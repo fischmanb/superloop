@@ -107,27 +107,18 @@ if [ -f "$PROJECT_DIR/.env.local" ]; then
     done < "$PROJECT_DIR/.env.local"
 fi
 
+# ── Logging ───────────────────────────────────────────────────────────────
+log() { echo "[$(date '+%H:%M:%S')] $1"; }
+success() { echo "[$(date '+%H:%M:%S')] ✓ $1"; }
+warn() { echo "[$(date '+%H:%M:%S')] ⚠ $1"; }
+error() { echo "[$(date '+%H:%M:%S')] ✗ $1"; }
+
+# ── Source shared reliability library ─────────────────────────────────────
+source "$SCRIPT_DIR/../lib/reliability.sh"
+
 # ── File locking (concurrency protection) ──────────────────────────────────
 LOCK_DIR="/tmp"
 LOCK_FILE="${LOCK_DIR}/sdd-build-loop-$(echo "$PROJECT_DIR" | tr '/' '_' | tr ' ' '_').lock"
-
-acquire_lock() {
-    if [ -f "$LOCK_FILE" ]; then
-        local existing_pid
-        existing_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
-        if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
-            fail "Another instance is already running (PID: $existing_pid)"
-            fail "Lock file: $LOCK_FILE"
-            fail "If this is stale, remove $LOCK_FILE manually"
-            exit 4
-        else
-            warn "Removing stale lock file (PID $existing_pid no longer running)"
-            rm -f "$LOCK_FILE"
-        fi
-    fi
-    echo $$ > "$LOCK_FILE"
-    trap 'rm -f "$LOCK_FILE"' INT TERM EXIT
-}
 
 acquire_lock
 
@@ -144,58 +135,8 @@ for arg in "$@"; do
     fi
 done
 
-# Write state atomically (write to temp, then mv)
-write_state() {
-    local feature_index="$1"
-    local strategy="$2"
-    local completed_json="$3"
-    local current_branch="$4"
-    mkdir -p "$STATE_DIR"
-    local tmpfile
-    tmpfile=$(mktemp "$STATE_DIR/resume.XXXXXX")
-    cat > "$tmpfile" << STATEJSON
-{
-  "feature_index": $feature_index,
-  "branch_strategy": "$strategy",
-  "completed_features": $completed_json,
-  "current_branch": "$current_branch",
-  "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-}
-STATEJSON
-    mv "$tmpfile" "$STATE_FILE"
-}
-
-# Read state file, sets RESUME_INDEX, RESUME_STRATEGY, RESUME_BRANCH
-read_state() {
-    if [ ! -f "$STATE_FILE" ]; then
-        return 1
-    fi
-    # Parse JSON with awk (no jq dependency)
-    RESUME_INDEX=$(awk -F': ' '/"feature_index"/{gsub(/[^0-9]/,"",$2); print $2}' "$STATE_FILE")
-    RESUME_STRATEGY=$(awk -F'"' '/"branch_strategy"/{print $4}' "$STATE_FILE")
-    RESUME_BRANCH=$(awk -F'"' '/"current_branch"/{print $4}' "$STATE_FILE")
-    return 0
-}
-
-# Build JSON array of completed feature names
-completed_features_json() {
-    local json="["
-    local first=true
-    for name in "${BUILT_FEATURE_NAMES[@]}"; do
-        if [ "$first" = true ]; then
-            first=false
-        else
-            json="$json, "
-        fi
-        json="$json\"$name\""
-    done
-    json="$json]"
-    echo "$json"
-}
-
-clean_state() {
-    rm -f "$STATE_FILE"
-}
+# write_state, read_state, completed_features_json, clean_state
+# are provided by lib/reliability.sh
 
 # Handle --resume
 RESUME_START_INDEX=0
@@ -230,11 +171,6 @@ BUILD_MODEL="${BUILD_MODEL:-}"
 RETRY_MODEL="${RETRY_MODEL:-}"
 DRIFT_MODEL="${DRIFT_MODEL:-}"
 REVIEW_MODEL="${REVIEW_MODEL:-}"
-
-log() { echo "[$(date '+%H:%M:%S')] $1"; }
-success() { echo "[$(date '+%H:%M:%S')] ✓ $1"; }
-warn() { echo "[$(date '+%H:%M:%S')] ⚠ $1"; }
-fail() { echo "[$(date '+%H:%M:%S')] ✗ $1"; }
 
 # ── Robust signal parsing ─────────────────────────────────────────────────
 # Extracts the LAST occurrence of a signal from agent output.
@@ -302,7 +238,7 @@ cd "$PROJECT_DIR"
 
 # Validate BRANCH_STRATEGY
 if [[ ! "$BRANCH_STRATEGY" =~ ^(chained|independent|both|sequential)$ ]]; then
-    fail "Invalid BRANCH_STRATEGY: $BRANCH_STRATEGY (must be: chained, independent, both, or sequential)"
+    error "Invalid BRANCH_STRATEGY: $BRANCH_STRATEGY (must be: chained, independent, both, or sequential)"
     exit 1
 fi
 
@@ -413,49 +349,8 @@ clean_working_tree() {
 LAST_BUILD_OUTPUT=""
 LAST_TEST_OUTPUT=""
 
-# ── Exponential backoff for agent calls ─────────────────────────────────────
-MAX_AGENT_RETRIES="${MAX_AGENT_RETRIES:-5}"
-BACKOFF_MAX_SECONDS="${BACKOFF_MAX_SECONDS:-60}"
-
-# Wraps an agent command with retry logic for rate limits.
-# Usage: run_agent_with_backoff <output_file> <agent_cmd_args...>
-# Sets AGENT_EXIT to the final exit code.
-run_agent_with_backoff() {
-    local output_file="$1"
-    shift
-    local agent_retry=0
-    AGENT_EXIT=0
-
-    while [ "$agent_retry" -le "$MAX_AGENT_RETRIES" ]; do
-        if [ "$agent_retry" -gt 0 ]; then
-            local backoff=$(( 2 ** agent_retry ))
-            if [ "$backoff" -gt "$BACKOFF_MAX_SECONDS" ]; then
-                backoff="$BACKOFF_MAX_SECONDS"
-            fi
-            warn "Rate limit detected, retrying in ${backoff}s (attempt $agent_retry/$MAX_AGENT_RETRIES)..."
-            sleep "$backoff"
-        fi
-
-        set +e
-        "$@" 2>&1 | tee "$output_file"
-        AGENT_EXIT=${PIPESTATUS[0]}
-        set -e
-
-        # Check for rate limit indicators in output
-        if [ "$AGENT_EXIT" -ne 0 ]; then
-            if grep -qiE '(rate.?limit|429|too many requests|overloaded|capacity)' "$output_file" 2>/dev/null; then
-                agent_retry=$((agent_retry + 1))
-                continue
-            fi
-        fi
-
-        # Not a rate limit error, return result
-        return 0
-    done
-
-    fail "Agent failed after $MAX_AGENT_RETRIES retries due to rate limiting"
-    return 1
-}
+# run_agent_with_backoff is provided by lib/reliability.sh
+# Config: MAX_AGENT_RETRIES, BACKOFF_MAX_SECONDS (defaults in library)
 
 # ── Safe command execution ──────────────────────────────────────────────────
 # Executes a command safely without eval. For custom commands from .env.local,
@@ -488,7 +383,7 @@ check_build() {
         LAST_BUILD_OUTPUT=""
     else
         LAST_BUILD_OUTPUT=$(tail -50 "$tmpfile")
-        fail "Build check failed"
+        error "Build check failed"
     fi
     rm -f "$tmpfile"
     return $exit_code
@@ -511,7 +406,7 @@ check_tests() {
         LAST_TEST_OUTPUT=""
     else
         LAST_TEST_OUTPUT=$(tail -80 "$tmpfile")
-        fail "Tests failed"
+        error "Tests failed"
     fi
     rm -f "$tmpfile"
     return $exit_code
@@ -521,41 +416,8 @@ should_run_step() {
     echo ",$POST_BUILD_STEPS," | grep -q ",$1,"
 }
 
-# ── Context budget management ──────────────────────────────────────────────
-MAX_CONTEXT_TOKENS="${MAX_CONTEXT_TOKENS:-100000}"
-
-# Estimate token count of a file (rough: 4 chars = 1 token).
-# If spec exceeds 50% of budget, truncate to Gherkin scenarios only.
-# Usage: truncate_for_context "$file_path"
-# Outputs the (possibly truncated) content to stdout.
-truncate_for_context() {
-    local file="$1"
-    if [ ! -f "$file" ]; then
-        return
-    fi
-
-    local char_count
-    char_count=$(wc -c < "$file" 2>/dev/null || echo "0")
-    local estimated_tokens=$(( char_count / 4 ))
-    local budget_half=$(( MAX_CONTEXT_TOKENS / 2 ))
-
-    if [ "$estimated_tokens" -gt "$budget_half" ]; then
-        warn "Spec file exceeds 50% of context budget (~${estimated_tokens} tokens, budget: ${MAX_CONTEXT_TOKENS})"
-        warn "Truncating to Gherkin scenarios only (removing mockups and non-essential content)"
-        # Extract only YAML frontmatter + Gherkin scenarios (Given/When/Then/And/Scenario/Feature lines)
-        awk '
-            BEGIN { in_frontmatter=0; fm_count=0 }
-            /^---$/ { fm_count++; if (fm_count<=2) { print; next } }
-            fm_count==1 { print; next }
-            /^#+[[:space:]]/ { print; next }
-            /^[[:space:]]*(Feature|Scenario|Given|When|Then|And|But|Background|Rule):/ { print; next }
-            /^[[:space:]]*(Feature|Scenario|Given|When|Then|And|But|Background|Rule)[[:space:]]/ { print; next }
-            /^\*\*/ { print; next }
-        ' "$file"
-    else
-        cat "$file"
-    fi
-}
+# truncate_for_context is provided by lib/reliability.sh
+# Config: MAX_CONTEXT_TOKENS (default in library)
 
 # ── Drift check helpers ──────────────────────────────────────────────────
 
@@ -618,11 +480,18 @@ PREVIOUS TEST FAILURE OUTPUT (last 80 lines):
 $LAST_TEST_OUTPUT"
         fi
 
+        # Inline (possibly truncated) spec content for drift agent context
+        local spec_content=""
+        spec_content=$(truncate_for_context "$spec_file" 2>/dev/null || true)
+
         local drift_prompt="
 Run /catch-drift for this specific feature. This is an automated check — do NOT ask for user input. Auto-fix all drift by updating specs to match code (prefer documenting reality over reverting code).
 
 Spec file: $spec_file
 Source files: $source_files$test_context
+
+Spec content (inline, may be truncated — read from disk if you need the full file):
+$spec_content
 
 Instructions:
 1. Read the spec file and all its Gherkin scenarios
@@ -685,7 +554,7 @@ DRIFT_UNRESOLVABLE: {what needs human attention and why}
         drift_attempt=$((drift_attempt + 1))
     done
 
-    fail "Drift check failed after $((MAX_DRIFT_RETRIES + 1)) attempt(s)"
+    error "Drift check failed after $((MAX_DRIFT_RETRIES + 1)) attempt(s)"
     return 1
 }
 
@@ -775,7 +644,7 @@ setup_branch_chained() {
 
     CURRENT_FEATURE_BRANCH="auto/chained-$(date +%Y%m%d-%H%M%S)"
     git checkout -b "$CURRENT_FEATURE_BRANCH" 2>/dev/null || {
-        fail "Failed to create branch $CURRENT_FEATURE_BRANCH"
+        error "Failed to create branch $CURRENT_FEATURE_BRANCH"
         return 1
     }
     success "Created branch: $CURRENT_FEATURE_BRANCH (from $base_branch)"
@@ -798,9 +667,9 @@ check_disk_space() {
     fi
 
     if [ "$available_mb" -lt "$WORKTREE_SPACE_MB" ]; then
-        fail "Insufficient disk space: ${available_mb}MB available, ${WORKTREE_SPACE_MB}MB required per worktree"
-        fail "Suggestion: use BRANCH_STRATEGY=sequential to avoid worktrees"
-        fail "Or set WORKTREE_SPACE_MB to a lower value in .env.local"
+        error "Insufficient disk space: ${available_mb}MB available, ${WORKTREE_SPACE_MB}MB required per worktree"
+        error "Suggestion: use BRANCH_STRATEGY=sequential to avoid worktrees"
+        error "Or set WORKTREE_SPACE_MB to a lower value in .env.local"
         exit 5
     fi
 
@@ -816,7 +685,7 @@ setup_branch_independent() {
 
     log "Creating worktree: $worktree_name (from $MAIN_BRANCH)"
     git worktree add -b "auto/$worktree_name" "$worktree_path" "$MAIN_BRANCH" 2>/dev/null || {
-        fail "Failed to create worktree $worktree_name"
+        error "Failed to create worktree $worktree_name"
         return 1
     }
 
@@ -967,10 +836,10 @@ run_build_loop() {
         # ── Setup branch based on strategy ──
         case "$strategy" in
             chained)
-                setup_branch_chained || { fail "Failed to setup chained branch"; continue; }
+                setup_branch_chained || { error "Failed to setup chained branch"; continue; }
                 ;;
             independent)
-                setup_branch_independent || { fail "Failed to setup independent worktree"; continue; }
+                setup_branch_independent || { error "Failed to setup independent worktree"; continue; }
                 ;;
             sequential)
                 setup_branch_sequential
@@ -1115,7 +984,7 @@ run_build_loop() {
             local feature_duration=$((feature_end - FEATURE_START))
             LOOP_SKIPPED="${LOOP_SKIPPED}\n  - feature $i ($(format_duration $feature_duration))"
             LOOP_TIMINGS+=("✗ feature $i: $(format_duration $feature_duration)")
-            fail "Feature failed after $((MAX_RETRIES + 1)) attempt(s). Skipping. ($(format_duration $feature_duration))"
+            error "Feature failed after $((MAX_RETRIES + 1)) attempt(s). Skipping. ($(format_duration $feature_duration))"
             clean_working_tree
 
             case "$strategy" in
@@ -1136,84 +1005,10 @@ run_build_loop() {
     done
 }
 
-# ── Parallel validation (M3 Ultra optimization) ───────────────────────────
-
-# Detect CPU core count for parallel job limiting
-get_cpu_count() {
-    if command -v nproc &>/dev/null; then
-        nproc
-    elif command -v sysctl &>/dev/null; then
-        sysctl -n hw.ncpu 2>/dev/null || echo "4"
-    else
-        echo "4"
-    fi
-}
-
-# Run drift checks in parallel for independent branch strategy.
-# Args: array of "spec_file:source_files" pairs
-# Returns 0 if all passed, 1 if any failed.
-run_parallel_drift_checks() {
-    if [ "$PARALLEL_VALIDATION" != "true" ]; then
-        return 0  # Parallel mode not enabled
-    fi
-
-    local max_jobs
-    max_jobs=$(get_cpu_count)
-    log "Running parallel drift checks (max $max_jobs concurrent jobs)..."
-
-    local pids=()
-    local results_dir
-    results_dir=$(mktemp -d)
-    local job_count=0
-
-    for pair in "$@"; do
-        local spec_file="${pair%%:*}"
-        local source_files="${pair#*:}"
-
-        if [ -z "$spec_file" ]; then
-            continue
-        fi
-
-        # Wait if we've hit the max concurrent jobs
-        while [ "$job_count" -ge "$max_jobs" ]; do
-            wait -n 2>/dev/null || true
-            job_count=$((job_count - 1))
-        done
-
-        (
-            if check_drift "$spec_file" "$source_files"; then
-                echo "PASS" > "$results_dir/$(basename "$spec_file").result"
-            else
-                echo "FAIL" > "$results_dir/$(basename "$spec_file").result"
-            fi
-        ) &
-        pids+=($!)
-        job_count=$((job_count + 1))
-    done
-
-    # Wait for all jobs to complete
-    local any_failed=false
-    for pid in "${pids[@]}"; do
-        wait "$pid" || true
-    done
-
-    # Check results
-    for result_file in "$results_dir"/*.result; do
-        if [ -f "$result_file" ] && [ "$(cat "$result_file")" = "FAIL" ]; then
-            any_failed=true
-            local failed_spec
-            failed_spec=$(basename "$result_file" .result)
-            warn "Parallel drift check failed for: $failed_spec"
-        fi
-    done
-
-    rm -rf "$results_dir"
-
-    if [ "$any_failed" = true ]; then
-        return 1
-    fi
-    return 0
-}
+# get_cpu_count and run_parallel_drift_checks are provided by lib/reliability.sh
+# Config: PARALLEL_VALIDATION (default in library)
+# NOTE: run_parallel_drift_checks is not yet wired into the independent pass.
+# To use it, collect spec:source pairs during the build loop and call it afterward.
 
 # ── Clean up worktrees helper ────────────────────────────────────────────
 
@@ -1231,85 +1026,7 @@ cleanup_all_worktrees() {
 
 # ── Main ──────────────────────────────────────────────────────────────────
 
-# ── Circular dependency detection ──────────────────────────────────────────
-# Parses roadmap.md dependency graph and detects cycles using DFS.
-# Exits with code 3 if circular dependencies are found.
-check_circular_deps() {
-    local roadmap="$PROJECT_DIR/.specs/roadmap.md"
-    if [ ! -f "$roadmap" ]; then
-        return 0  # No roadmap, nothing to check
-    fi
-
-    # Parse roadmap table rows: extract feature ID and deps
-    # Format: | # | Feature | Source | Jira | Complexity | Deps | Status |
-    local dep_map
-    dep_map=$(awk -F'|' '
-        /^\|[[:space:]]*[0-9]+[[:space:]]*\|/ {
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)  # ID
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $7)  # Deps column
-            if ($2 ~ /^[0-9]+$/ && $7 != "-" && $7 != "") {
-                print $2 ":" $7
-            }
-        }
-    ' "$roadmap" 2>/dev/null)
-
-    if [ -z "$dep_map" ]; then
-        return 0  # No deps to check
-    fi
-
-    # DFS cycle detection using awk
-    local cycle_result
-    cycle_result=$(echo "$dep_map" | awk -F: '
-    {
-        node = $1
-        split($2, deps, /[[:space:]]*,[[:space:]]*/);
-        for (i in deps) {
-            gsub(/[^0-9]/, "", deps[i])
-            if (deps[i] != "") {
-                adj[node] = adj[node] " " deps[i]
-            }
-        }
-        nodes[node] = 1
-    }
-    END {
-        # DFS with three states: 0=unvisited, 1=in-stack, 2=done
-        for (n in nodes) state[n] = 0
-
-        function dfs(node, path,    neighbors, i, n_count, n_list) {
-            if (state[node] == 1) {
-                # Found cycle
-                print "CYCLE:" path " -> " node
-                return 1
-            }
-            if (state[node] == 2) return 0
-            state[node] = 1
-            n_count = split(adj[node], n_list, " ")
-            for (i = 1; i <= n_count; i++) {
-                if (n_list[i] != "" && dfs(n_list[i], path " -> " n_list[i])) {
-                    return 1
-                }
-            }
-            state[node] = 2
-            return 0
-        }
-
-        for (n in nodes) {
-            if (state[n] == 0) {
-                if (dfs(n, n)) exit 0
-            }
-        }
-    }')
-
-    if echo "$cycle_result" | grep -q "^CYCLE:"; then
-        fail "Circular dependency detected in roadmap!"
-        fail "$cycle_result"
-        fail "Fix the dependency cycle in .specs/roadmap.md before building"
-        exit 3
-    fi
-
-    return 0
-}
-
+# check_circular_deps is provided by lib/reliability.sh
 check_circular_deps
 
 echo ""
@@ -1414,7 +1131,7 @@ if [ "$BRANCH_STRATEGY" = "both" ]; then
             git branch -D "$branch_name" 2>/dev/null || true
 
             git worktree add -b "$branch_name" "$worktree_path" "$MAIN_BRANCH" 2>/dev/null || {
-                fail "Failed to create worktree for: $fn"
+                error "Failed to create worktree for: $fn"
                 INDEPENDENT_FAILED=$((INDEPENDENT_FAILED + 1))
                 continue
             }

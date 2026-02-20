@@ -34,6 +34,9 @@ warn() { echo -e "${YELLOW}[$(date '+%H:%M:%S')] ⚠${NC} $1"; }
 error() { echo -e "${RED}[$(date '+%H:%M:%S')] ✗${NC} $1"; }
 section() { echo -e "\n${CYAN}═══════════════════════════════════════════════════════════${NC}"; echo -e "${CYAN}  $1${NC}"; echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}\n"; }
 
+# ── Source shared reliability library ─────────────────────────────────────
+source "$SCRIPT_DIR/../lib/reliability.sh"
+
 # ── Robust signal parsing ─────────────────────────────────────────────────
 # Extracts the LAST occurrence of a signal from agent output.
 # Handles values containing colons, preserves internal whitespace,
@@ -105,24 +108,7 @@ fi
 LOCK_DIR="/tmp"
 LOCK_FILE="${LOCK_DIR}/sdd-overnight-$(echo "$PROJECT_DIR" | tr '/' '_' | tr ' ' '_').lock"
 
-acquire_lock() {
-    if [ -f "$LOCK_FILE" ]; then
-        local existing_pid
-        existing_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
-        if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
-            error "Another instance is already running (PID: $existing_pid)"
-            error "Lock file: $LOCK_FILE"
-            error "If this is stale, remove $LOCK_FILE manually"
-            exit 4
-        else
-            warn "Removing stale lock file (PID $existing_pid no longer running)"
-            rm -f "$LOCK_FILE"
-        fi
-    fi
-    echo $$ > "$LOCK_FILE"
-    trap 'rm -f "$LOCK_FILE"' INT TERM EXIT
-}
-
+# acquire_lock is provided by lib/reliability.sh
 acquire_lock
 
 # Defaults
@@ -199,44 +185,8 @@ detect_build_check() {
 
 BUILD_CMD=$(detect_build_check)
 
-# ── Exponential backoff for agent calls ─────────────────────────────────────
-MAX_AGENT_RETRIES="${MAX_AGENT_RETRIES:-5}"
-BACKOFF_MAX_SECONDS="${BACKOFF_MAX_SECONDS:-60}"
-
-run_agent_with_backoff() {
-    local output_file="$1"
-    shift
-    local agent_retry=0
-    AGENT_EXIT=0
-
-    while [ "$agent_retry" -le "$MAX_AGENT_RETRIES" ]; do
-        if [ "$agent_retry" -gt 0 ]; then
-            local backoff=$(( 2 ** agent_retry ))
-            if [ "$backoff" -gt "$BACKOFF_MAX_SECONDS" ]; then
-                backoff="$BACKOFF_MAX_SECONDS"
-            fi
-            warn "Rate limit detected, retrying in ${backoff}s (attempt $agent_retry/$MAX_AGENT_RETRIES)..."
-            sleep "$backoff"
-        fi
-
-        set +e
-        "$@" 2>&1 | tee "$output_file"
-        AGENT_EXIT=${PIPESTATUS[0]}
-        set -e
-
-        if [ "$AGENT_EXIT" -ne 0 ]; then
-            if grep -qiE '(rate.?limit|429|too many requests|overloaded|capacity)' "$output_file" 2>/dev/null; then
-                agent_retry=$((agent_retry + 1))
-                continue
-            fi
-        fi
-
-        return 0
-    done
-
-    error "Agent failed after $MAX_AGENT_RETRIES retries due to rate limiting"
-    return 1
-}
+# run_agent_with_backoff is provided by lib/reliability.sh
+# Config: MAX_AGENT_RETRIES, BACKOFF_MAX_SECONDS (defaults in library)
 
 # ── Safe command execution ──────────────────────────────────────────────────
 run_cmd_safe() {
@@ -343,35 +293,8 @@ if [ -n "$AGENT_MODEL" ] || [ -n "$BUILD_MODEL" ] || [ -n "$DRIFT_MODEL" ] || [ 
     log "Models: default=${AGENT_MODEL:-CLI default} build=${BUILD_MODEL:-↑} drift=${DRIFT_MODEL:-↑} review=${REVIEW_MODEL:-↑}"
 fi
 
-# ── Context budget management ──────────────────────────────────────────────
-MAX_CONTEXT_TOKENS="${MAX_CONTEXT_TOKENS:-100000}"
-
-truncate_for_context() {
-    local file="$1"
-    if [ ! -f "$file" ]; then
-        return
-    fi
-    local char_count
-    char_count=$(wc -c < "$file" 2>/dev/null || echo "0")
-    local estimated_tokens=$(( char_count / 4 ))
-    local budget_half=$(( MAX_CONTEXT_TOKENS / 2 ))
-
-    if [ "$estimated_tokens" -gt "$budget_half" ]; then
-        warn "Spec file exceeds 50% of context budget (~${estimated_tokens} tokens, budget: ${MAX_CONTEXT_TOKENS})"
-        warn "Truncating to Gherkin scenarios only"
-        awk '
-            BEGIN { in_frontmatter=0; fm_count=0 }
-            /^---$/ { fm_count++; if (fm_count<=2) { print; next } }
-            fm_count==1 { print; next }
-            /^#+[[:space:]]/ { print; next }
-            /^[[:space:]]*(Feature|Scenario|Given|When|Then|And|But|Background|Rule):/ { print; next }
-            /^[[:space:]]*(Feature|Scenario|Given|When|Then|And|But|Background|Rule)[[:space:]]/ { print; next }
-            /^\*\*/ { print; next }
-        ' "$file"
-    else
-        cat "$file"
-    fi
-}
+# truncate_for_context is provided by lib/reliability.sh
+# Config: MAX_CONTEXT_TOKENS (default in library)
 
 # ── Drift check helpers ──────────────────────────────────────────────────
 
@@ -417,6 +340,10 @@ PREVIOUS TEST FAILURE OUTPUT (last 80 lines):
 $LAST_TEST_OUTPUT"
         fi
 
+        # Inline (possibly truncated) spec content for drift agent context
+        local spec_content=""
+        spec_content=$(truncate_for_context "$spec_file" 2>/dev/null || true)
+
         local AGENT_EXIT=0
         set +e
         $(agent_cmd "$DRIFT_MODEL") "
@@ -424,6 +351,9 @@ Run /catch-drift for this specific feature. Auto-fix all drift by updating specs
 
 Spec file: $spec_file
 Source files: $source_files$test_context
+
+Spec content (inline, may be truncated — read from disk if you need the full file):
+$spec_content
 
 Instructions:
 1. Read the spec file and all its Gherkin scenarios
@@ -473,7 +403,7 @@ DRIFT_UNRESOLVABLE: {what needs human attention}
         fi
         drift_attempt=$((drift_attempt + 1))
     done
-    fail "Drift check failed"
+    error "Drift check failed"
     return 1
 }
 
@@ -574,6 +504,9 @@ fi
 STEP_DURATION=$(( $(date +%s) - STEP_START ))
 success "Triage complete ($(format_duration $STEP_DURATION))"
 STEP_TIMINGS+=("Step 2 - Triage: $(format_duration $STEP_DURATION)")
+
+# ── Circular dependency check (from lib/reliability.sh) ──
+check_circular_deps
 
 # ─────────────────────────────────────────────
 # STEP 3: Build features from roadmap

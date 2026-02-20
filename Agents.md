@@ -1,7 +1,7 @@
 # Agents.md
 
-> **For AI agents working on this codebase**  
-> Last updated: 2024-02-20  
+> **For AI agents working on this codebase**
+> Last updated: 2026-02-20
 > Architecture: Multi-invocation, context-safe
 
 ## What This Is
@@ -30,7 +30,8 @@ optimized-256gb/
 │   └── 04-fix.sh    # review.json → fixed files
 ├── lib/             # Shared libraries
 │   ├── common.sh    # curl, parsing, validation
-│   └── models.sh    # Model endpoint management
+│   ├── models.sh    # Model endpoint management
+│   └── reliability.sh # Lock, backoff, state, truncation, cycle detection
 └── framework/       # User-facing tools
     └── ai-dev       # Main CLI entry
 ```
@@ -124,6 +125,45 @@ cat review.json
 | Delimiter + JSON output | Robust parsing, handles malformed output |
 | Atomic file writes | No partial files on crash |
 | Separate models per stage | Each model stays sharp in its role |
+| Shared lib/reliability.sh | Dedup ~100 lines between build-loop and overnight scripts |
+| bash DFS for cycle detection | Portable across mawk/gawk (awk functions are gawk-only) |
+
+## Shared Library: lib/reliability.sh
+
+Both `scripts/build-loop-local.sh` and `scripts/overnight-autonomous.sh` source
+`lib/reliability.sh` for shared reliability functions:
+
+| Function | Purpose |
+|----------|---------|
+| `acquire_lock` / `release_lock` | PID-file lock with stale detection |
+| `run_agent_with_backoff` | Exponential backoff retry for rate limits |
+| `truncate_for_context` | Truncate large specs to Gherkin-only for context budget |
+| `check_circular_deps` | DFS cycle detection on roadmap dependency graph |
+| `write_state` / `read_state` / `clean_state` | JSON resume state persistence |
+| `completed_features_json` | Build JSON array from bash array (with escaping) |
+| `get_cpu_count` / `run_parallel_drift_checks` | Parallel drift checks (M3 Ultra) |
+
+**Caller contract**: define `log`, `warn`, `success`, `error` before sourcing.
+Set globals (`LOCK_FILE`, `PROJECT_DIR`, `STATE_DIR`, `STATE_FILE`) before calling.
+
+## Testing
+
+```bash
+# Unit tests for lib/reliability.sh
+./tests/test-reliability.sh
+
+# Structural dry-run (no agent needed)
+DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
+
+# Full dry-run (requires agent CLI + running model)
+./tests/dry-run.sh
+```
+
+## Known Gaps
+
+- `run_parallel_drift_checks` is defined but not yet wired into the independent build pass
+- Resume doesn't skip already-built features (relies on roadmap ✅ status)
+- No live integration testing yet — all validation is `bash -n` + unit tests
 
 ## Questions?
 
