@@ -816,6 +816,8 @@ run_build_loop() {
     LAST_FEATURE_BRANCH=""
     CURRENT_FEATURE_BRANCH=""
     CURRENT_WORKTREE_PATH=""
+    # Reset drift pairs to prevent cross-run contamination
+    DRIFT_PAIRS=()
 
     for i in $(seq 1 "$MAX_FEATURES"); do
         # ── Resume: skip already-completed features ──
@@ -910,8 +912,16 @@ run_build_loop() {
                             local drift_ok=true
                             if validate_required_signals "$BUILD_RESULT"; then
                                 extract_drift_targets "$BUILD_RESULT"
-                                if ! check_drift "$DRIFT_SPEC_FILE" "$DRIFT_SOURCE_FILES"; then
-                                    drift_ok=false
+                                if [ "$PARALLEL_VALIDATION" = "true" ]; then
+                                    # Accumulate spec:source pairs for batch parallel drift check after loop.
+                                    # source_files is comma-separated (from parse_signal "SOURCE_FILES"),
+                                    # which run_parallel_drift_checks passes through to check_drift as-is.
+                                    DRIFT_PAIRS+=("$DRIFT_SPEC_FILE:$DRIFT_SOURCE_FILES")
+                                    log "Deferred drift check for parallel batch (pair #${#DRIFT_PAIRS[@]})"
+                                else
+                                    if ! check_drift "$DRIFT_SPEC_FILE" "$DRIFT_SOURCE_FILES"; then
+                                        drift_ok=false
+                                    fi
                                 fi
                             else
                                 warn "Required signals missing/invalid — skipping drift check"
@@ -1003,12 +1013,18 @@ run_build_loop() {
             esac
         fi
     done
+
+    # After the build loop, run any accumulated parallel drift checks
+    if [ "$PARALLEL_VALIDATION" = "true" ] && [ "${#DRIFT_PAIRS[@]}" -gt 0 ]; then
+        log "Running ${#DRIFT_PAIRS[@]} deferred drift checks in parallel..."
+        if ! run_parallel_drift_checks "${DRIFT_PAIRS[@]}"; then
+            warn "One or more parallel drift checks failed"
+        fi
+    fi
 }
 
 # get_cpu_count and run_parallel_drift_checks are provided by lib/reliability.sh
 # Config: PARALLEL_VALIDATION (default in library)
-# NOTE: run_parallel_drift_checks is not yet wired into the independent pass.
-# To use it, collect spec:source pairs during the build loop and call it afterward.
 
 # ── Clean up worktrees helper ────────────────────────────────────────────
 
@@ -1104,8 +1120,9 @@ if [ "$BRANCH_STRATEGY" = "both" ]; then
 
         INDEPENDENT_BUILT=0
         INDEPENDENT_FAILED=0
-
         INDEPENDENT_TIMINGS=()
+        # Reset drift pairs for the independent pass to prevent cross-run contamination
+        DRIFT_PAIRS=()
 
         for fn in "${CHAINED_FEATURE_NAMES[@]}"; do
             INDEP_FEATURE_START=$(date +%s)
@@ -1181,9 +1198,34 @@ BUILD_FAILED: {reason}
 
             if echo "$BUILD_RESULT" | grep -q "FEATURE_BUILT"; then
                 if check_working_tree_clean; then
-                    INDEPENDENT_BUILT=$((INDEPENDENT_BUILT + 1))
-                    success "Independently built: $fn (branch: $branch_name) ($(format_duration $indep_feature_duration))"
-                    INDEPENDENT_TIMINGS+=("✓ $fn: $(format_duration $indep_feature_duration)")
+                    # Accumulate or run drift check for independent build
+                    local indep_drift_ok=true
+                    if validate_required_signals "$BUILD_RESULT"; then
+                        extract_drift_targets "$BUILD_RESULT"
+                        if [ "$PARALLEL_VALIDATION" = "true" ]; then
+                            # Accumulate spec:source pairs for batch parallel drift check after loop.
+                            # source_files is comma-separated (from parse_signal "SOURCE_FILES"),
+                            # which run_parallel_drift_checks passes through to check_drift as-is.
+                            DRIFT_PAIRS+=("$DRIFT_SPEC_FILE:$DRIFT_SOURCE_FILES")
+                            log "Deferred drift check for parallel batch (pair #${#DRIFT_PAIRS[@]})"
+                        else
+                            if ! check_drift "$DRIFT_SPEC_FILE" "$DRIFT_SOURCE_FILES"; then
+                                indep_drift_ok=false
+                            fi
+                        fi
+                    else
+                        warn "Required signals missing/invalid — skipping drift check"
+                    fi
+
+                    if [ "$indep_drift_ok" = true ]; then
+                        INDEPENDENT_BUILT=$((INDEPENDENT_BUILT + 1))
+                        success "Independently built: $fn (branch: $branch_name) ($(format_duration $indep_feature_duration))"
+                        INDEPENDENT_TIMINGS+=("✓ $fn: $(format_duration $indep_feature_duration)")
+                    else
+                        warn "Independent build drift check failed for: $fn ($(format_duration $indep_feature_duration))"
+                        INDEPENDENT_FAILED=$((INDEPENDENT_FAILED + 1))
+                        INDEPENDENT_TIMINGS+=("✗ $fn: $(format_duration $indep_feature_duration)")
+                    fi
                 else
                     warn "Agent said FEATURE_BUILT but left uncommitted changes ($(format_duration $indep_feature_duration))"
                     INDEPENDENT_FAILED=$((INDEPENDENT_FAILED + 1))
@@ -1201,6 +1243,14 @@ BUILD_FAILED: {reason}
                 warn "Failed to remove worktree: $worktree_path"
             }
         done
+
+        # After the independent pass, run any accumulated parallel drift checks
+        if [ "$PARALLEL_VALIDATION" = "true" ] && [ "${#DRIFT_PAIRS[@]}" -gt 0 ]; then
+            log "Running ${#DRIFT_PAIRS[@]} deferred drift checks in parallel..."
+            if ! run_parallel_drift_checks "${DRIFT_PAIRS[@]}"; then
+                warn "One or more parallel drift checks failed"
+            fi
+        fi
 
         cleanup_all_worktrees
     fi

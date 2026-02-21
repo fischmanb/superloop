@@ -392,11 +392,13 @@ test_functions_called() {
         fi
     done
 
-    # Special check: run_parallel_drift_checks — known to be defined but not yet wired
-    if grep -q "run_parallel_drift_checks" "$build_loop" 2>/dev/null | grep -v '#' | grep -qv "provided by" 2>/dev/null; then
-        echo "  INFO: run_parallel_drift_checks — not yet wired (known gap)"
+    # Check: run_parallel_drift_checks should be called from build-loop-local.sh
+    if grep -n "run_parallel_drift_checks" "$build_loop" 2>/dev/null | grep -v '^\s*#' | grep -v 'provided by' | grep -qv "^.*run_parallel_drift_checks()" 2>/dev/null; then
+        echo "  PASS: run_parallel_drift_checks is called from scripts"
+        PASS=$((PASS + 1))
     else
-        echo "  INFO: run_parallel_drift_checks — not yet wired (known gap, documented)"
+        echo "  FAIL: run_parallel_drift_checks is defined but NEVER CALLED from scripts"
+        FAIL=$((FAIL + 1))
     fi
 
     # Check that lib/reliability.sh is actually sourced from both scripts
