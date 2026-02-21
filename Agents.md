@@ -64,6 +64,19 @@ Future agents: read this before making changes.
 
 > **⚠️ SUPERSEDED**: Branch `claude/setup-auto-sdd-framework-INusW` is fully contained in the integration branch. Do not merge.
 
+### Round 4: Cursor → Claude Code CLI Swap (branch: claude/setup-git-workflow-yzpbx)
+
+**What was asked**: Lightest possible swap from `agent` (Cursor CLI) to `claude` (Claude Code CLI).
+
+**What was changed**:
+- `agent_cmd()` in build-loop-local.sh and overnight-autonomous.sh: removed `--force`, changed binary to `claude`
+- Bare invocation in nightly-review.sh: same flag change
+- All `command -v agent` checks (5 files): updated binary name and error messages
+
+**What was NOT changed**: prompt strings, output parsing, model variables, lib/reliability.sh, test assertions
+
+**Verification**: all 57 unit tests pass, dry-run passes, no remaining raw `agent` references
+
 ---
 
 ## What This Is

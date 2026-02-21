@@ -258,8 +258,8 @@ else
     fi
 fi
 
-if ! command -v agent &> /dev/null; then
-    echo "Cursor CLI (agent) not found. Install from: https://cursor.com/cli"
+if ! command -v claude &> /dev/null; then
+    echo "Claude Code CLI (claude) not found. Install via: npm install -g @anthropic-ai/claude-code"
     exit 1
 fi
 
@@ -323,7 +323,7 @@ TEST_CMD=$(detect_test_check)
 agent_cmd() {
     local step_model="$1"
     local model="${step_model:-$AGENT_MODEL}"
-    local cmd="agent -p --force --output-format text"
+    local cmd="claude -p --output-format text"
     if [ -n "$model" ]; then
         cmd="$cmd --model $model"
     fi

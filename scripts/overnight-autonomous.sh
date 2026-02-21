@@ -164,8 +164,8 @@ log "Jira project: ${JIRA_PROJECT_KEY:-not configured}"
 cd "$PROJECT_DIR"
 
 # Check prerequisites
-if ! command -v agent &> /dev/null; then
-    error "Cursor CLI (agent) not found. Install from: https://cursor.com/cli"
+if ! command -v claude &> /dev/null; then
+    error "Claude Code CLI (claude) not found. Install via: npm install -g @anthropic-ai/claude-code"
     exit 1
 fi
 
@@ -186,7 +186,7 @@ POST_BUILD_STEPS="${POST_BUILD_STEPS:-test}"
 agent_cmd() {
     local step_model="$1"
     local model="${step_model:-$AGENT_MODEL}"
-    local cmd="agent -p --force --output-format text"
+    local cmd="claude -p --output-format text"
     if [ -n "$model" ]; then
         cmd="$cmd --model $model"
     fi
