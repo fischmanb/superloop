@@ -241,7 +241,7 @@ Both `scripts/build-loop-local.sh` and `scripts/overnight-autonomous.sh` source
 | `completed_features_json` | Build JSON array from bash array (with escaping) | build-loop only |
 | `get_cpu_count` | Detect CPU count (nproc/sysctl) | build-loop only |
 | `count_files` | Count files in directory grouped by extension (nameref) | pending |
-| `run_parallel_drift_checks` | Parallel drift checks (M3 Ultra) | **NOT YET CALLED** |
+| `run_parallel_drift_checks` | Parallel drift checks (M3 Ultra) | build-loop (independent pass) |
 
 **Caller contract**: define `log`, `warn`, `success`, `error` before sourcing (or use fallbacks).
 Set globals (`LOCK_FILE`, `PROJECT_DIR`, `STATE_DIR`, `STATE_FILE`) before calling relevant functions.
@@ -297,7 +297,6 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 ## Known Gaps
 
-- `run_parallel_drift_checks` is defined but not yet wired into the independent build pass
 - Resume doesn't skip already-built features (relies on roadmap status being updated before crash)
 - No live integration testing — all validation is `bash -n` + unit tests + structural dry-run
 - `lib/common.sh` and `lib/models.sh` are orphaned (not sourced by main scripts)
