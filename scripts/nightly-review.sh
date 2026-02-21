@@ -73,8 +73,8 @@ if command -v gh &> /dev/null; then
 fi
 
 # Check if Cursor CLI is available
-if ! command -v agent &> /dev/null; then
-    error "Cursor CLI (agent) not found. Install from: https://cursor.com/cli"
+if ! command -v claude &> /dev/null; then
+    error "Claude Code CLI (claude) not found. Install via: npm install -g @anthropic-ai/claude-code"
     exit 1
 fi
 
@@ -84,7 +84,7 @@ fi
 
 log "Extracting learnings from recent work..."
 
-agent -p --force --output-format text "
+claude -p --output-format text "
 NIGHTLY REVIEW: Extract learnings from today's work.
 
 ## Recent Commits (last $HOURS_BACK hours)

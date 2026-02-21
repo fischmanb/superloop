@@ -31,12 +31,12 @@ echo ""
 # Check prerequisites
 log "Checking prerequisites..."
 
-if ! command -v agent &> /dev/null; then
-    error "Cursor CLI not found!"
-    echo "  Install with: curl https://cursor.com/install -fsS | bash"
+if ! command -v claude &> /dev/null; then
+    error "Claude Code CLI (claude) not found!"
+    echo "  Install via: npm install -g @anthropic-ai/claude-code"
     exit 1
 fi
-success "Cursor CLI found"
+success "Claude Code CLI found"
 
 if ! command -v gh &> /dev/null; then
     warn "GitHub CLI (gh) not found - PR creation will be skipped"

@@ -220,9 +220,9 @@ full_test() {
     echo "=== Full dry run (with agent calls) ==="
     echo ""
 
-    if ! command -v agent &>/dev/null; then
-        echo "SKIP: agent CLI not found — run structural test only"
-        echo "Install from: https://cursor.com/cli"
+    if ! command -v claude &>/dev/null; then
+        echo "SKIP: claude CLI not found — run structural test only"
+        echo "Install via: npm install -g @anthropic-ai/claude-code"
         return 0
     fi
 
