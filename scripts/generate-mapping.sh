@@ -32,49 +32,10 @@ else
     USE_YQ=true
 fi
 
-# ── YAML frontmatter validation ──────────────────────────────────────────────
+# ── YAML frontmatter validation (from lib/validation.sh) ─────────────────────
 
-# Validate that a feature spec has well-formed YAML frontmatter.
-# Checks for balanced --- markers and required fields.
-# Returns 0 if valid, 1 if invalid.
-validate_frontmatter() {
-    local file="$1"
-    local validate_only="${2:-false}"
-
-    # Check first line is ---
-    if ! head -1 "$file" | grep -q "^---$"; then
-        echo -e "${YELLOW}Warning: $file — missing opening --- marker, skipping${NC}" >&2
-        return 1
-    fi
-
-    # Check for closing --- within first 20 lines
-    local marker_count
-    marker_count=$(head -20 "$file" | grep -c "^---$" 2>/dev/null || echo "0")
-    if [ "$marker_count" -lt 2 ]; then
-        echo -e "${YELLOW}Warning: $file — missing closing --- marker in first 20 lines, skipping${NC}" >&2
-        return 1
-    fi
-
-    # Check required fields exist in frontmatter
-    local frontmatter
-    frontmatter=$(awk 'BEGIN{c=0} /^---$/{c++; if(c==2) exit; next} c==1{print}' "$file")
-
-    local has_feature has_domain has_status
-    has_feature=$(echo "$frontmatter" | grep -c "^feature:" 2>/dev/null || echo "0")
-    has_domain=$(echo "$frontmatter" | grep -c "^domain:" 2>/dev/null || echo "0")
-    has_status=$(echo "$frontmatter" | grep -c "^status:" 2>/dev/null || echo "0")
-
-    if [ "$has_feature" -eq 0 ]; then
-        echo -e "${YELLOW}Warning: $file — missing required field 'feature', skipping${NC}" >&2
-        return 1
-    fi
-    if [ "$has_domain" -eq 0 ]; then
-        echo -e "${YELLOW}Warning: $file — missing required field 'domain', skipping${NC}" >&2
-        return 1
-    fi
-
-    return 0
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/validation.sh"
 
 # Function to extract ONLY the first frontmatter block (between first two --- markers)
 # Fixes a bug where sed -n '/^---$/,/^---$/p' could match --- horizontal rules

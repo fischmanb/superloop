@@ -24,6 +24,7 @@
 #   truncate_for_context
 #   check_circular_deps
 #   get_cpu_count, run_parallel_drift_checks
+#   count_files  (returns associative array via nameref)
 #
 # Notes:
 #   - run_parallel_drift_checks requires check_drift() to be defined by caller
@@ -381,5 +382,48 @@ run_parallel_drift_checks() {
     if [ "$any_failed" = true ]; then
         return 1
     fi
+    return 0
+}
+
+# ── File counting by extension ────────────────────────────────────────────────
+# Count files in a directory grouped by extension.
+#
+# Existing structured-data patterns in this library:
+#   - read_state: sets fixed global variables (not suitable for variable-key maps)
+#   - completed_features_json: outputs JSON string to stdout (requires parsing)
+# Neither fits a variable-key associative array, so this uses a nameref parameter.
+#
+# Usage:
+#   declare -A counts
+#   count_files "/path/to/dir" counts
+#   echo "${counts[sh]}"    # number of .sh files
+#   echo "${counts[none]}"  # files with no extension
+#
+# Returns 0 on success, 1 if directory does not exist.
+# Empty directories return zero counts (not an error).
+
+count_files() {
+    local dir="$1"
+    local -n _count_files_ref="$2"
+
+    if [ ! -d "$dir" ]; then
+        echo "count_files: directory does not exist: $dir" >&2
+        return 1
+    fi
+
+    _count_files_ref=()
+
+    while IFS= read -r -d '' file; do
+        local basename
+        basename=$(basename "$file")
+        local ext
+        if [[ "$basename" == *.* ]]; then
+            ext="${basename##*.}"
+        else
+            ext="none"
+        fi
+        _count_files_ref[$ext]=$(( ${_count_files_ref[$ext]:-0} + 1 ))
+    done < <(find "$dir" -maxdepth 1 -type f -print0 2>/dev/null)
+
     return 0
 }

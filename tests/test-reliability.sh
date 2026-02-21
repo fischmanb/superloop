@@ -434,6 +434,50 @@ test_syntax() {
     done
 }
 
+# ── Test: count_files ─────────────────────────────────────────────────────────
+
+test_count_files() {
+    echo ""
+    echo "=== count_files ==="
+    setup
+
+    # Test 1: directory does not exist → error code 1
+    local exit_code=0
+    declare -A cf_result=()
+    count_files "$TEST_TMPDIR/nonexistent" cf_result 2>/dev/null || exit_code=$?
+    assert_exit_code "nonexistent dir returns 1" "1" "$exit_code"
+
+    # Test 2: empty directory → zero counts, no error
+    local empty_dir="$TEST_TMPDIR/empty_dir"
+    mkdir -p "$empty_dir"
+    declare -A cf_empty=()
+    exit_code=0
+    count_files "$empty_dir" cf_empty || exit_code=$?
+    assert_exit_code "empty dir returns 0" "0" "$exit_code"
+    assert_eq "empty dir has zero keys" "0" "${#cf_empty[@]}"
+
+    # Test 3: mixed extension directory → correct counts per extension
+    local mixed_dir="$TEST_TMPDIR/mixed"
+    mkdir -p "$mixed_dir"
+    touch "$mixed_dir/a.sh" "$mixed_dir/b.sh" "$mixed_dir/c.md" "$mixed_dir/d.txt" "$mixed_dir/e.txt" "$mixed_dir/f.txt"
+    declare -A cf_mixed=()
+    count_files "$mixed_dir" cf_mixed
+    assert_eq "sh count" "2" "${cf_mixed[sh]}"
+    assert_eq "md count" "1" "${cf_mixed[md]}"
+    assert_eq "txt count" "3" "${cf_mixed[txt]}"
+
+    # Test 4: files with no extension → grouped under "none"
+    local noext_dir="$TEST_TMPDIR/noext"
+    mkdir -p "$noext_dir"
+    touch "$noext_dir/Makefile" "$noext_dir/Dockerfile" "$noext_dir/script.sh"
+    declare -A cf_noext=()
+    count_files "$noext_dir" cf_noext
+    assert_eq "no-extension files grouped as none" "2" "${cf_noext[none]}"
+    assert_eq "sh files still counted" "1" "${cf_noext[sh]}"
+
+    teardown
+}
+
 # ── Run all tests ────────────────────────────────────────────────────────────
 
 echo "Running lib/reliability.sh test suite..."
@@ -443,6 +487,7 @@ test_state_roundtrip
 test_completed_features_json
 test_check_circular_deps
 test_lock
+test_count_files
 test_functions_called
 test_syntax
 

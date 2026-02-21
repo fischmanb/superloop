@@ -84,7 +84,8 @@ auto-sdd/
 │   ├── overnight-autonomous.sh # Overnight automation with Slack/Jira (790 lines)
 │   └── generate-mapping.sh     # Auto-generate .specs/mapping.md from frontmatter
 ├── lib/                        # Shared libraries
-│   ├── reliability.sh          # Lock, backoff, state, truncation, cycle detection (385 lines)
+│   ├── reliability.sh          # Lock, backoff, state, truncation, cycle detection, file counting
+│   ├── validation.sh           # YAML frontmatter validation (sourced by generate-mapping.sh)
 │   ├── common.sh               # curl, parsing, validation (UNUSED by main scripts)
 │   └── models.sh               # Model endpoint management (UNUSED by main scripts)
 ├── stages/                     # Multi-invocation pipeline (local LLM infrastructure)
@@ -95,7 +96,8 @@ auto-sdd/
 ├── framework/                  # User-facing tools
 │   └── ai-dev                  # Main CLI entry for stages/
 ├── tests/                      # Test suite
-│   ├── test-reliability.sh     # Unit tests for lib/reliability.sh (41 assertions)
+│   ├── test-reliability.sh     # Unit tests for lib/reliability.sh (49 assertions)
+│   ├── test-validation.sh      # Unit tests for lib/validation.sh (10 assertions)
 │   ├── dry-run.sh              # Integration test for build-loop-local.sh
 │   └── fixtures/dry-run/       # Test fixtures (roadmap, vision)
 ├── Brians-Notes/               # Human notes
@@ -238,10 +240,21 @@ Both `scripts/build-loop-local.sh` and `scripts/overnight-autonomous.sh` source
 | `write_state` / `read_state` / `clean_state` | JSON resume state persistence | build-loop only |
 | `completed_features_json` | Build JSON array from bash array (with escaping) | build-loop only |
 | `get_cpu_count` | Detect CPU count (nproc/sysctl) | build-loop only |
+| `count_files` | Count files in directory grouped by extension (nameref) | pending |
 | `run_parallel_drift_checks` | Parallel drift checks (M3 Ultra) | **NOT YET CALLED** |
 
 **Caller contract**: define `log`, `warn`, `success`, `error` before sourcing (or use fallbacks).
 Set globals (`LOCK_FILE`, `PROJECT_DIR`, `STATE_DIR`, `STATE_FILE`) before calling relevant functions.
+
+## Shared Library: lib/validation.sh
+
+`scripts/generate-mapping.sh` sources `lib/validation.sh` for YAML frontmatter validation:
+
+| Function | Purpose | Called from |
+|----------|---------|------------|
+| `validate_frontmatter` | Validate YAML frontmatter in feature spec files | scripts/generate-mapping.sh |
+
+**Caller contract**: set `RED`, `YELLOW`, `NC` color variables before sourcing (or use fallbacks).
 
 ## Exit Codes
 
@@ -269,8 +282,11 @@ Review agents must output: `REVIEW_CLEAN` | `REVIEW_FIXED: {summary}` | `REVIEW_
 ## Testing
 
 ```bash
-# Unit tests for lib/reliability.sh (41 assertions, all passing)
+# Unit tests for lib/reliability.sh (49 assertions, all passing)
 ./tests/test-reliability.sh
+
+# Unit tests for lib/validation.sh (10 assertions, all passing)
+./tests/test-validation.sh
 
 # Structural dry-run (no agent needed)
 DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
@@ -299,10 +315,11 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 ```bash
 # 1. Syntax check
-bash -n scripts/build-loop-local.sh && bash -n scripts/overnight-autonomous.sh && bash -n lib/reliability.sh
+bash -n scripts/build-loop-local.sh && bash -n scripts/overnight-autonomous.sh && bash -n lib/reliability.sh && bash -n lib/validation.sh
 
 # 2. Unit tests
 ./tests/test-reliability.sh
+./tests/test-validation.sh
 
 # 3. Structural dry-run
 DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
@@ -313,6 +330,7 @@ grep -n "function_name" scripts/*.sh | grep -v '^\s*#'
 # 5. Check for orphaned code
 grep -c "source.*common.sh" scripts/*.sh  # Should be 0 (orphaned)
 grep -c "source.*reliability.sh" scripts/*.sh  # Should be 2
+grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh)
 ```
 
 ## Questions?
