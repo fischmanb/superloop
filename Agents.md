@@ -64,7 +64,7 @@ Future agents: read this before making changes.
 
 > **⚠️ SUPERSEDED**: Branch `claude/setup-auto-sdd-framework-INusW` is fully contained in the integration branch. Do not merge.
 
-### Round 4: Cursor → Claude Code CLI Swap (branch: claude/cursor-to-claude-cli-swap-3544)
+### Round 4: Cursor → Claude Code CLI Swap (branch: claude/setup-git-workflow-yzpbx)
 
 **What was asked**: Lightest possible swap from `agent` (Cursor CLI) to `claude` (Claude Code CLI).
 
