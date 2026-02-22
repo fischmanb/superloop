@@ -14,6 +14,13 @@
 logs/*.log
 tests/dry-run-verbose.log
 
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+tsconfig.tsbuildinfo
+
 # OS files
 .DS_Store
 

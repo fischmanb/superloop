@@ -1,70 +1,57 @@
 # App Vision
 
-> High-level description of what this application does and why it exists.
-> This is the "north star" that guides all feature development.
+> ADHD Calendar — a visual time-blocking calendar designed for ADHD coaches and their clients.
 
 ---
 
 ## Overview
 
-<!-- One paragraph describing the app's purpose -->
+A mobile-first calendar app that displays a week view of time blocks, color-coded by category. Designed to help people with ADHD visualize their schedule structure at a glance.
 
-**Target users**: <!-- Who is this for? -->
+**Target users**: ADHD coaches and their clients
 
-**Core value proposition**: <!-- What problem does it solve? -->
+**Core value proposition**: Simple, visual weekly overview that reduces cognitive load by showing blocks as colored categories instead of dense text schedules.
 
 ---
 
 ## Key Screens / Areas
 
-<!-- List the main areas of the app discovered during /clone-app or planned -->
-
 | Screen | Purpose | Priority |
 |--------|---------|----------|
-| <!-- e.g., Dashboard --> | <!-- What users do here --> | <!-- Core/Secondary --> |
+| Week View | Display 7-day grid of color-coded time blocks | Core |
+| Block Detail | Tap a block to see full details | Core |
+| Add/Edit Block | Create or modify a time block | Core |
+| Coach Client Switcher | Coach toggles between client calendars | Secondary |
 
 ---
 
 ## Tech Stack
 
-<!-- Detected or chosen technology stack -->
-
 | Layer | Technology |
 |-------|------------|
-| Frontend | <!-- e.g., React, Next.js --> |
-| Styling | <!-- e.g., Tailwind CSS --> |
-| Backend | <!-- e.g., Node.js, Python --> |
-| Database | <!-- e.g., PostgreSQL --> |
-| Auth | <!-- e.g., NextAuth, Auth0 --> |
-| Hosting | <!-- e.g., Vercel, AWS --> |
+| Frontend | React 18 + TypeScript |
+| Styling | Tailwind CSS |
+| Build Tool | Vite |
+| Testing | Vitest + React Testing Library |
+| State | Props + local state (no global store yet) |
 
 ---
 
 ## Design Principles
 
-<!-- Key UX/UI principles to follow -->
-
-1. <!-- e.g., Mobile-first responsive design -->
-2. <!-- e.g., Accessible (WCAG 2.1 AA) -->
-3. <!-- e.g., Fast initial load (<3s) -->
+1. Mobile-first — designed for phone screens, responsive up
+2. Minimal cognitive load — color-coded blocks, not walls of text
+3. Glanceable — a week's structure visible without scrolling
 
 ---
 
 ## Out of Scope (for now)
 
-<!-- Features explicitly NOT being built in this phase -->
-
-- <!-- e.g., Mobile native apps -->
-- <!-- e.g., Multi-tenancy -->
-
----
-
-## Reference
-
-<!-- If cloning an existing app -->
-
-**Source app**: <!-- URL or name -->
-**Analysis date**: <!-- When /clone-app was run -->
+- Backend / API / database
+- Authentication
+- Push notifications
+- Native mobile apps
+- Multi-tenancy
 
 ---
 

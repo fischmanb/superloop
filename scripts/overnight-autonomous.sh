@@ -186,7 +186,7 @@ POST_BUILD_STEPS="${POST_BUILD_STEPS:-test}"
 agent_cmd() {
     local step_model="$1"
     local model="${step_model:-$AGENT_MODEL}"
-    local cmd="claude -p --output-format text"
+    local cmd="claude -p --dangerously-skip-permissions --output-format text"
     if [ -n "$model" ]; then
         cmd="$cmd --model $model"
     fi
