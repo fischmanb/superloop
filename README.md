@@ -1,515 +1,274 @@
-# SDD 2.0.0: Spec-Driven Development + Compound Learning
+# auto-sdd
 
-A framework for AI-assisted development that combines:
-- **Spec-Driven Development (SDD)** - Define behavior before implementing
-- **Compound Learning** - Agent gets smarter from every session
-- **Roadmap-Driven Automation** - Build entire apps feature-by-feature
-- **Overnight Automation** - Wake up to draft PRs
+> Spec-driven development with autonomous Claude Code agents — hardened for production use.
 
-Works with both **Cursor** and **Claude Code**.
+Forked from [AdrianRogowski/auto-sdd](https://github.com/AdrianRogowski/auto-sdd).
+The original introduced a compelling concept: Gherkin specs driving AI agents through a feature build loop. This fork completes the runtime — adding the reliability layer, test suite, crash recovery, and Claude Code CLI support needed to run it against real projects.
 
-## Installation
+---
 
-### Option 1: Git Alias (Recommended)
+## What it does
 
-Add to your `~/.gitconfig`:
+You write a feature roadmap. The loop picks the next pending feature, hands it to a Claude Code agent with a fresh context, validates the output, commits the result, and moves on. Repeat until the roadmap is done.
 
-```ini
-[alias]
-    auto = "!f() { git clone --depth 1 https://github.com/AdrianRogowski/auto-sdd.git .sdd-temp && rm -rf .sdd-temp/.git && cp -r .sdd-temp/. . && rm -rf .sdd-temp && echo 'SDD 2.0.0 installed! Run /spec-first to create your first feature spec.'; }; f"
-```
+Each agent invocation is isolated. No context rot. No shared state between features except what you explicitly define in the spec.
 
-Then in any project:
+**Validated end-to-end**: the loop produced a working React + TypeScript + Vite app — WeekView calendar component (12 passing tests) and ClientSwitcher coach panel (7 passing tests) — TypeScript clean, running at localhost:5173.
 
-```bash
-git auto
-```
+---
 
-This copies all SDD files into your current project:
-- `VERSION` - Framework version (semver, e.g. 2.0.0)
-- `.cursor/` - Cursor rules, commands, hooks
-- `.claude/` - Claude Code commands
-- `.specs/` - Feature specs, learnings, design system, roadmap
-- `scripts/` - Automation scripts
-- `CLAUDE.md` - Agent instructions
+## What this fork adds
 
-### Option 2: Manual Clone
+The upstream project provided the orchestration concept and slash commands. Production use required a second pass:
 
-```bash
-git clone https://github.com/AdrianRogowski/auto-sdd.git
-cp -r auto-sdd/.cursor auto-sdd/.claude auto-sdd/.specs auto-sdd/scripts auto-sdd/CLAUDE.md .
-rm -rf auto-sdd
-```
+| Area | Upstream | This fork |
+|------|----------|-----------|
+| CLI support | Cursor (`agent`) | Claude Code (`claude`) — `--force` removed, all `command -v` checks updated |
+| Reliability | None | `lib/reliability.sh` — locking, exponential backoff, context truncation, cycle detection |
+| Crash recovery | None | `--resume` flag; JSON state persisted in `.sdd-state/` across interruptions |
+| Test suite | None | 64 assertions across unit tests, validation tests, and structural dry-run |
+| Bug fixes | — | 7 bare `local` statements outside functions; broken comment-line grep filter; `MAX_FEATURES_PER_RUN` env key silently ignored |
+| Documentation | README | `Agents.md` — agent work log with verified outcomes vs claimed outcomes; `ARCHITECTURE.md`; `Brians-Notes/` |
 
-### Migrating from SDD 1.0
+The reliability library is ~385 lines handling the failure modes that matter in overnight runs: stale locks, rate limit backoff, context budget enforcement, dependency cycles in the roadmap, and state recovery after a crash.
 
-If you have an existing project using SDD 1.0 (`git sdd`), **do NOT run `git auto`** - it would overwrite your files.
+---
 
-Instead, use the two-step migration process:
+## Architecture
 
-```bash
-# Step 1: Stage the 2.0 files (creates .sdd-upgrade/ directory)
-git auto-upgrade
+### Two systems in one repo
 
-# Step 2: Run the migration (in Cursor or Claude Code)
-/sdd-migrate
-```
+**System 1 — Orchestration** (actively developed):
+`scripts/build-loop-local.sh` and `scripts/overnight-autonomous.sh` call Claude Code agents with a fresh context per feature. `lib/reliability.sh` is the shared runtime for both.
 
-**Git alias for `auto-upgrade`** (add to `~/.gitconfig`):
+**System 2 — Local LLM pipeline** (original prototype):
+`stages/`, `framework/ai-dev`, `lib/common.sh`, `lib/models.sh`. Multi-stage pipeline (plan → build → review → fix) designed for locally-hosted models. Not currently wired into the main orchestration scripts.
 
-```ini
-[alias]
-    auto-upgrade = "!f() { git clone --depth 1 https://github.com/AdrianRogowski/auto-sdd.git .sdd-temp && rm -rf .sdd-temp/.git && mkdir -p .sdd-upgrade && cp -r .sdd-temp/. .sdd-upgrade/ && rm -rf .sdd-temp && echo 'SDD 2.0.0 files staged in .sdd-upgrade/' && echo 'Now run /sdd-migrate to upgrade'; }; f"
-```
+### Build validation pipeline
 
-### Post-Install (Optional: Overnight Automation)
-
-```bash
-# Install dependencies
-brew install yq gh
-
-# Configure Slack/Jira integration
-cp .env.local.example .env.local
-nano .env.local
-
-# Set up scheduled jobs
-./scripts/setup-overnight.sh
-```
-
-## Quick Start
-
-After installing, use the slash commands:
+Every feature goes through this before a commit is made:
 
 ```
-/spec-first user authentication    # Create a feature spec
-/compound                          # Extract learnings after implementing
-/vision "CRM for real estate"      # Create a vision doc from description
-/roadmap create                    # Create a roadmap from the vision
-/clone-app https://example.com     # Clone an app into vision + roadmap
-/build-next                        # Build next feature from roadmap
+┌──────────┐  ┌─────────────┐  ┌───────────┐  ┌─────────────┐  ┌──────────┐
+│  BUILD   │─▶│ BUILD CHECK │─▶│   TESTS   │─▶│ DRIFT CHECK │─▶│  COMMIT  │
+│ (agent)  │  │  (compile)  │  │ (npm test)│  │   (agent)   │  │          │
+└──────────┘  └─────────────┘  └───────────┘  └─────────────┘  └──────────┘
+     │              │                │               │
+     └── retry ◄────┴── retry ◄──────┘               │
+                                                      ▼
+                                           build + tests re-run
 ```
 
-## The Workflows
+Each agent step runs in a fresh context window. The shell re-runs build and tests as a hard gate after every agent step — no additional tokens, no trust in self-assessment.
 
-### Manual: Single Feature
+### Signal protocol
+
+Build agents must emit one of:
+```
+FEATURE_BUILT: {feature name}
+SPEC_FILE: {path to .feature.md}
+SOURCE_FILES: {comma-separated source paths}
+```
+or `NO_FEATURES_READY` | `BUILD_FAILED: {reason}`
+
+Drift and review agents have their own signal contracts. The orchestrator parses these with grep — no JSON parsing, no eval on agent output.
+
+---
+
+## File structure
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   DESIGN    │ ──▶ │    SPEC     │ ──▶ │    TEST     │ ──▶ │ IMPLEMENT   │
-│ (tokens)    │     │ (Gherkin)   │     │  (failing)  │     │   (code)    │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-                                                                   │
-                                                                   ▼
-                                                            ┌─────────────┐
-                                                            │  /compound  │
-                                                            │ (learnings) │
-                                                            └─────────────┘
-```
-
-### Roadmap: Full App Build
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  /vision    │ ──▶ │  /roadmap   │ ──▶ │ /build-next │ ──▶ │   repeat    │
-│ (describe)  │     │  (plan)     │     │  (build)    │     │  until done │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-
-Or from an existing app:
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  /clone-app │ ──▶ │ vision.md + │ ──▶ │ /build-next │ ──repeat──▶ App Built!
-│  (analyze)  │     │ roadmap.md  │     │  (loop)     │
-└─────────────┘     └─────────────┘     └─────────────┘
-```
-
-### Overnight: Autonomous
-
-```
-11:00 PM  /roadmap-triage (scan Slack/Jira → add to roadmap)
-          /build-next × MAX_FEATURES (build from roadmap)
-            └─ Each feature: build → tests → drift check → [code review] → commit
-          Create draft PRs
- 7:00 AM  You review 3-4 draft PRs (specs verified against code)
-```
-
-### Build Validation Pipeline
-
-Every feature build goes through a multi-stage pipeline. Each agent-based step runs in a **fresh context window** — you can assign different AI models to each step.
-
-```
-┌─────────────┐  ┌───────────┐  ┌───────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────┐
-│   BUILD     │─▶│  BUILD    │─▶│   TEST    │─▶│ DRIFT CHECK │─▶│CODE REVIEW  │─▶│  COMMIT  │
-│ (spec-first │  │  CHECK    │  │  SUITE    │  │ (fresh agent│  │(fresh agent,│  │          │
-│  --full)    │  │ (compile) │  │ (npm test)│  │  Layer 2)   │  │ optional)   │  │          │
-└─────────────┘  └───────────┘  └───────────┘  └─────────────┘  └─────────────┘  └──────────┘
-      │               │               │               │                │
-      └── retry ◄─────┴── retry ◄─────┘               │                │
-                                                       ▼                ▼
-                                              build+tests re-run  build+tests re-run
-                                              (agents modify code)  (agents modify code)
-```
-
-| Stage | Type | Controls | Blocking? | Re-validates? |
-|-------|------|----------|-----------|---------------|
-| Build check | Shell (compile/type check) | `BUILD_CHECK_CMD` | Yes (retry) | — |
-| Test suite | Shell (test runner) | `TEST_CHECK_CMD` | Yes (retry) | — |
-| Drift check | Agent (fresh context) | `DRIFT_CHECK=true` | Yes (retry) | build + tests after fix |
-| Code review | Agent (fresh context) | `POST_BUILD_STEPS` | No (warn only) | build + tests after fix |
-
-**Agents are test-aware**: Every agent receives the test command and is told to run tests and iterate until they pass. The retry agent also receives the actual failure output (last 50/80 lines of build/test errors) so it knows exactly what to fix. After each agent step, the shell re-runs build + tests as a safety net — **zero additional AI tokens** for that verification.
-
-**Model selection**: Each agent step can use a different model via `BUILD_MODEL`, `DRIFT_MODEL`, `REVIEW_MODEL`, etc.
-
-## Slash Commands
-
-### Core Workflow
-
-| Command | Purpose |
-|---------|---------|
-| `/spec-first` | Create feature spec with Gherkin + ASCII mockup |
-| `/spec-first --full` | Create spec AND build without pauses |
-| `/compound` | Extract learnings from current session |
-| `/spec-init` | Bootstrap SDD on existing codebase |
-
-### Roadmap Commands
-
-| Command | Purpose |
-|---------|---------|
-| `/vision` | Create or update vision.md from description, Jira, or Confluence |
-| `/roadmap` | Create, add features, reprioritize, or check status |
-| `/clone-app <url>` | Analyze app → create vision.md + roadmap.md |
-| `/build-next` | Build next pending feature from roadmap |
-| `/roadmap-triage` | Scan Slack/Jira → add to roadmap |
-
-### Maintenance
-
-| Command | Purpose |
-|---------|---------|
-| `/sdd-migrate` | Migrate from SDD 1.0 to 2.0 |
-| `/catch-drift` | Detect spec ↔ code misalignment |
-| `/check-coverage` | Find gaps in spec/test coverage |
-| `/fix-bug` | Create regression test for bug |
-| `/code-review` | Review against engineering standards |
-
-## Directory Structure
-
-```
-.
-├── VERSION                 # Framework version (semver, e.g. 2.0.0)
-├── .cursor/
-│   ├── commands/           # Slash command definitions
-│   ├── rules/              # Cursor rules (SDD workflow, design tokens)
-│   ├── hooks.json          # Cursor hooks configuration
-│   └── hooks/              # Hook scripts
+auto-sdd/
+├── scripts/
+│   ├── build-loop-local.sh        # Main build loop — features from roadmap (1311 lines)
+│   ├── overnight-autonomous.sh    # Overnight automation with Slack/Jira (790 lines)
+│   ├── generate-mapping.sh        # Auto-generate .specs/mapping.md from frontmatter
+│   ├── nightly-review.sh          # Extract learnings from today's commits
+│   ├── setup-overnight.sh         # Install launchd scheduled jobs (macOS)
+│   └── uninstall-overnight.sh     # Remove launchd jobs
 │
-├── .claude/
-│   └── commands/           # Claude Code command definitions
+├── lib/
+│   ├── reliability.sh             # Shared runtime: locking, backoff, state, truncation,
+│   │                              #   cycle detection, file counting (385 lines)
+│   ├── validation.sh              # YAML frontmatter validation for generate-mapping.sh
+│   ├── common.sh                  # HTTP/parsing helpers (system 2, not sourced by main scripts)
+│   └── models.sh                  # Model endpoint management (system 2, not sourced by main scripts)
+│
+├── stages/                        # Multi-invocation local LLM pipeline (system 2)
+│   ├── 01-plan.sh                 # Spec → plan.json
+│   ├── 02-build.sh                # plan.json → source files
+│   ├── 03-review.sh               # files → review.json
+│   └── 04-fix.sh                  # review.json → fixed files
+│
+├── framework/
+│   └── ai-dev                     # CLI entry point for stages/ pipeline
+│
+├── tests/
+│   ├── test-reliability.sh        # Unit tests for lib/reliability.sh (54 assertions)
+│   ├── test-validation.sh         # Unit tests for lib/validation.sh (10 assertions)
+│   ├── dry-run.sh                 # Structural integration test (no agent needed)
+│   └── fixtures/dry-run/          # Test fixtures: roadmap.md, vision.md
+│
+├── .claude/commands/              # Claude Code slash commands
+├── .cursor/                       # Cursor rules, commands, hooks
 │
 ├── .specs/
-│   ├── vision.md           # App vision (created by /vision or /clone-app)
-│   ├── roadmap.md          # Feature roadmap (single source of truth)
-│   ├── features/           # Feature specs (Gherkin + ASCII mockups)
-│   │   └── {domain}/
-│   │       └── {feature}.feature.md
-│   ├── test-suites/        # Test documentation
-│   ├── design-system/      # Design tokens + component docs
-│   ├── learnings/          # Cross-cutting patterns by category
-│   │   ├── index.md        # Summary + recent learnings
-│   │   ├── testing.md
-│   │   ├── performance.md
-│   │   ├── security.md
-│   │   ├── api.md
-│   │   ├── design.md
-│   │   └── general.md
-│   └── mapping.md          # AUTO-GENERATED routing table
+│   ├── vision.md                  # App vision
+│   ├── roadmap.md                 # Feature roadmap (single source of truth)
+│   ├── features/                  # Feature specs (.feature.md files)
+│   ├── learnings/                 # Cross-cutting patterns by category
+│   └── mapping.md                 # Auto-generated routing table
 │
-├── scripts/
-│   ├── build-loop-local.sh        # Run /build-next in a loop (no remote)
-│   ├── generate-mapping.sh        # Regenerate mapping.md
-│   ├── nightly-review.sh          # Extract learnings (10:30 PM)
-│   ├── overnight-autonomous.sh    # Auto-implement features (11:00 PM)
-│   ├── setup-overnight.sh         # Install launchd jobs
-│   ├── uninstall-overnight.sh     # Remove launchd jobs
-│   └── launchd/                   # macOS scheduling plists
+├── Brians-Notes/
+│   ├── SETUP.md                   # Mac Studio setup guide
+│   └── HANDOFF-PROMPT.md          # Prompt templates for agent sessions
 │
-├── logs/                   # Overnight automation logs
-├── CLAUDE.md               # Agent instructions (universal)
-└── .env.local              # Configuration (Slack, Jira, etc.)
+├── CLAUDE.md                      # Agent instructions (universal)
+├── Agents.md                      # Agent work log — what was asked vs what happened
+├── ARCHITECTURE.md                # Design decisions for stages/ pipeline
+├── .env.local.example             # Full config reference (167 lines)
+├── VERSION                        # Framework version (semver)
+└── .gitignore                     # Excludes .sdd-state/, .build-worktrees/, logs/
 ```
 
-### Versioning
-
-SDD uses semantic versioning. The `VERSION` file at the project root holds the framework version (e.g. `2.0.0`). `.specs/.sdd-version` mirrors it for migration detection. To check your version: `cat VERSION`.
-
-## Roadmap System
-
-The roadmap is the **single source of truth** for what to build.
-
-### vision.md
-
-High-level app description. Created by:
-- `/vision "description"` — from a text description
-- `/vision --from-jira PROJECT_KEY` — seeded from Jira epics
-- `/vision --from-confluence PAGE_ID` — seeded from a Confluence page
-- `/clone-app <url>` — from analyzing a live app
-- `/vision --update` — refresh based on what's been built and learned
-
-Contents: app overview, target users, key screens, tech stack, design principles.
-
-### roadmap.md
-
-Ordered list of features with dependencies. Managed by:
-- `/roadmap create` — build from vision.md
-- `/roadmap add "feature"` — add features to existing roadmap
-- `/roadmap reprioritize` — restructure phases and reorder
-- `/roadmap status` — read-only progress report
-- `/clone-app <url>` — auto-generated from app analysis
-- `/roadmap-triage` — add items from Slack/Jira
-
-```markdown
-## Phase 1: Foundation
-
-| # | Feature | Source | Jira | Complexity | Deps | Status |
-|---|---------|--------|------|------------|------|--------|
-| 1 | Project setup | clone-app | PROJ-101 | S | - | ✅ |
-| 2 | Auth: Signup | clone-app | PROJ-102 | M | 1 | 🔄 |
-| 3 | Auth: Login | clone-app | PROJ-103 | M | 1 | ⬜ |
-
-## Ad-hoc Requests
-
-| # | Feature | Source | Jira | Complexity | Deps | Status |
-|---|---------|--------|------|------------|------|--------|
-| 100 | Dark mode | slack:C123/ts | PROJ-200 | M | - | ⬜ |
-```
-
-### How Features Flow In
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     ROADMAP (Single Source)                     │
-├─────────────────────────────────────────────────────────────────┤
-│                              ▲                                  │
-│          ┌───────────────────┼───────────────────┐              │
-│          │                   │                   │              │
-│    ┌─────┴─────┐  ┌────┴────┐  ┌────┴────┐  ┌─────┴─────┐       │
-│    │  /vision   │  │/roadmap │  │  Slack  │  │   Jira    │       │
-│    │ /clone-app │  │  add    │  │(triage) │  │ (triage)  │       │
-│    └───────────┘  └────────┘  └────────┘  └───────────┘       │
-│                                                                 │
-│                              │                                  │
-│                              ▼                                  │
-│                       ┌─────────────┐                           │
-│                       │ /build-next │ ──▶ Picks next pending    │
-│                       └─────────────┘     feature, builds it    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Jira/Slack Integration
-
-The system integrates with Jira and Slack via MCPs:
-
-| Action | Jira | Slack |
-|--------|------|-------|
-| **Triage** | Search by label | Search channel |
-| **Track** | Create tickets for features | Reply with Jira link |
-| **Start** | Transition to "In Progress" | - |
-| **Complete** | Transition to "Done" + PR link | Reply with ✅ |
-
-Configure in `.env.local`:
-
-```bash
-# Slack
-SLACK_FEATURE_CHANNEL="#feature-requests"
-SLACK_REPORT_CHANNEL="#dev-updates"
-
-# Jira
-JIRA_CLOUD_ID="yoursite.atlassian.net"
-JIRA_PROJECT_KEY="PROJ"
-JIRA_AUTO_LABEL="auto-ok"
-
-# Base branch (branch to sync from and create feature branches from)
-BASE_BRANCH=                  # Unset: build-loop uses current branch; overnight uses main
-# BASE_BRANCH=develop         # Use develop instead of main
-# BASE_BRANCH=current         # Overnight: use whatever branch you're on
-
-# Options
-CREATE_JIRA_FOR_SLACK=true    # Create Jira tickets for Slack requests
-SYNC_JIRA_STATUS=true         # Keep Jira status in sync
-MAX_FEATURES=4                # Features per overnight run
-
-# Build validation
-BUILD_CHECK_CMD=""            # Auto-detected (tsc, cargo check, etc.)
-TEST_CHECK_CMD=""             # Auto-detected (npm test, pytest, etc.)
-POST_BUILD_STEPS="test"       # Comma-separated: test, code-review
-DRIFT_CHECK=true              # Spec↔code drift detection
-
-# Model selection (per-step, each gets a fresh context window)
-# Run `agent --list-models` to see options
-AGENT_MODEL=""                # Default for all steps (empty = CLI default)
-BUILD_MODEL=""                # Main build agent
-DRIFT_MODEL=""                # Catch-drift agent
-REVIEW_MODEL=""               # Code-review agent
-```
-
-## Feature Spec Format
-
-Every feature spec has YAML frontmatter:
-
-```markdown
 ---
-feature: User Login
-domain: auth
-source: src/auth/LoginForm.tsx
-tests:
-  - tests/auth/login.test.ts
-components:
-  - LoginForm
-status: implemented
-created: 2026-01-31
-updated: 2026-01-31
----
-
-# User Login
-
-## Scenarios
-
-### Scenario: Successful login
-Given user is on login page
-When user enters valid credentials
-Then user is redirected to dashboard
-
-## UI Mockup
-
-┌─────────────────────────────────────┐
-│           Welcome Back              │
-├─────────────────────────────────────┤
-│  Email: [________________]          │
-│  Password: [________________]       │
-│  [        Log in        ]           │
-└─────────────────────────────────────┘
-
-## Learnings
-
-### 2026-01-31
-- **Gotcha**: Safari autofill needs onBlur handler
-```
-
-## Compound Learning
-
-Learnings are persisted at two levels:
-
-| Level | Location | Example |
-|-------|----------|---------|
-| Feature-specific | Spec's `## Learnings` section | "Login: Safari needs onBlur" |
-| Cross-cutting | `.specs/learnings/{category}.md` | "All forms need loading states" |
-
-Categories: `testing.md`, `performance.md`, `security.md`, `api.md`, `design.md`, `general.md`
-
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `./scripts/build-loop-local.sh` | Run /build-next in a loop locally (no remote/push/PR). Config: BASE_BRANCH, BRANCH_STRATEGY, MAX_FEATURES |
-| `./scripts/generate-mapping.sh` | Regenerate mapping.md from specs |
-| `./scripts/nightly-review.sh` | Extract learnings from today's commits |
-| `./scripts/overnight-autonomous.sh` | Full overnight automation (sync, triage, build, PRs) |
-| `./scripts/setup-overnight.sh` | Install launchd scheduled jobs |
-| `./scripts/uninstall-overnight.sh` | Remove launchd jobs |
-
-### Build Loop Examples
-
-```bash
-# Default: chained branches, build with test suite enforcement
-./scripts/build-loop-local.sh
-
-# Full validation: tests + code review
-POST_BUILD_STEPS="test,code-review" ./scripts/build-loop-local.sh
-
-# Use Opus for building, cheap model for validation
-BUILD_MODEL="opus-4.6-thinking" DRIFT_MODEL="gemini-3-flash" ./scripts/build-loop-local.sh
-
-# Branch strategies (set in .env.local or pass inline)
-BRANCH_STRATEGY=independent ./scripts/build-loop-local.sh   # Each feature isolated (worktrees)
-BRANCH_STRATEGY=both ./scripts/build-loop-local.sh         # Chained + independent rebuild
-BRANCH_STRATEGY=sequential ./scripts/build-loop-local.sh   # All features on current branch
-
-# Base branch (default: current branch for build-loop, main for overnight)
-BASE_BRANCH=develop ./scripts/build-loop-local.sh
-```
 
 ## Requirements
 
-- **Cursor** or **Claude Code**
-- **GitHub CLI** (`gh`) for PR creation
-- **yq** for YAML parsing (`brew install yq`)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code): `npm install -g @anthropic-ai/claude-code`
+- `ANTHROPIC_API_KEY` in your shell environment
+- `yq`: `brew install yq`
+- bash 5+: `brew install bash` on macOS
+- `gh` (GitHub CLI) for PR creation: `brew install gh`
 
-For overnight automation:
-- **Cursor CLI** (`agent` command)
-- macOS (for launchd scheduling)
+For overnight automation: macOS (launchd scheduling)
 
-## Example: Building a Full App
+---
 
-### From a description
+## Quick start
 
 ```bash
-# 1. Initialize project
-mkdir my-app && cd my-app
-git init
-git auto
+# Copy framework into your project
+git clone https://github.com/fischmanb/auto-sdd.git
+cd your-project
+cp -r auto-sdd/.claude auto-sdd/.specs auto-sdd/scripts \
+       auto-sdd/lib auto-sdd/CLAUDE.md auto-sdd/Agents.md .
 
-# 2. Define what you're building
-/vision "A task management app for small teams with projects, labels, and due dates"
+# Configure
+cp .env.local.example .env.local
+# Edit .env.local — set TEST_CHECK_CMD, BUILD_CHECK_CMD, model preferences
 
-# 3. Create the build plan
+# Verify the test suite passes
+./tests/test-reliability.sh        # 54 assertions
+./tests/test-validation.sh         # 10 assertions
+DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
+
+# Define your app
+/vision "A task management app for small teams with projects and due dates"
 /roadmap create
 
-# 4. Build feature by feature
-/build-next    # Builds feature #1
-/build-next    # Builds feature #2
-# ...or let overnight automation handle it
-
-# 5. Check progress
-/roadmap status
+# Build
+./scripts/build-loop-local.sh
 ```
 
-### From an existing app
+---
+
+## Configuration
+
+Key `.env.local` settings:
 
 ```bash
-# 1. Initialize project
-mkdir my-app && cd my-app
-git init
-git auto
+# Build validation
+BUILD_CHECK_CMD=""          # Auto-detected (tsc, cargo check, etc.)
+TEST_CHECK_CMD=""           # Auto-detected (npm test, pytest, etc.)
+POST_BUILD_STEPS="test"     # Comma-separated: test, code-review
+DRIFT_CHECK=true
 
-# 2. Clone an existing app into roadmap
-/clone-app https://todoist.com
+# Model selection (each step gets a fresh context window)
+AGENT_MODEL=""              # Default for all steps
+BUILD_MODEL=""              # Main build agent
+DRIFT_MODEL=""              # Drift detection agent
+REVIEW_MODEL=""             # Code review agent
 
-# Creates:
-# - .specs/vision.md (app description)
-# - .specs/roadmap.md (20 features across 3 phases)
+# Roadmap
+MAX_FEATURES=4              # Features per run (also reads MAX_FEATURES_PER_RUN)
+BASE_BRANCH=""              # Unset = current branch; "main" = overnight default
 
-# 3. Build feature by feature
-/build-next    # Builds feature #1
-/build-next    # Builds feature #2
+# Branch strategy
+BRANCH_STRATEGY=chained     # chained | independent | both | sequential
+
+# Resume after crash
+# Run with --resume flag to pick up from last known state
 ```
 
-### Adding features later
+---
+
+## Slash commands
+
+| Command | Purpose |
+|---------|---------|
+| `/spec-first <feature>` | Create feature spec with Gherkin + ASCII mockup |
+| `/spec-first --full` | Create spec and build without pauses |
+| `/vision` | Create or update vision.md |
+| `/roadmap create` | Build roadmap from vision.md |
+| `/roadmap add "feature"` | Add feature to existing roadmap |
+| `/roadmap status` | Progress report |
+| `/build-next` | Build next pending feature |
+| `/compound` | Extract learnings from current session |
+| `/catch-drift` | Detect spec ↔ code misalignment |
+| `/clone-app <url>` | Analyze existing app → vision + roadmap |
+
+---
+
+## What vibe coding actually looks like at the seams
+
+The loop works. It also fails in reproducible ways. Documenting both is the engineering.
+
+**What holds up well**: isolated frontend features built from tight Gherkin specs. The agent produces solid scaffolding with tests. TypeScript compiles. The test suite catches the obvious gaps before commit.
+
+**Where it breaks down**:
+
+1. **Integration across features** — each agent builds without knowledge of what previous agents produced. Types get redefined. Component interfaces drift. A codebase summary passed to each agent would fix most of this; it's the next logical addition.
+
+2. **Backend spec layer** — the framework is frontend-oriented. Database schemas, API contracts, and migrations have no equivalent spec format. The orchestrator can't validate what it can't parse.
+
+3. **Agent self-assessment is unreliable** — Round 1 in the agent work log produced zero code while writing a detailed description of bugs in code it never wrote. The reliability layer exists partly because of this. Always verify with grep and tests, never with the agent's summary.
+
+The productivity gain is real. So is the ceiling. Both are documented in `Agents.md`.
+
+---
+
+## Testing
 
 ```bash
-# Add a new feature or phase
-/roadmap add "email notifications and digest system"
+# Unit tests — lib/reliability.sh
+./tests/test-reliability.sh        # 54 assertions, all passing
 
-# Pull in requests from Slack/Jira
-/roadmap-triage
+# Unit tests — lib/validation.sh
+./tests/test-validation.sh         # 10 assertions, all passing
 
-# Restructure after priorities change
-/roadmap reprioritize
+# Structural integration test (no agent required)
+DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
-# Update vision after building 20 features
-/vision --update
+# Full integration test (requires Claude Code + ANTHROPIC_API_KEY)
+./tests/dry-run.sh
 ```
+
+Verification after any change:
+
+```bash
+bash -n scripts/build-loop-local.sh
+bash -n scripts/overnight-autonomous.sh
+bash -n lib/reliability.sh
+./tests/test-reliability.sh
+DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
+```
+
+---
 
 ## Credits
 
-Inspired by [Ryan Carson's Compound Engineering](https://x.com/ryancarson) approach, adapted for Cursor/Claude Code and the SDD workflow.
+Original concept by [Adrian Rogowski](https://github.com/AdrianRogowski/auto-sdd), inspired by [Ryan Carson's Compound Engineering](https://x.com/ryancarson) approach.
 
 ## License
 
