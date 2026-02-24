@@ -21,3 +21,5 @@ tests/dry-run-verbose.log
 .idea/
 *.swp
 *.swo
+node_modules/
+tsconfig.tsbuildinfo
