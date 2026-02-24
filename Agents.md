@@ -79,6 +79,34 @@ Future agents: read this before making changes.
 
 ---
 
+### Round 5: Fix broken grep comment-filter pattern (branch: claude/fix-grep-comment-filter-EB9FL)
+
+**What was asked**: Fix grep -v '^\s*#' → grep -v ":#\|: #" in active code locations.
+
+**What was changed**:
+- tests/test-reliability.sh lines 380 and 396: corrected comment-filter pattern
+- Agents.md verification checklist example: corrected pattern
+
+**What was NOT changed**: test assertions, pass/fail logic, scripts/, lib/, Brians-Notes/ (already documents the bug correctly)
+
+**Verification**: 57/57 unit tests pass, broken pattern absent from active code
+
+---
+
+### Round 6: Fix build-loop-local.sh bugs (branch: claude/fix-build-loop-local-Tzy8m)
+
+**What was asked**: Fix two bugs in `scripts/build-loop-local.sh`:
+1. `local: can only be used in a function` — multiple `local` declarations in top-level code (the `if [ "$BRANCH_STRATEGY" = "both" ]` block and its `else` branch, which are outside any function).
+2. `MAX_FEATURES_PER_RUN` vs `MAX_FEATURES` mismatch — `.env.local` uses `MAX_FEATURES_PER_RUN` but the script only reads `MAX_FEATURES`, ignoring the user's config.
+
+**What actually happened**:
+- **Bug 1**: Found 7 `local` statements outside functions (lines 1143, 1197, 1210, 1211, 1216, 1276, 1344). All were in the "both" mode block or the "single mode" else branch — top-level script code, not inside any function. Removed `local` keyword from all 7, converting them to plain variable assignments.
+- **Bug 2**: Changed line 160 from `MAX_FEATURES="${MAX_FEATURES:-25}"` to `MAX_FEATURES="${MAX_FEATURES:-${MAX_FEATURES_PER_RUN:-25}}"`. Now if `MAX_FEATURES` is unset, it falls back to `MAX_FEATURES_PER_RUN`, then to 25.
+
+**Verification**: `bash -n` passes, `test-reliability.sh` (54/54 pass), `dry-run.sh` structural tests pass. Grep confirms no remaining bare `local` outside functions.
+
+---
+
 ## What This Is
 
 A spec-driven development system optimized for 256GB unified memory. Uses multiple local LLMs with **fresh contexts per stage** to avoid context rot.
@@ -375,7 +403,7 @@ bash -n scripts/build-loop-local.sh && bash -n scripts/overnight-autonomous.sh &
 DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 # 4. Check functions are called (not just defined)
-grep -n "function_name" scripts/*.sh | grep -v '^\s*#'
+grep -n "function_name" scripts/*.sh | grep -v ":#\|: #"
 
 # 5. Check lib/ only contains active libraries
 ls lib/  # Should show only reliability.sh and validation.sh

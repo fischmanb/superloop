@@ -377,7 +377,7 @@ test_functions_called() {
         local called=false
         for script in "$build_loop" "$overnight"; do
             # Grep for function name, exclude comment lines and "provided by" lines
-            if grep -n "$func" "$script" 2>/dev/null | grep -v '^\s*#' | grep -v 'provided by' | grep -qv "^.*${func}()" 2>/dev/null; then
+            if grep -n "$func" "$script" 2>/dev/null | grep -v ":#\|: #" | grep -v 'provided by' | grep -qv "^.*${func}()" 2>/dev/null; then
                 called=true
                 break
             fi
@@ -393,7 +393,7 @@ test_functions_called() {
     done
 
     # Check: run_parallel_drift_checks should be called from build-loop-local.sh
-    if grep -n "run_parallel_drift_checks" "$build_loop" 2>/dev/null | grep -v '^\s*#' | grep -v 'provided by' | grep -qv "^.*run_parallel_drift_checks()" 2>/dev/null; then
+    if grep -n "run_parallel_drift_checks" "$build_loop" 2>/dev/null | grep -v ":#\|: #" | grep -v 'provided by' | grep -qv "^.*run_parallel_drift_checks()" 2>/dev/null; then
         echo "  PASS: run_parallel_drift_checks is called from scripts"
         PASS=$((PASS + 1))
     else

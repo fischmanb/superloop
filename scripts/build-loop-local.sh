@@ -157,7 +157,7 @@ if [ "$RESUME_MODE" = true ]; then
     fi
 fi
 
-MAX_FEATURES="${MAX_FEATURES:-25}"
+MAX_FEATURES="${MAX_FEATURES:-${MAX_FEATURES_PER_RUN:-25}}"
 MAX_RETRIES="${MAX_RETRIES:-1}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
 DRIFT_CHECK="${DRIFT_CHECK:-true}"
@@ -1140,7 +1140,7 @@ if [ "$BRANCH_STRATEGY" = "both" ]; then
 
         for fn in "${CHAINED_FEATURE_NAMES[@]}"; do
             INDEP_FEATURE_START=$(date +%s)
-            local elapsed_so_far=$(( INDEP_FEATURE_START - SCRIPT_START ))
+            elapsed_so_far=$(( INDEP_FEATURE_START - SCRIPT_START ))
 
             echo ""
             echo "═══════════════════════════════════════════════════════════"
@@ -1194,7 +1194,7 @@ BUILD_FAILED: {reason}
 "
 
             BUILD_OUTPUT=$(mktemp)
-            local AGENT_EXIT=0
+            AGENT_EXIT=0
             set +e
             $(agent_cmd "$BUILD_MODEL") "$INDEP_PROMPT" 2>&1 | tee "$BUILD_OUTPUT"
             AGENT_EXIT=${PIPESTATUS[0]}
@@ -1207,13 +1207,13 @@ BUILD_FAILED: {reason}
             BUILD_RESULT=$(cat "$BUILD_OUTPUT")
             rm -f "$BUILD_OUTPUT"
 
-            local indep_feature_end=$(date +%s)
-            local indep_feature_duration=$((indep_feature_end - INDEP_FEATURE_START))
+            indep_feature_end=$(date +%s)
+            indep_feature_duration=$((indep_feature_end - INDEP_FEATURE_START))
 
             if echo "$BUILD_RESULT" | grep -q "FEATURE_BUILT"; then
                 if check_working_tree_clean; then
                     # Accumulate or run drift check for independent build
-                    local indep_drift_ok=true
+                    indep_drift_ok=true
                     if validate_required_signals "$BUILD_RESULT"; then
                         extract_drift_targets "$BUILD_RESULT"
                         if [ "$PARALLEL_VALIDATION" = "true" ]; then
@@ -1273,7 +1273,7 @@ BUILD_FAILED: {reason}
     cd "$PROJECT_DIR"
     git checkout "$MAIN_BRANCH" 2>/dev/null || true
 
-    local total_elapsed=$(( $(date +%s) - SCRIPT_START ))
+    total_elapsed=$(( $(date +%s) - SCRIPT_START ))
 
     echo ""
     echo "═══════════════════════════════════════════════════════════"
@@ -1341,7 +1341,7 @@ else
         cleanup_all_worktrees
     fi
 
-    local total_elapsed=$(( $(date +%s) - SCRIPT_START ))
+    total_elapsed=$(( $(date +%s) - SCRIPT_START ))
 
     echo ""
     echo "═══════════════════════════════════════════════════════════"
