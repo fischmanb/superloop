@@ -64,6 +64,18 @@ Future agents: read this before making changes.
 
 > **⚠️ SUPERSEDED**: Branch `claude/setup-auto-sdd-framework-INusW` is fully contained in the integration branch. Do not merge.
 
+### Round 6: Fix build-loop-local.sh bugs (branch: claude/fix-build-loop-local-Tzy8m)
+
+**What was asked**: Fix two bugs in `scripts/build-loop-local.sh`:
+1. `local: can only be used in a function` — multiple `local` declarations in top-level code (the `if [ "$BRANCH_STRATEGY" = "both" ]` block and its `else` branch, which are outside any function).
+2. `MAX_FEATURES_PER_RUN` vs `MAX_FEATURES` mismatch — `.env.local` uses `MAX_FEATURES_PER_RUN` but the script only reads `MAX_FEATURES`, ignoring the user's config.
+
+**What actually happened**:
+- **Bug 1**: Found 7 `local` statements outside functions (lines 1143, 1197, 1210, 1211, 1216, 1276, 1344). All were in the "both" mode block or the "single mode" else branch — top-level script code, not inside any function. Removed `local` keyword from all 7, converting them to plain variable assignments.
+- **Bug 2**: Changed line 160 from `MAX_FEATURES="${MAX_FEATURES:-25}"` to `MAX_FEATURES="${MAX_FEATURES:-${MAX_FEATURES_PER_RUN:-25}}"`. Now if `MAX_FEATURES` is unset, it falls back to `MAX_FEATURES_PER_RUN`, then to 25.
+
+**Verification**: `bash -n` passes, `test-reliability.sh` (54/54 pass), `dry-run.sh` structural tests pass. Grep confirms no remaining bare `local` outside functions.
+
 ---
 
 ## What This Is
