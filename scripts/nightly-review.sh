@@ -84,7 +84,7 @@ fi
 
 log "Extracting learnings from recent work..."
 
-claude -p --output-format text "
+bash lib/claude-wrapper.sh -p --dangerously-skip-permissions "
 NIGHTLY REVIEW: Extract learnings from today's work.
 
 ## Recent Commits (last $HOURS_BACK hours)

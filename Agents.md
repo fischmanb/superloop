@@ -122,6 +122,23 @@ Future agents: read this before making changes.
 
 ---
 
+### Round 9: Add cost/token tracking wrapper (branch: claude/add-cost-tracking)
+
+**What was asked**: Route all agent invocations through a wrapper that captures cost/token metadata as JSONL while preserving raw text output.
+
+**What was changed**:
+- lib/claude-wrapper.sh: NEW — runs claude with --output-format json, extracts .result as text to stdout, appends cost data to $COST_LOG_FILE
+- scripts/build-loop-local.sh: agent_cmd() now invokes wrapper
+- scripts/overnight-autonomous.sh: same change
+- scripts/nightly-review.sh: direct invocation changed to use wrapper
+- Agents.md: this entry
+
+**What was NOT changed**: parse_signal(), run_agent_with_backoff(), signal grep patterns, tee/cat pipelines, lib/reliability.sh, lib/validation.sh, tests
+
+**Verification**: bash -n passes, wrapper executable, all existing tests pass, no "agent -p" remnants, git diff --stat shows exactly 5 files
+
+---
+
 ## What This Is
 
 A spec-driven development system optimized for 256GB unified memory. Uses multiple local LLMs with **fresh contexts per stage** to avoid context rot.
