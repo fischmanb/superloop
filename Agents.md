@@ -107,6 +107,21 @@ Future agents: read this before making changes.
 
 ---
 
+### Round 8: Fix agent permissions (branch: claude/fix-agent-permissions)
+
+**What was asked**: Fix permissions so spawned Claude Code agents can write files autonomously.
+
+**What was changed**:
+- scripts/build-loop-local.sh: added --dangerously-skip-permissions to agent_cmd()
+- scripts/overnight-autonomous.sh: same change
+- .claude/settings.local.json: set permissions.allow to ["*"]
+
+**What was NOT changed**: No other files. No packages installed. No dependencies added.
+
+**Verification**: bash -n passes on both scripts, grep confirms flag present, git diff --stat shows exactly 4 files
+
+---
+
 ## What This Is
 
 A spec-driven development system optimized for 256GB unified memory. Uses multiple local LLMs with **fresh contexts per stage** to avoid context rot.
