@@ -231,4 +231,34 @@ auto-sdd/
 
 ---
 
+## Keeping This File Current
+
+Any Claude instance that makes meaningful changes to the project **must update this file before the conversation ends.** This is not optional.
+
+### What triggers an update
+
+- A new round is added to `Agents.md` → update the **Agent Work Log Summary** table
+- A known gap is resolved or a new one discovered → update **Known gaps** under Current State
+- A new key file is created → add it to the **Key Files** table and **File Tree**
+- The "what's next" priorities change → update **What's next** under Current State
+- A new process lesson is learned → add it to **Process Lessons**
+- The verification commands change (new tests, renamed scripts) → update **How to Verify**
+- The project version changes → update the version in the header
+
+### How to update
+
+1. Make your edits to this file
+2. `git add ONBOARDING.md && git commit -m "docs: update ONBOARDING.md — <what changed>"`
+3. Brian pushes (or push if you have access)
+
+### What NOT to put here
+
+- Implementation details that belong in `Agents.md` (per-round specifics, line-level changes)
+- Prompt methodology that belongs in `Brians-Notes/PROMPT-ENGINEERING-GUIDE.md`
+- Agent instructions that belong in `CLAUDE.md`
+
+This file is the **orientation layer**. It tells you what exists and where to find it. The other files contain the depth.
+
+---
+
 _To pick up work: read this file, then read `Agents.md` for current state and verification checklist. Everything else is reachable from those two files._
