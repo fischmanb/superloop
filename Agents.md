@@ -107,6 +107,36 @@ Future agents: read this before making changes.
 
 ---
 
+### Round 7: End-to-End Smoke Test (branch: `auto/chained-20260222-123029`)
+
+**Date**: Feb 22, 2026
+
+**What was asked**: Run the build loop end-to-end against a real React + TypeScript + Vite coaching calendar app using the chained branch strategy. Two features from the roadmap.
+
+**What happened**:
+
+The loop ran to completion without human intervention.
+
+| Commit | Time | Description |
+|--------|------|-------------|
+| `2a4773e` | 12:33:30 | feat: complete Feature #1 — Calendar Week View |
+| `290d440` | 12:39:52 | feat: complete Feature #2 — Coach Client Switcher |
+| `3e084d6` | 12:42:43 | fix: reconcile spec drift for Coach Client Switcher |
+
+**Feature 1 — Calendar Week View** (model: Claude Opus 4.6, ~6 min):
+- Components: `WeekView`, `DayColumn`, `BlockCard` in `src/components/calendar/`
+- Tests: 12 passing (CMP-01 through CMP-12)
+
+**Feature 2 — Coach Client Switcher** (model: Claude Sonnet 4.6, ~6 min):
+- Component: `ClientSwitcher` in `src/components/coach/`
+- Tests: 7 new passing (CMP-13 through CMP-19), 19 total
+
+**Drift check**: Detected 24-line divergence on Feature 2, reconciled automatically.
+
+**Verification**: TypeScript clean, 19/19 tests, app running at localhost:5173
+
+---
+
 ### Round 8: Fix agent permissions (branch: claude/fix-agent-permissions)
 
 **What was asked**: Fix permissions so spawned Claude Code agents can write files autonomously.
@@ -147,6 +177,62 @@ Future agents: read this before making changes.
 - Agents.md: this entry
 **What was NOT changed**: scripts/overnight-autonomous.sh (no hardcoded anti-mock rules found), .specs/roadmap.md, lib/, tests/, any other files
 **Verification**: bash -n passes, git diff --stat shows only allowed files
+
+---
+
+### Round 11: Diagnose and fix 78% build failure rate (no branch — manual changes)
+
+**What was asked**: Investigate why stakd build loop failed 14/21 features in the previous run. Fix root cause and restart.
+
+**Root cause**: NOT context loss. All 14 failures were "Credit balance is too low" API errors — features 1-7 built successfully before credits ran out. The anti-mock rules (hardcoded in BUILD_PROMPT lines 571-576, build_retry_prompt lines 600/605, and independent build prompt) were a secondary blocker: agents couldn't use seed data, causing unnecessary retries that burned credits faster.
+
+**What was changed**:
+- Round 10 agent (branch: claude/clarify-implementation-rules-123FQ) replaced anti-mock rules with permissive seed data language across 3 locations in build-loop-local.sh, CLAUDE.md, and Agents.md
+- `.env.local`: Changed AGENT_MODEL from `claude-sonnet-4-20250514` to `claude-sonnet-4-6`
+- `lib/claude-wrapper.sh`: Copied from auto-sdd/lib/ to stakd/lib/ — build loop failed with exit 127 when PROJECT_DIR pointed to stakd because wrapper didn't exist there
+
+**Results**: 12 built, 1 failed out of 13 attempts before laptop battery died. Config: max_retries=1, drift_retries=1. Previous run: 7/21 with same retry limits.
+
+**What was NOT changed**: scripts/build-loop-local.sh logic, overnight-autonomous.sh, roadmap.md, test suite
+
+**Pending**: 8 features remain. Restart with `PROJECT_DIR=$(pwd) MAX_FEATURES=8`
+
+---
+
+### Round 12: Add decision comments to build prompts (branch: `claude/add-decision-comments-0216`)
+
+**What was asked**: Add rules to BUILD_PROMPT and build_retry_prompt() instructing agents to leave brief inline WHY comments on architectural decisions and document what broke and why a fix was chosen.
+
+**What was changed**:
+- `scripts/build-loop-local.sh` BUILD_PROMPT (line 745): Added rule for inline WHY comments on architectural decisions
+- `scripts/build-loop-local.sh` `build_retry_prompt()` (line 775): Added line for commenting what broke and why fix was chosen
+- `Agents.md`: Added Round 12 work log entry
+
+**Verification**: `bash -n` passed, greps confirmed changes present, only allowed files modified
+
+---
+
+### Round 13: Harden branch switch + credit exhaustion detection (branch: claude/add-decision-comments-QAn1M)
+
+**What was asked**: Harden build-loop-local.sh against two failure modes: (1) dirty worktree cascading failures where one failed feature leaves uncommitted changes that prevent all subsequent features from checking out new branches, and (2) API credit exhaustion where the loop wastes time retrying and advancing through features that can never succeed.
+
+**What was changed**:
+- scripts/build-loop-local.sh: Added `git add -A && git stash push` before every `git checkout` call (5 stash guards covering all 8 checkout calls across setup_branch_chained, NO_FEATURES_READY cleanup, feature failure cleanup, independent pass transition, and final summary)
+- scripts/build-loop-local.sh: Added credit exhaustion detection after agent output is captured — checks for patterns (credit, billing, insufficient_quota, quota exceeded, 402, 429, payment required) and halts the build loop immediately with `exit 1` instead of continuing to retry or advance to the next feature
+- Agents.md: this entry
+
+**Why**:
+- Dirty worktree cascade: A failed feature that leaves uncommitted changes causes every subsequent `git checkout` to fail, turning one failure into a cascade that fails the entire build loop. The stash-before-checkout pattern ensures each feature starts with a clean worktree.
+- Credit exhaustion: When API credits run out, every subsequent agent call will also fail. Without early detection, the loop wastes time on retries and advances through all remaining features, all of which are doomed to fail.
+
+**What was NOT changed**: lib/reliability.sh, tests/, overnight-autonomous.sh, any other files
+
+**Verification**:
+- `bash -n scripts/build-loop-local.sh` passes (no syntax errors)
+- `./tests/test-reliability.sh` passes (57/57 assertions)
+- 5 stash guards cover all 8 real checkout calls
+- Credit exhaustion detection present with pattern matching for billing/quota/402/429 signals
+- `git diff --stat` shows only build-loop-local.sh and Agents.md
 
 ---
 

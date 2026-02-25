@@ -628,6 +628,9 @@ REVIEW_FAILED: {reason}
 # ── Branch strategy helpers ────────────────────────────────────────────────
 
 setup_branch_chained() {
+    # WHY: Failed features can leave dirty worktree, causing all subsequent checkouts to fail (cascade failure)
+    git add -A && git stash push -m "auto-stash before branch switch" 2>/dev/null || true
+
     local base_branch="${LAST_FEATURE_BRANCH:-$MAIN_BRANCH}"
 
     if [ "$base_branch" != "$MAIN_BRANCH" ]; then
@@ -878,6 +881,13 @@ run_build_loop() {
             BUILD_RESULT=$(cat "$BUILD_OUTPUT")
             rm -f "$BUILD_OUTPUT"
 
+            # ── Check for API credit exhaustion ──
+            # WHY: Credit exhaustion means all subsequent features will also fail — halt immediately instead of wasting time
+            if echo "$BUILD_RESULT" | grep -qiE '(credit|billing|insufficient_quota|quota exceeded|402 Payment|429 Too Many|payment required)'; then
+                error "✗ API credits exhausted — halting build loop"
+                exit 1
+            fi
+
             # ── Check for "no features ready" ──
             if echo "$BUILD_RESULT" | grep -q "NO_FEATURES_READY"; then
                 log "No more features ready to build"
@@ -886,6 +896,8 @@ run_build_loop() {
                 # Clean up the branch/worktree we just created (nothing to build)
                 case "$strategy" in
                     chained)
+                        # WHY: Failed features can leave dirty worktree, causing all subsequent checkouts to fail (cascade failure)
+                        git add -A && git stash push -m "auto-stash before branch switch" 2>/dev/null || true
                         git checkout "${LAST_FEATURE_BRANCH:-$MAIN_BRANCH}" 2>/dev/null || git checkout "$MAIN_BRANCH" 2>/dev/null || true
                         git branch -D "$CURRENT_FEATURE_BRANCH" 2>/dev/null || true
                         ;;
@@ -1015,6 +1027,8 @@ run_build_loop() {
                 chained)
                     # Keep LAST_FEATURE_BRANCH so next feature branches from last successful, not base
                     warn "Feature failed, next feature will branch from last successful: ${LAST_FEATURE_BRANCH:-$MAIN_BRANCH}"
+                    # WHY: Failed features can leave dirty worktree, causing all subsequent checkouts to fail (cascade failure)
+                    git add -A && git stash push -m "auto-stash before branch switch" 2>/dev/null || true
                     git checkout "${LAST_FEATURE_BRANCH:-$MAIN_BRANCH}" 2>/dev/null || git checkout "$MAIN_BRANCH" 2>/dev/null || true
                     git branch -D "$CURRENT_FEATURE_BRANCH" 2>/dev/null || true
                     ;;
@@ -1118,6 +1132,8 @@ if [ "$BRANCH_STRATEGY" = "both" ]; then
     else
         # Go back to main for independent pass
         cd "$PROJECT_DIR"
+        # WHY: Failed features can leave dirty worktree, causing all subsequent checkouts to fail (cascade failure)
+        git add -A && git stash push -m "auto-stash before branch switch" 2>/dev/null || true
         git checkout "$MAIN_BRANCH" 2>/dev/null || true
 
         echo ""
@@ -1271,6 +1287,8 @@ BUILD_FAILED: {reason}
 
     # ── Final summary for both mode ──
     cd "$PROJECT_DIR"
+    # WHY: Failed features can leave dirty worktree, causing all subsequent checkouts to fail (cascade failure)
+    git add -A && git stash push -m "auto-stash before branch switch" 2>/dev/null || true
     git checkout "$MAIN_BRANCH" 2>/dev/null || true
 
     total_elapsed=$(( $(date +%s) - SCRIPT_START ))
