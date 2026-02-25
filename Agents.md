@@ -236,6 +236,15 @@ The loop ran to completion without human intervention.
 
 ---
 
+### Round 14: Investigate adaptive chained/independent routing (branch: `claude/investigate-adaptive-routing-4L3dl`)
+**Date**: Feb 25, 2026
+**What was asked**: Investigate whether the build loop should automatically select between chained and independent branch strategies based on feature dependency structure, rather than requiring the user to choose via `BRANCH_STRATEGY` in `.env.local`.
+**What actually happened**: Investigation-only round. The agent analyzed the dependency graph handling in `build-loop-local.sh` and the chained vs independent strategy implementations. Findings were reported in the conversation but the conversation context was lost to compaction before results could be documented. The branch contains a single empty commit (marker only — no files were modified).
+**What was changed**: Nothing. Investigation only.
+**What was NOT changed**: No files modified. No implementation attempted.
+**Status**: Investigation results lost to context compaction. If adaptive routing is pursued in the future, a fresh investigation should be conducted. The core question remains valid: features with no dependencies could safely use independent branching (parallel-safe), while features with dependencies require chained branching (sequential). An adaptive router would inspect each feature's `Deps` column in the roadmap and select the strategy per-feature rather than per-run.
+---
+
 ### Round 15: Add build summary report (branch: `claude/add-build-summary-V3py6`)
 
 **Date**: Feb 25, 2026
