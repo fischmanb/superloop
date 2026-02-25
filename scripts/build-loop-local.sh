@@ -232,6 +232,45 @@ format_duration() {
     fi
 }
 
+# ── Parse token usage from agent output (best-effort) ────────────────────
+# Looks for patterns like "input_tokens": 1234 or "Total tokens: 5678"
+# Returns total tokens or empty string if not found.
+parse_token_usage() {
+    local output="$1"
+    local input_tokens output_tokens total
+    # Try JSON-style token fields from claude wrapper
+    input_tokens=$(echo "$output" | grep -oE '"input_tokens"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1 || echo "")
+    output_tokens=$(echo "$output" | grep -oE '"output_tokens"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1 || echo "")
+    if [ -n "$input_tokens" ] && [ -n "$output_tokens" ]; then
+        echo $(( input_tokens + output_tokens ))
+        return
+    fi
+    # Try "Total tokens:" pattern
+    total=$(echo "$output" | grep -oiE 'total tokens[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1 || echo "")
+    if [ -n "$total" ]; then
+        echo "$total"
+        return
+    fi
+    echo ""
+}
+
+# ── Format token count for display ───────────────────────────────────────
+format_tokens() {
+    local tokens="$1"
+    if [ -z "$tokens" ] || [ "$tokens" = "null" ]; then
+        echo "N/A"
+        return
+    fi
+    if [ "$tokens" -ge 1000 ]; then
+        # Show as X.Yk
+        local whole=$((tokens / 1000))
+        local frac=$(( (tokens % 1000) / 100 ))
+        echo "${whole}.${frac}k"
+    else
+        echo "$tokens"
+    fi
+}
+
 SCRIPT_START=$(date +%s)
 
 cd "$PROJECT_DIR"
@@ -401,6 +440,12 @@ check_tests() {
     [ -n "$TEST_CHECK_CMD" ] && [ "$TEST_CHECK_CMD" != "skip" ] && is_custom="true"
     run_cmd_safe "$TEST_CMD" "$is_custom" 2>&1 | tee "$tmpfile"
     local exit_code=${PIPESTATUS[0]}
+    # Parse test count from runner output (vitest/jest/pytest patterns)
+    LAST_TEST_COUNT=$(grep -oE '(Tests\s+)?[0-9]+ (passed|tests? passed)' "$tmpfile" | grep -oE '[0-9]+' | tail -1 || echo "")
+    if [ -z "$LAST_TEST_COUNT" ]; then
+        # Try pytest pattern: "N passed"
+        LAST_TEST_COUNT=$(grep -oE '[0-9]+ passed' "$tmpfile" | grep -oE '[0-9]+' | tail -1 || echo "")
+    fi
     if [ $exit_code -eq 0 ]; then
         success "Tests passed"
         LAST_TEST_OUTPUT=""
@@ -974,6 +1019,13 @@ run_build_loop() {
                                 # Track feature name for 'both' mode
                                 BUILT_FEATURE_NAMES+=("$feature_name")
 
+                                # Track build summary data
+                                FEATURE_TIMINGS+=("$feature_duration")
+                                FEATURE_SOURCE_FILES+=("${DRIFT_SOURCE_FILES:-}")
+                                FEATURE_TEST_COUNTS+=("${LAST_TEST_COUNT:-}")
+                                FEATURE_TOKEN_USAGE+=("$(parse_token_usage "$BUILD_RESULT")")
+                                FEATURE_STATUSES+=("built")
+
                                 # Save resume state
                                 if [ "$ENABLE_RESUME" = "true" ]; then
                                     write_state "$i" "$strategy" "$(completed_features_json)" "${CURRENT_FEATURE_BRANCH:-}"
@@ -1020,6 +1072,15 @@ run_build_loop() {
             local feature_duration=$((feature_end - FEATURE_START))
             LOOP_SKIPPED="${LOOP_SKIPPED}\n  - feature $i ($(format_duration $feature_duration))"
             LOOP_TIMINGS+=("✗ feature $i: $(format_duration $feature_duration)")
+
+            # Track failed feature in build summary
+            BUILT_FEATURE_NAMES+=("feature $i")
+            FEATURE_TIMINGS+=("$feature_duration")
+            FEATURE_SOURCE_FILES+=("")
+            FEATURE_TEST_COUNTS+=("")
+            FEATURE_TOKEN_USAGE+=("$(parse_token_usage "${BUILD_RESULT:-}")")
+            FEATURE_STATUSES+=("failed")
+
             error "Feature failed after $((MAX_RETRIES + 1)) attempt(s). Skipping. ($(format_duration $feature_duration))"
             clean_working_tree
 
@@ -1068,6 +1129,173 @@ cleanup_all_worktrees() {
     fi
 }
 
+# ── Build summary report ─────────────────────────────────────────────────
+#
+# write_build_summary <total_elapsed> <built_count> <failed_count>
+#
+# Writes a JSON summary to logs/build-summary-{timestamp}.json and prints
+# a human-readable summary table to stdout. Uses the accumulator arrays
+# (BUILT_FEATURE_NAMES, FEATURE_TIMINGS, FEATURE_SOURCE_FILES,
+# FEATURE_TEST_COUNTS, FEATURE_TOKEN_USAGE, FEATURE_STATUSES).
+#
+write_build_summary() {
+    local total_elapsed="$1"
+    local built_count="$2"
+    local failed_count="$3"
+
+    local timestamp
+    timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S')
+    local file_timestamp
+    file_timestamp=$(date '+%Y%m%d-%H%M%S')
+
+    # Compute total test count (last non-empty test count from any feature)
+    local total_tests=0
+    local idx=0
+    while [ "$idx" -lt "${#FEATURE_TEST_COUNTS[@]}" ]; do
+        if [ -n "${FEATURE_TEST_COUNTS[$idx]}" ]; then
+            total_tests="${FEATURE_TEST_COUNTS[$idx]}"
+        fi
+        idx=$((idx + 1))
+    done
+
+    # ── Write JSON summary ──
+    mkdir -p "$PROJECT_DIR/logs"
+    local summary_file="$PROJECT_DIR/logs/build-summary-${file_timestamp}.json"
+
+    # Build features JSON array using indexed arrays (no associative arrays for bash 3.x)
+    local features_json=""
+    idx=0
+    while [ "$idx" -lt "${#BUILT_FEATURE_NAMES[@]}" ]; do
+        local fname="${BUILT_FEATURE_NAMES[$idx]}"
+        local ftime="${FEATURE_TIMINGS[$idx]:-0}"
+        local fsrc="${FEATURE_SOURCE_FILES[$idx]:-}"
+        local ftests="${FEATURE_TEST_COUNTS[$idx]:-}"
+        local ftokens="${FEATURE_TOKEN_USAGE[$idx]:-}"
+        local fstatus="${FEATURE_STATUSES[$idx]:-built}"
+
+        # Escape feature name for JSON
+        fname=$(echo "$fname" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+        # Build source_files JSON array from comma-separated string
+        local src_json="[]"
+        if [ -n "$fsrc" ]; then
+            src_json="["
+            local first_src=true
+            local IFS_SAVE="$IFS"
+            IFS=','
+            for src_item in $fsrc; do
+                # Trim whitespace
+                src_item=$(echo "$src_item" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                if [ -n "$src_item" ]; then
+                    src_item=$(echo "$src_item" | sed 's/\\/\\\\/g; s/"/\\"/g')
+                    if [ "$first_src" = true ]; then
+                        src_json="${src_json}\"${src_item}\""
+                        first_src=false
+                    else
+                        src_json="${src_json}, \"${src_item}\""
+                    fi
+                fi
+            done
+            IFS="$IFS_SAVE"
+            src_json="${src_json}]"
+        fi
+
+        # Format test count and tokens as JSON values
+        local tests_json="null"
+        if [ -n "$ftests" ]; then
+            tests_json="$ftests"
+        fi
+        local tokens_json="null"
+        if [ -n "$ftokens" ]; then
+            tokens_json="$ftokens"
+        fi
+
+        local feature_entry
+        feature_entry=$(cat <<FEATURE_EOF
+    {
+      "name": "$fname",
+      "status": "$fstatus",
+      "time_seconds": $ftime,
+      "source_files": $src_json,
+      "test_count": $tests_json,
+      "tokens": $tokens_json
+    }
+FEATURE_EOF
+)
+        if [ "$idx" -eq 0 ]; then
+            features_json="$feature_entry"
+        else
+            features_json="${features_json},
+${feature_entry}"
+        fi
+        idx=$((idx + 1))
+    done
+
+    # Escape model and strategy for JSON safety
+    local model_json="${AGENT_MODEL:-default}"
+    model_json=$(echo "$model_json" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    local strategy_json="${BRANCH_STRATEGY:-chained}"
+    strategy_json=$(echo "$strategy_json" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+    cat > "$summary_file" <<SUMMARY_EOF
+{
+  "timestamp": "$timestamp",
+  "total_time_seconds": $total_elapsed,
+  "model": "$model_json",
+  "branch_strategy": "$strategy_json",
+  "features_built": $built_count,
+  "features_failed": $failed_count,
+  "total_tests": $total_tests,
+  "features": [
+$features_json
+  ]
+}
+SUMMARY_EOF
+
+    # ── Print human-readable summary ──
+    echo ""
+    echo "═══ Build Summary ═══"
+    echo "  Model: ${AGENT_MODEL:-default}"
+    echo "  Strategy: $BRANCH_STRATEGY"
+    echo "  Total time: $(format_duration $total_elapsed)"
+    echo "  Features: $built_count built, $failed_count failed"
+    echo "  Total tests: $total_tests"
+
+    if [ "${#BUILT_FEATURE_NAMES[@]}" -gt 0 ]; then
+        printf "  %-36s %-10s %-8s %-9s %s\n" "Feature" "Time" "Tests" "Tokens" "Status"
+        echo "  ─────────────────────────────────────────────────────────────────"
+        idx=0
+        while [ "$idx" -lt "${#BUILT_FEATURE_NAMES[@]}" ]; do
+            local fname="${BUILT_FEATURE_NAMES[$idx]}"
+            local ftime="${FEATURE_TIMINGS[$idx]:-0}"
+            local ftests="${FEATURE_TEST_COUNTS[$idx]:-}"
+            local ftokens="${FEATURE_TOKEN_USAGE[$idx]:-}"
+            local fstatus="${FEATURE_STATUSES[$idx]:-built}"
+
+            # Truncate long feature names
+            if [ ${#fname} -gt 34 ]; then
+                fname="${fname:0:31}..."
+            fi
+
+            local time_str
+            time_str=$(format_duration "$ftime")
+            local tests_str="${ftests:-N/A}"
+            local tokens_str
+            tokens_str=$(format_tokens "$ftokens")
+            local status_str="✓"
+            if [ "$fstatus" = "failed" ]; then
+                status_str="✗"
+            fi
+
+            printf "  %-36s %-10s %-8s %-9s %s\n" "$fname" "$time_str" "$tests_str" "$tokens_str" "$status_str"
+            idx=$((idx + 1))
+        done
+    fi
+    echo ""
+    echo "  Summary written to: logs/build-summary-${file_timestamp}.json"
+    echo ""
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────
 
 # check_circular_deps is provided by lib/reliability.sh
@@ -1104,6 +1332,14 @@ echo ""
 
 # Track feature names across passes (used by 'both' mode)
 BUILT_FEATURE_NAMES=()
+
+# Build summary accumulators (indexed arrays for macOS bash 3.x compatibility)
+FEATURE_TIMINGS=()
+FEATURE_SOURCE_FILES=()
+FEATURE_TEST_COUNTS=()
+FEATURE_TOKEN_USAGE=()
+FEATURE_STATUSES=()
+LAST_TEST_COUNT=""
 
 if [ "$BRANCH_STRATEGY" = "both" ]; then
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1340,6 +1576,9 @@ BUILD_FAILED: {reason}
     echo "═══════════════════════════════════════════════════════════"
     echo ""
 
+    # Write build summary report (JSON + human-readable)
+    write_build_summary "$total_elapsed" "$CHAINED_BUILT" "$CHAINED_FAILED"
+
     # Clean resume state on successful completion
     if [ "$ENABLE_RESUME" = "true" ]; then
         clean_state
@@ -1385,6 +1624,9 @@ else
     echo "  Total time: $(format_duration $total_elapsed)"
     echo "═══════════════════════════════════════════════════════════"
     echo ""
+
+    # Write build summary report (JSON + human-readable)
+    write_build_summary "$total_elapsed" "$LOOP_BUILT" "$LOOP_FAILED"
 
     # Clean resume state on successful completion of all features
     if [ "$ENABLE_RESUME" = "true" ] && [ "$LOOP_FAILED" -eq 0 ]; then
