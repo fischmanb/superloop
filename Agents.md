@@ -236,6 +236,44 @@ The loop ran to completion without human intervention.
 
 ---
 
+### Round 15: Add build summary report (branch: `claude/add-build-summary-V3py6`)
+
+**Date**: Feb 25, 2026
+
+**What was asked**: Add a build summary report that prints when the build loop finishes and writes to `logs/build-summary-{timestamp}.json`. Only modify `scripts/build-loop-local.sh` and `Agents.md`.
+
+**What was changed**:
+- `scripts/build-loop-local.sh`: Added accumulator arrays (`FEATURE_TIMINGS[]`, `FEATURE_SOURCE_FILES[]`, `FEATURE_TEST_COUNTS[]`, `FEATURE_TOKEN_USAGE[]`, `FEATURE_STATUSES[]`) alongside existing `BUILT_FEATURE_NAMES[]`
+- `scripts/build-loop-local.sh`: Added `parse_token_usage()` — best-effort token extraction from agent output (handles JSON `input_tokens`/`output_tokens` fields and "Total tokens:" patterns, returns empty on no match)
+- `scripts/build-loop-local.sh`: Added `format_tokens()` — human-readable token display (e.g., "12.3k")
+- `scripts/build-loop-local.sh`: Added `LAST_TEST_COUNT` parsing in `check_tests()` — extracts test count from vitest/jest/pytest output patterns
+- `scripts/build-loop-local.sh`: Added `write_build_summary()` — writes JSON to `logs/build-summary-{timestamp}.json` and prints human-readable table to stdout
+- `scripts/build-loop-local.sh`: Per-feature data capture on both success (line ~1024) and failure (line ~1075) paths
+- `scripts/build-loop-local.sh`: Summary called from both "both" mode and "single" mode final sections
+- `Agents.md`: This entry
+
+**Data captured per feature**:
+- Feature name (from `FEATURE_BUILT` signal or "feature N" for failures)
+- Status (built/failed)
+- Wall-clock time in seconds
+- Source files (from `SOURCE_FILES` signal, comma-separated)
+- Test count (parsed from test runner output)
+- Token usage (best-effort parse from agent output, null if unavailable)
+
+**Bash compatibility note**: All accumulator arrays are indexed arrays (not associative). No `local -A` or `declare -A` used — compatible with macOS bash 3.x.
+
+**What was NOT changed**: No existing build logic, signal parsing, branch handling, or per-feature timing output modified. The new summary prints AFTER the existing output.
+
+**Verification**:
+- `bash -n scripts/build-loop-local.sh` passes (no syntax errors)
+- `./tests/test-reliability.sh` passes (57/57 assertions)
+- Accumulator grep count: 19 (FEATURE_TIMINGS, FEATURE_TEST_COUNTS, FEATURE_SOURCE_FILES)
+- JSON summary grep count: 3 (build-summary, logs/)
+- Human-readable summary grep count: 13 (Build Summary, ═══)
+- `git diff --stat` shows only build-loop-local.sh and Agents.md
+
+---
+
 ## What This Is
 
 A spec-driven development system optimized for 256GB unified memory. Uses multiple local LLMs with **fresh contexts per stage** to avoid context rot.
