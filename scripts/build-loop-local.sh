@@ -736,11 +736,11 @@ Run the /build-next command to:
 4. If no features are ready, output: NO_FEATURES_READY
 5. If build fails, output: BUILD_FAILED: {reason}
 
-CRITICAL IMPLEMENTATION RULES (from roadmap):
-- NO mock data, fake JSON, or placeholder content. All features use real DB queries and real API calls.
-- NO fake API endpoints that return static JSON. Every route must do real work.
+CRITICAL IMPLEMENTATION RULES:
+- Seed data is fine; stub functions are not. Use seed data, fixtures, or realistic sample data to make features work.
+- NO stub functions that return hardcoded values or TODO placeholders. Every function must contain real logic.
 - NO placeholder UI. Components must be wired to real data sources.
-- Features must work end-to-end with real user data or they are not done.
+- Features must work end-to-end or they are not done.
 - Real validation, real error handling, real flows.
 
 After completion, output EXACTLY these signals (each on its own line):
@@ -765,12 +765,12 @@ Your job:
 1. Run "git status" to understand the current state
 2. Look at .specs/roadmap.md to find the feature marked 🔄 in progress
 3. Fix whatever is broken — type errors, missing imports, incomplete implementation, failing tests
-4. Make sure the feature works end-to-end with REAL data (no mocks, no fake endpoints)
+4. Make sure the feature works end-to-end. Seed data is fine; stub functions are not.
 5. Run the test suite to verify everything passes: '"$TEST_CMD"'
 6. Commit all changes with a descriptive message
 7. Update roadmap to mark the feature ✅ completed
 
-CRITICAL: Do NOT use mock data, fake JSON, or placeholder content. All features must use real DB queries and real API calls.
+CRITICAL: Seed data is fine; stub functions are not. All features must use real function implementations, not placeholder stubs.
 '
 
     # Append failure context if available
@@ -1182,10 +1182,10 @@ Instructions:
 5. Commit all changes with a descriptive message
 
 CRITICAL IMPLEMENTATION RULES:
-- NO mock data, fake JSON, or placeholder content. All features use real DB queries and real API calls.
-- NO fake API endpoints that return static JSON. Every route must do real work.
+- Seed data is fine; stub functions are not. Use seed data, fixtures, or realistic sample data to make features work.
+- NO stub functions that return hardcoded values or TODO placeholders. Every function must contain real logic.
 - NO placeholder UI. Components must be wired to real data sources.
-- Features must work end-to-end with real user data or they are not done.
+- Features must work end-to-end or they are not done.
 - Real validation, real error handling, real flows.
 
 After completion, output exactly one of:

@@ -139,6 +139,17 @@ Future agents: read this before making changes.
 
 ---
 
+### Round 10: Allow seed data in build loop (branch: claude/clarify-implementation-rules-123FQ)
+**What was asked**: Replace hardcoded anti-mock rules in BUILD_PROMPT and build_retry_prompt with permissive seed data language. Keep anti-stub rules. Update CLAUDE.md to match.
+**What was changed**:
+- scripts/build-loop-local.sh: BUILD_PROMPT and build_retry_prompt() — replaced "NO mock data" rules with "seed data is fine, stub functions are not"
+- CLAUDE.md: Implementation Rules section — same replacement
+- Agents.md: this entry
+**What was NOT changed**: scripts/overnight-autonomous.sh (no hardcoded anti-mock rules found), .specs/roadmap.md, lib/, tests/, any other files
+**Verification**: bash -n passes, git diff --stat shows only allowed files
+
+---
+
 ## What This Is
 
 A spec-driven development system optimized for 256GB unified memory. Uses multiple local LLMs with **fresh contexts per stage** to avoid context rot.

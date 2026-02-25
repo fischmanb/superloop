@@ -430,3 +430,13 @@ In `.env.local`:
 DRIFT_CHECK=true          # Enable/disable drift checking (default: true)
 MAX_DRIFT_RETRIES=1       # Retry attempts for fixing drift (default: 1)
 ```
+
+---
+
+## Implementation Rules
+
+- Seed data is acceptable. Use seed data, fixtures, or realistic sample data to make features functional.
+- NO stub functions that return hardcoded values or TODO placeholders. Every function must contain real logic.
+- NO placeholder UI. Components must be wired to real data sources.
+- Features must work end-to-end or they are not done.
+- Real validation, real error handling, real flows.
