@@ -50,15 +50,21 @@ Forked from [AdrianRogowski/auto-sdd](https://github.com/AdrianRogowski/auto-sdd
 
 ## Active Considerations
 
-> Topics under discussion or exploration that haven't resolved yet. A fresh chat should pick these up.
+> What's next and what's in-flight. Priority stack is the execution plan; everything below it is context a fresh chat should pick up.
 
-- **Priority stack (decided 2026-02-25)**: The agreed execution order for next work is: (1) Codebase summary injection → (2) Topological sort for feature ordering → (3) Local model integration → (4) Adaptive routing / parallelism (only if data shows it's needed after 1-3). Each item is ordered by efficiency gain per complexity added.
-- **Codebase summary for agent context**: Each build agent currently has no knowledge of what previous agents produced, causing type redeclarations and interface drift. Passing a codebase summary to each agent is the next thing to build. High quality gain, moderate speed gain (fewer retries), low complexity. Not started.
-- **Topological sort for feature ordering**: Use the existing `check_circular_deps` dependency graph parser to emit a topological order. Run all independent features first, then dependents. Gets 80% of adaptive routing's benefit with near-zero complexity. Not started.
-- **Adaptive routing — deprioritized**: Investigated in Round 14 (results lost to compaction), re-analyzed in Round 16. Full edge case analysis done: diamond deps, merge conflicts at convergence, complex resume state, drift check ordering, resource contention, partial parallel failure. Conclusion: the wall-clock savings don't justify the complexity (~400-500 new lines, new failure classes) until items 1-3 are done and real data shows the remaining sequential bottleneck matters.
-- **Local model integration**: Replacing cloud API calls with local LM Studio endpoints on Mac Studio. The archived `archive/local-llm-pipeline/` system is reference material. Not started — comes after codebase summary and topo sort.
-- **stakd/ build campaign**: Next major end-to-end test — running the build loop against the Traded.co clone (28 features, 3 phases). Benefits from codebase summary being in place first for clean cross-feature builds.
-- **Onboarding state protocol**: Implemented this session (2026-02-25). Mechanical enforcement via `~/auto-sdd/.onboarding-state` file — tracks prompt count, buffers pending captures, triggers interval checks. Memory instruction points all future chats to the protocol. See "Keeping This File Current" section.
+### Priority stack (decided 2026-02-25)
+
+Ordered by efficiency gain per complexity added:
+
+1. **Codebase summary injection** — Generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift. Each build agent currently has no knowledge of what previous agents produced, causing type redeclarations and interface drift. High quality gain, moderate speed gain (fewer retries), low complexity. *Not started.*
+2. **Topological sort** — Use the existing `check_circular_deps` dependency graph parser to emit optimal feature order. Independent features first, then dependents. Gets 80% of adaptive routing's benefit with near-zero complexity. *Not started.*
+3. **Local model integration** — Replace cloud API calls with local LM Studio endpoints on Mac Studio. The archived `archive/local-llm-pipeline/` system is reference material. *Not started.*
+4. **stakd/ build campaign** — Full 28-feature end-to-end run against the Traded.co clone (3 phases). Benefits from codebase summary being in place first for clean cross-feature builds. *Not started.*
+5. **Adaptive routing / parallelism** — Only if data from 1–3 shows remaining sequential bottleneck justifies the complexity. Investigated in Round 14 (results lost to compaction), re-analyzed in Round 16. Full edge case analysis done: diamond deps, merge conflicts at convergence, complex resume state, drift check ordering, resource contention, partial parallel failure. Conclusion: ~400-500 new lines and new failure classes don't justify savings until simpler levers are exhausted. *Deprioritized.*
+
+### Other active items
+
+- **Onboarding state protocol**: Implemented 2026-02-25. Mechanical enforcement via `~/auto-sdd/.onboarding-state` file — tracks prompt count, buffers pending captures, triggers interval checks. Memory instruction points all future chats to the protocol. See "Keeping This File Current" section.
 
 ---
 
