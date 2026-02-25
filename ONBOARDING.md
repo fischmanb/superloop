@@ -277,6 +277,8 @@ pending_captures=["item 1", "item 2"]
 4. If `pending_captures` is non-empty → read only **Active Considerations**, reconcile the buffer into it, flush `pending_captures`, update hash
 5. Reset counter
 
+**Privacy check on every read**: When reading any portion of ONBOARDING.md (interval or fresh onboard), if anything private, non-project-related, or sensitive (personal details, credentials, API keys, account info) is detected, immediately report all findings to Brian concisely. Do not silently correct — surface it.
+
 **Fresh onboard (state file missing or `last_check_ts` > 24h stale)**:
 - Full read of ONBOARDING.md. This is the only case where the whole file gets read.
 
