@@ -314,7 +314,8 @@ A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
 **Fresh onboard (state file missing or `last_check_ts` > 24h stale)**:
 - Full read of ONBOARDING.md. This is the only case where the whole file gets read.
 - Read the "Lessons Learned (Failure Catalog)" section of `Brians-Notes/PROMPT-ENGINEERING-GUIDE.md`. These hard-won failure modes repeat if not internalized at session start. Do not read the full guide — only the failure catalog.
-- **The first response of any new session must be read-only.** Read ONBOARDING.md, read the failure catalog, read the state file, report status. No file writes (except `.onboarding-state`), no commits, no edits. The first response is always a status report.
+- **Flush stale captures**: If `pending_captures` is non-empty, reconcile them into the **Active Considerations** section immediately during onboard. This is exempt from the read-only-first-response rule — the state protocol's own writes are always permitted. Without this, short sessions (< 4 prompts) can die before the interval trigger fires, and captures survive indefinitely across session boundaries without ever landing in ONBOARDING.md.
+- **The first response of any new session must be read-only.** Read ONBOARDING.md, read the failure catalog, read the state file, flush stale captures if present, report status. No other file writes, no commits, no edits.
 
 **Cost profile**: 95% of responses = read/write a 5-line file (negligible). Every ~4th response = one md5 + maybe 15 lines (minimal). New chat after a break = full read (appropriate).
 
