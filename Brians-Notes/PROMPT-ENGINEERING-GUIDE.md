@@ -90,6 +90,12 @@ Every prompt must end with: "Report your findings immediately upon completion. D
 
 ---
 
+## Prompt Delivery
+
+Engineered prompts are delivered in the chat response body inside a single fenced code block. Do not write prompt files to disk, save them to the repo, or place them in any directory. Brian copies the prompt from the chat to wherever he needs it. The prompt exists in chat until Brian acts on it — it is not a repo artifact.
+
+---
+
 ## Investigation Prompts
 
 When Claude doesn't have enough information to write a safe implementation prompt, write an investigation prompt instead. These:

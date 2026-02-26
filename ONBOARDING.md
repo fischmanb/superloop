@@ -194,6 +194,10 @@ These are documented in detail in `Brians-Notes/PROMPT-ENGINEERING-GUIDE.md` and
 - The `stakd/` directory inside the repo is a separate project (Traded.co clone). It has its own `.git`, `.specs/`, and `CLAUDE.md`. Don't conflate them.
 - Brian pushes to GitHub manually. Agents should commit locally but not push.
 
+### Chat session permissions
+
+Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capability that provides filesystem or system access) must ask Brian for explicit permission before making any file changes, git commits, or GitHub operations. The only exceptions are `.onboarding-state` reads/writes and `ONBOARDING.md` reads/writes required by the onboarding state protocol. This applies to documentation edits, prompt files, script changes, and any other filesystem modification. Do not batch multiple changes into a single approval request in a way that obscures what's being changed — describe each change clearly.
+
 ---
 
 ## Quick Reference: Common Tasks
