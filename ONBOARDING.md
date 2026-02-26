@@ -48,7 +48,7 @@ Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capabi
 
 1. **Codebase summary injection** — generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift.
 2. **Local model integration** — replace cloud API with local LM Studio on Mac Studio
-3. **stakd issue triage (in progress)** — map page fix done, NODE_ENV issue identified. Remaining: triage 21 features that had failures/retries, clean up orphaned code from failed builds, verify all routes end-to-end.
+3. **stakd issue triage — COMPLETE** — 36 findings documented in `build-loop-failure-investigation.md`. Map page fix done (commit 42d7a3a). Root causes identified: credit exhaustion detection not in script during any run, resume state not committed (lost on crash), no Next.js 15 rules in CLAUDE.md, no codebase summary between features. Prioritized remediation plan in the investigation file. Next: implement P0 fixes before next build campaign.
 4. **Adaptive routing / parallelism** — only if data from 1-3 shows remaining sequential bottleneck justifies the complexity
 
 ### Known gaps
@@ -73,7 +73,7 @@ Ordered by efficiency gain per complexity added:
 1. ~~**Topological sort + pre-flight summary**~~ — ✅ Done (Rounds 17-18). Shell-side Kahn's algorithm for feature ordering in both `build-loop-local.sh` and `overnight-autonomous.sh`. Pre-flight prints sorted feature list with t-shirt sizes, requires user confirmation (`AUTO_APPROVE=true` skips for overnight). 68 test assertions passing.
 2. **Codebase summary injection** — Generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift. Each build agent currently has no knowledge of what previous agents produced, causing type redeclarations and interface drift. High quality gain, moderate speed gain (fewer retries), low complexity. *Not started.*
 3. **Local model integration** — Replace cloud API calls with local LM Studio endpoints on Mac Studio. The archived `archive/local-llm-pipeline/` system is reference material. *Not started.*
-4. ~~**stakd/ build campaign + issue triage**~~ — ✅ Build campaign done (2026-02-25). All 28 features built autonomously. 88 failures/retries during run. Now in issue triage phase — root cause of all browser 500s identified and fixed (map page, commit 42d7a3a in stakd). *Issue triage in progress.*
+4. ~~**stakd/ build campaign + issue triage**~~ — ✅ Build campaign done (2026-02-25). Issue triage complete (2026-02-26). 36 findings in `build-loop-failure-investigation.md` covering credit exhaustion, resume state loss, agent pattern confusion, framework rule gaps, orphan branches, cost analysis. Prioritized remediation: P0 = commit resume.json per feature, add Next.js 15 rules to CLAUDE.md, verify script version before campaigns. See investigation file for full list.
 5. **Adaptive routing / parallelism** — Only if data from 1–3 shows remaining sequential bottleneck justifies the complexity. Investigated in Round 14 (results lost to compaction), re-analyzed in Round 16. Full edge case analysis done: diamond deps, merge conflicts at convergence, complex resume state, drift check ordering, resource contention, partial parallel failure. Conclusion: ~400-500 new lines and new failure classes don't justify savings until simpler levers are exhausted. *Deprioritized.*
 
 ### Historical build estimator (designed, not yet built)

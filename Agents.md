@@ -343,6 +343,51 @@ The loop ran to completion without human intervention.
 
 ---
 
+### Round 19: Stakd build campaign triage + map page fix (no branch — manual changes in stakd repo)
+
+**Date**: Feb 26, 2026
+
+**What was asked**: (1) Diagnose localhost 500 errors across all stakd routes after the 28-feature build campaign completed. (2) Conduct comprehensive failure investigation across all build runs and prior chat transcripts.
+
+**Triage — Root Cause**:
+- `src/app/map/page.tsx` had `"use client"` directive on line 1 alongside `import { cookies } from 'next/headers'` (server-only API) and `export const metadata` (server-only export). Agent added `"use client"` because it saw `dynamic(ssr:false)` + Leaflet and assumed client component was required. Wrong — that's the pattern for loading client components FROM a server component.
+- Single broken module poisoned webpack compilation graph. /map → 500 (direct), /news and /data → 500 (showing map error), middleware → EvalError (cascade from corrupted module graph).
+- Secondary: `NODE_ENV=production` in shell broke Tailwind PostCSS on cold start. Masked by `.next` cache on warm starts.
+
+**Fix applied** (committed in stakd repo as `42d7a3a`):
+- Created `src/components/map/DealMapLoader.tsx` — client wrapper with `"use client"`, `dynamic(ssr:false)`, loading skeleton
+- Edited `src/app/map/page.tsx` — removed `"use client"`, replaced inline dynamic import with `<DealMapLoader>` import
+- Page stays server component (cookies, db queries, metadata). Client wrapper handles Leaflet.
+
+**Verification**: All routes 200 (/, /map, /deals, /listings, /rankings, /awards, /news, /data). Middleware compiled clean. /agents → 404 (expected, no page). /settings → 307 (expected, auth redirect).
+
+**Build campaign stats**:
+- 28 features built across 3 runs over ~12 hours (with gaps for manual restarts)
+- Run 1 (Opus): 7 built, 14 failed (credit exhaustion — 84 wasted API calls)
+- Run 2 (Haiku 4.5): 15 built in ~2.5 hours
+- Run 3a/3b (Haiku 4.5): 6 built, with 3 features rebuilt due to lost resume state
+- Total cost: ~$39 (Haiku runs) + Run 1 cost (Opus, not in cost-log)
+- 132 files changed, ~20k lines added
+
+**Failure investigation**: 24 findings documented in `~/auto-sdd/build-loop-failure-investigation.md`. Key categories:
+
+| Category | Findings | Examples |
+|----------|----------|---------|
+| Reliability gaps | #1, #2, #10, #17, #18 | Credit exhaustion retry burn (84 wasted calls), resume state lost on crash, rapid branch creation during retries |
+| Agent intelligence | #3, #12, #21, #23 | "use client" confusion, dotall regex used twice/fixed twice, no codebase summary |
+| Infrastructure bugs | #6, #7, #8, #9 | `local` outside function, env var mismatch, nested session block, permission prompts |
+| Cascade/environment | #4, #5 | Webpack cascade from single bad module, NODE_ENV masking |
+| Operational gaps | #14, #19, #20, #22 | Model switching undocumented, 39 orphan branches, no build log for runs 2-3, empty security learnings |
+| Process (meta) | #16, #24 | Context overload in chat sessions, manual restarts between runs |
+
+**What was changed**: stakd repo only (map page fix + DealMapLoader). Investigation findings stored in auto-sdd repo as `build-loop-failure-investigation.md`. ONBOARDING.md updated with stakd status.
+
+**What was NOT changed**: No scripts, no lib/, no tests in auto-sdd. Investigation file is raw findings — remediation is a separate round.
+
+**Status**: Investigation in progress. Findings 1-24 captured. Remaining: prior chat transcripts for additional failure patterns, cost-log deep analysis, learnings injection strategy.
+
+---
+
 ## What This Is
 
 A spec-driven development system optimized for 256GB unified memory. Uses multiple local LLMs with **fresh contexts per stage** to avoid context rot.
@@ -592,6 +637,26 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 # Full dry-run with verbose agent output (captured to tests/dry-run-verbose.log)
 ./tests/dry-run.sh --verbose
 ```
+
+### Round 20: Build loop failure investigation — 36 findings (no branch — chat session via Desktop Commander)
+
+**What was asked**: Comprehensive audit of all build loop failures across the stakd 28-feature campaign and prior runs. Find every issue, document it, prioritize remediation.
+
+**What actually happened**: Investigated build.log, cost-log.jsonl, git history (80 commits, 39 branches), stash, .specs/learnings/ files, CLAUDE.md, .env.local configs, and prior chat transcripts. Produced 36 findings across 4 batches. Fixed the cascade 500 bug (map page server/client confusion) in Round 19; this round documented the systemic causes.
+
+**Key findings**:
+- Credit exhaustion detection (Round 13) wasn't in the build script during ANY stakd run — all 3 runs predated the merge
+- Resume state lost on crash → $9.42 wasted rebuilding features 23-25
+- No Next.js 15 rules in CLAUDE.md → root cause of cascade 500 bug
+- Security learnings completely empty despite 7+ auth features
+- 39 orphan branches, no cleanup step
+- Same dotAll regex bug fixed twice (no cross-feature context)
+
+**Artifact**: `build-loop-failure-investigation.md` (404 lines, 36 findings, prioritized remediation plan)
+
+**What was NOT changed**: No script changes, no CLAUDE.md changes, no learnings files updated. Investigation only — remediation is queued.
+
+**Verification**: File reviewed for completeness and accuracy. Count corrected (33→36), cost discrepancy fixed (#17 aligned with #34).
 
 ## Known Gaps
 
