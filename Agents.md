@@ -737,6 +737,23 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 ---
 
+### Round 27: Eval function library + tests (branch: claude/eval-function-library-3W3Ek)
+
+**Date**: Feb 26, 2026
+
+**What was asked**: Create a sourceable shell library (`lib/eval.sh`) providing four functions for evaluating completed feature builds: `run_mechanical_eval` (deterministic agent-free checks against a commit), `generate_eval_prompt` (outputs a prompt for a fresh eval agent), `parse_eval_signal` (same pattern as `parse_signal` in build-loop-local.sh), and `write_eval_result` (merges mechanical + agent eval into a JSON file). Plus a test suite (`tests/test-eval.sh`). These will be used by a sidecar eval process in Round 28.
+
+**What actually happened**:
+- `lib/eval.sh`: Created with four functions. `run_mechanical_eval` extracts commit metadata (files changed, lines added/removed, new type exports, type redeclarations, import count, test files touched) as JSON. Handles edge cases: first commit (diff against empty tree), merge commits (skip with reason), missing args (error JSON). `generate_eval_prompt` builds a prompt including the diff, CLAUDE.md content, learnings, and required signal definitions with safety instructions. `parse_eval_signal` uses the awk pattern from build-loop-local.sh. `write_eval_result` merges mechanical JSON with parsed agent signals, gracefully handling empty/malformed agent output.
+- `tests/test-eval.sh`: 53 assertions across 9 test groups — normal feature commit (14), first commit (4), merge commit (3), error cases (4), prompt generation (10), signal parsing (5), full write (6), agent-less write (4), malformed agent write (3). Creates temp git repos with React/TS fixtures. Cleans up on exit.
+- `Agents.md`: This entry.
+
+**What was NOT changed**: No existing files modified. lib/reliability.sh, lib/validation.sh, lib/codebase-summary.sh, scripts/, all untouched.
+
+**Verification**: `bash -n` clean on both new files. 53/53 new assertions pass. 68/68 reliability tests pass. 10/10 validation tests pass. 23/23 codebase-summary tests pass. `git diff --stat` shows only the 3 expected files.
+
+---
+
 ## Known Gaps
 
 - No live integration testing — all validation is `bash -n` + unit tests + structural dry-run
