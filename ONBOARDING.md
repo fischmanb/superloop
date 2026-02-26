@@ -260,6 +260,10 @@ auto-sdd/
 
 This file is useless if it's stale. Context loss — compaction, crashes, new chats — happens without warning. The update protocol is designed around that reality and enforced mechanically.
 
+### Reconciliation after agent rounds
+
+When a Claude Code agent completes a round and updates Agents.md, the chat session that triggered or reviewed that round is responsible for reconciling ONBOARDING.md before the session ends. This is a process rule, not a mechanical check — the chat is already reading Agents.md to verify the agent's work, so the marginal cost is near zero. Without this, Agents.md can drift from ONBOARDING.md silently: the hash stays clean, the interval check passes, and the next fresh chat onboards with stale context.
+
 ### Enforcement mechanism: `.onboarding-state`
 
 A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
