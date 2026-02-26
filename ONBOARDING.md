@@ -198,6 +198,8 @@ These are documented in detail in `Brians-Notes/PROMPT-ENGINEERING-GUIDE.md` and
 
 Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capability that provides filesystem or system access) must ask Brian for explicit permission before making any file changes, git commits, or GitHub operations. The only exceptions are `.onboarding-state` reads/writes and `ONBOARDING.md` reads/writes required by the onboarding state protocol. This applies to documentation edits, prompt files, script changes, and any other filesystem modification. Do not batch multiple changes into a single approval request in a way that obscures what's being changed — describe each change clearly.
 
+**Merge/push rule**: Claude must never run `git merge` or `git push` in the same response where it presents verification results or proposes the action. The response must end with the request. The merge or push can only happen in a subsequent response after Brian's explicit approval in the intervening message. This creates a forced wait state that prevents inferred permission from context.
+
 ---
 
 ## Quick Reference: Common Tasks
