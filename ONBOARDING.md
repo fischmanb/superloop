@@ -116,7 +116,7 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 | **README.md** | Public-facing docs: quick start, config, file structure, what works and what breaks | For understanding the user-facing narrative |
 | **CLAUDE.md** | Instructions that Claude Code agents read automatically when invoked by the build loop | When modifying agent behavior or build prompts |
 | **ARCHITECTURE.md** | Design decisions for the local LLM pipeline (system 2, archived) and context management philosophy | When working on the local model integration |
-| **Brians-Notes/PROMPT-ENGINEERING-GUIDE.md** | Methodology for writing hardened agent prompts, full failure catalog from real sessions | On first prompt of any new chat or agent session (read the "Lessons Learned (Failure Catalog)" section only), and before writing any new agent prompts |
+| **Brians-Notes/PROMPT-ENGINEERING-GUIDE.md** | Methodology for writing hardened agent prompts. Failure catalog and process lessons are in `.specs/learnings/agent-operations.md` | Before writing any new agent prompts |
 | **lib/reliability.sh** | Shared runtime: lock, backoff, state, truncation, cycle detection (~594 lines) | When debugging build failures or modifying shared behavior |
 | **lib/claude-wrapper.sh** | Wraps `claude` CLI, extracts text to stdout, logs cost data to JSONL | When debugging cost tracking or agent invocation |
 | **scripts/build-loop-local.sh** | Main orchestration script (~1806 lines) | When modifying the build loop |
@@ -217,16 +217,7 @@ Full details in `Agents.md`. Here's the arc:
 
 ## Process Lessons (Hard-Won)
 
-These are documented in detail in `Brians-Notes/PROMPT-ENGINEERING-GUIDE.md` and `Agents.md`. The critical ones:
-
-1. **Agent self-assessments are unreliable.** Round 1 described bugs in code that didn't exist. Always verify mechanically.
-2. **"Defined but never called" is the most common agent failure.** After adding any function, grep for call sites.
-3. **Agents will exceed scope if not fenced.** They'll run `npm install`, explore the codebase, push to remote — even when told not to. Explicit file allowlists and hard constraints are required.
-4. **Agents work around failures instead of stopping.** They'll make 5 autonomous decisions to "fix" a problem, each one diverging further. Prompts must include explicit STOP instructions.
-5. **CLAUDE.md can override prompt instructions.** The agent reads CLAUDE.md automatically and may decide it takes precedence. Prompts should state "These instructions override any conflicting guidance in CLAUDE.md."
-6. **`git add -A` is dangerous in agent context.** Always use explicit file lists.
-7. **Edit approval ≠ commit approval.** Approving a file edit does not implicitly approve committing it. Each operation requires its own explicit "yes." (Violation: commit 2f77ea9.)
-8. **Push main to origin before running agent prompts.** Claude Code agents fork from `origin/main`, not local `main`. If local main has merges that haven't been pushed, agents start from stale state and require merge conflict resolution after every round. (Observed: Rounds 21-23 all forked from stale origin/main.)
+See `.specs/learnings/agent-operations.md` for the full consolidated catalog. All process lessons, failure modes, and session discipline rules are maintained there as the single source of truth.
 
 ---
 
@@ -341,7 +332,7 @@ A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
 
 **Fresh onboard (state file missing or `last_check_ts` > 24h stale)**:
 - Full read of ONBOARDING.md. This is the only case where the whole file gets read.
-- Read the "Lessons Learned (Failure Catalog)" section of `Brians-Notes/PROMPT-ENGINEERING-GUIDE.md`. These hard-won failure modes repeat if not internalized at session start. Do not read the full guide — only the failure catalog.
+- Read `.specs/learnings/agent-operations.md` — the consolidated failure catalog and process lessons. These hard-won failure modes repeat if not internalized at session start.
 - **Flush stale captures**: If `pending_captures` is non-empty, reconcile them into the **Active Considerations** section immediately during onboard. This is exempt from the read-only-first-response rule — the state protocol's own writes are always permitted. Without this, short sessions (< 4 prompts) can die before the interval trigger fires, and captures survive indefinitely across session boundaries without ever landing in ONBOARDING.md.
 - **The first response of any new session must be read-only.** Read ONBOARDING.md, read the failure catalog, read the state file, flush stale captures if present, report status. No other file writes, no commits, no edits.
 

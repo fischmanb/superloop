@@ -315,12 +315,15 @@ Cross-cutting learnings are stored in `.specs/learnings/` by category:
 | API & Data | `.specs/learnings/api.md` |
 | Design System | `.specs/learnings/design.md` |
 | General | `.specs/learnings/general.md` |
+| Agent Operations | `.specs/learnings/agent-operations.md` |
 
 Read `.specs/learnings/index.md` for a summary and recent learnings.
 
 Feature-specific learnings are in each spec's `## Learnings` section.
 
 Run `/compound` at the end of implementation sessions to extract and persist learnings.
+
+**Important**: All learnings go in `auto-sdd/.specs/learnings/`, NOT in project-specific directories (e.g., `stakd/.specs/learnings/`). Project-specific dirs only get fixes specific to that build/app. Agent process lessons and failure modes go in `agent-operations.md`.
 
 ---
 

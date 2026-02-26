@@ -165,71 +165,13 @@ Superseded branches (whose work is fully merged) are noted as such in the log wi
 
 ## Lessons Learned (Failure Catalog)
 
-### Agent self-assessments are unreliable
-Agents will report "all verifications passed" while having made changes far beyond scope. The verification block in the prompt must enforce correctness — never trust the agent's narrative summary. Always include machine-checkable gates (`git diff --stat`, `bash -n`, grep).
-
-### "Do not modify any other files" is insufficient
-Round 7 (2025-02-24): Agent was told "do not modify any other files" but ran `npm install`, committing 6400+ node_modules files and a tsconfig.tsbuildinfo. The instruction was too vague. Fix: explicit file allowlist + explicit package manager ban + `git diff --stat` gate before commit.
-
-### Agents will run in the wrong directory
-Round 7: Prompt didn't specify working directory. Agent ran in the parent `auto-sdd/` repo (which had a git remote) instead of the intended `stakd/` subdirectory. The `stakd/` subdir was a separate git repo with no remote, but the agent found the parent's remote and pushed to it. Fix: always include a `pwd` check in Preconditions, and if the target is a subdirectory, add `cd <path> && pwd` as the first precondition step.
-
-### Agents will push when not told to (and when told not to)
-Round 7: Prompt said "Do not push." Agent pushed `claude/fix-agent-permissions-tHme8` to origin anyway. Fix: if you don't want a push, don't have a remote configured, or add explicit "Do not run git push under any circumstances" in Hard Constraints.
-
-### node_modules must be in .gitignore
-If the repo has a package.json, ensure `node_modules/` is in `.gitignore` before running any agent. Agents may run `npm install` despite instructions not to.
-
-### `--force-with-lease` requires fresh fetch
-`git push --force-with-lease` will fail with "stale info" if you haven't fetched since the remote was last updated. Always `git fetch origin` immediately before `--force-with-lease`.
-
-### HTTP 408 on large pushes
-Git pushes over ~25MB can fail with `HTTP 408 curl 22`. Fix: `git config http.postBuffer 524288000` (500MB buffer).
-
-### macOS ships bash 3.2
-Scripts using associative arrays (`declare -A`) or other bash 4+ features will fail on macOS default bash. Fix: `brew install bash` and invoke with `/opt/homebrew/bin/bash`.
-
-### CLAUDE.md repo instructions can override prompt instructions
-Round 8 (2025-02-24): Prompt explicitly said to merge to main and push main. The agent's own `CLAUDE.md` file contained branch development rules saying to push to the feature branch instead. The agent decided CLAUDE.md took precedence and refused to merge to main, citing "permissions I may not have." Fix: if the prompt needs to override CLAUDE.md behavior, state it explicitly: "These instructions override any conflicting guidance in CLAUDE.md or other repo-level configuration files." Alternatively, temporarily modify CLAUDE.md before running the agent, or accept that merge-to-main will always be a manual step.
-
-### `git add -A` considered harmful in agent context
-Never use `git add -A` or `git add .` in agent prompts. Always `git add <explicit file list>`. Agents create and modify unexpected files; blanket adds will commit them.
-
-### Agents don't report unprompted
-Round 9 investigation (2025-02-24): Agent completed all investigation steps but did not report results until asked "what happened?" Fix: every prompt must end with "Report your findings immediately upon completion. Do not wait for a follow-up question."
-
-### Agents will explore the codebase if not forbidden
-Round 9 (2025-02-24): Agent was given specific numbered steps but decided to "Explore auto-sdd codebase" and "read the key files to understand the project deeply" — reading every file in the repo before starting implementation. This wastes tokens and risks the agent "improving" things it discovered. Fix: Hard Constraints now allow reads but require justification before each read, and mandate full stop if unsure. Speculative exploration is banned; purposeful reads with stated rationale are allowed.
-
-### Agents work around failures instead of stopping
-Round 9 (2025-02-24): Agent couldn't push from a fresh clone (no GitHub auth in sandbox). Instead of stopping, it abandoned the clean clone, went back to a stale local repo at `/home/user/auto-sdd`, and applied changes there. It made 5 autonomous decisions to work around the problem, each one moving further from the intended execution path. Fix: Hard Constraints must include explicit STOP instructions for ANY unexpected situation: "If you encounter ANYTHING unexpected — STOP IMMEDIATELY. Do not attempt to fix, adapt, or work around the issue."
-
-### Sandbox environments cannot push to GitHub
-The Claude Code sandbox at `/home/user/` does not have GitHub authentication configured. Any prompt that ends with `git push origin main` will fail in the sandbox. Fix: either have the agent commit and merge locally without pushing (Brian pushes manually from his machine), or use `git clone` with the real repo URL so the agent works on a fresh clone — but accept that pushing will still fail. The safest pattern is: agent commits to feature branch, Brian pulls and merges locally.
-
-### CLAUDE.md appends random suffixes to branch names
-Claude Code's CLAUDE.md configuration appends random suffixes like `-f05hV` or `-Q63J8` to branch names specified in prompts. `claude/add-cost-tracking` becomes `claude/add-cost-tracking-wrapper-f05hV`. Fix: don't hardcode branch names in merge/push steps. Use the branch name the agent actually created, or accept that merge-to-main will be a manual step.
-
-### Orphan branches accumulate on remote
-Every agent run that pushes creates a remote branch that never gets cleaned up. After a few failed runs, 22 orphan branches were found on origin. Fix: periodically run `git branch -r | grep claude/ | while read b; do git push origin --delete "${b#origin/}"; done` to clean up. Future prompts should not instruct agents to push feature branches to origin.
-
-### Force push can destroy agent work
-Round 8 (2025-02-24): A `git push --force-with-lease` to clean up node_modules also wiped out agent branches that had been pushed to origin. The permissions fix from that agent run was lost and had to be redone. Fix: before force pushing, check what branches exist on origin and whether any contain unmerged work.
+Consolidated into `.specs/learnings/agent-operations.md` — the single source of truth for all agent failure modes, process lessons, and session discipline rules. Read the "Failure Catalog" and "Operational Process Lessons" sections there.
 
 ---
 
 ## Pending Fixes to Propagate
 
-### Grep comment-filter fix
-The verification blocks in existing prompts use the broken comment filter pattern. All future prompts should use the corrected version. When writing any new verification block that filters comments, always use:
-```bash
-grep -rn "pattern" scripts/ | grep -v ":#\|: #"
-```
-Not:
-```bash
-grep -rn "pattern" scripts/ | grep -v "^\s*#"
-```
-The broken pattern fails because `grep -rn` prepends `filename:linenum:` before the `#`, so `^\s*#` never matches. This has not yet been patched into the existing scripts or test suite.
+See `.specs/learnings/agent-operations.md` → "Grep comment-filter fix" under Operational Process Lessons.
 
 ---
 

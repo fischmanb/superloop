@@ -736,11 +736,7 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 ## Process Lessons (for humans and agents)
 
-1. **Agent self-assessments are unreliable.** Round 1 agent described bugs in code it never wrote. Always verify with grep/tests.
-2. **"Defined but never called" is the most common agent failure mode.** All 3 rounds had at least one instance. After adding any function, grep for call sites.
-3. **`bash -n` is necessary but insufficient.** It catches syntax errors but not unreachable code or wrong function names. The grep check in `test-reliability.sh` catches the most common failure.
-4. **Independent verification catches what self-assessment misses.** This is the same principle as the codebase's own drift detection (Layer 1 self-check vs Layer 2 cross-check).
-5. **Agents are better at verification than comprehensive implementation.** The skill gradient: verification > implementation > self-assessment.
+See `.specs/learnings/agent-operations.md` for the full consolidated catalog — core principles, failure catalog, operational process lessons, and session discipline rules. All learnings are maintained there as the single source of truth.
 
 ## Verification Checklist (after any agent work)
 

@@ -12,6 +12,7 @@ Cross-cutting patterns learned in this codebase. Updated via `/compound`.
 | API & Data | [api.md](./api.md) | Endpoints, data handling, errors |
 | Design System | [design.md](./design.md) | Tokens, components, accessibility |
 | General | [general.md](./general.md) | Other patterns |
+| Agent Operations | [agent-operations.md](./agent-operations.md) | Process lessons, failure catalog, session discipline |
 
 ---
 
