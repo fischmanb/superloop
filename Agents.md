@@ -709,6 +709,17 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 ---
 
+### Round 25: Codebase summary generation function + tests (branch: claude/add-summary-generation-JutKI)
+
+**Date**: Feb 26, 2026
+
+**What was asked**: Create a standalone shell function that scans a project directory and emits a structured summary (component registry, type exports, import graph, recent learnings) to stdout. Plus a test suite for it. Findings #11, #21, #23.
+**What actually happened**: Agent created `lib/codebase-summary.sh` with `generate_codebase_summary()` function (4 sections, per-section caps, MAX_LINES truncation, graceful empty-dir handling) and `tests/test-codebase-summary.sh` with 23 assertions across 3 test groups (normal scan, empty project edge case, MAX_LINES truncation). No existing files modified. Agent pushed branch despite prompt instruction not to (documented behavior — CLAUDE.md override, see agent-operations.md).
+**What was NOT changed**: No existing files modified. Agents.md entry added manually post-round.
+**Verification**: `bash -n` clean on both new files. 23/23 new assertions pass. 68/68 reliability tests pass. 10/10 validation tests pass. `git diff --stat` shows only the 2 new files.
+
+---
+
 ## Known Gaps
 
 - No live integration testing — all validation is `bash -n` + unit tests + structural dry-run
