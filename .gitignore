@@ -4,6 +4,9 @@
 # SDD build state (resume capability)
 .sdd-state/
 
+# Eval sidecar drain sentinel
+.sdd-eval-drain
+
 # Onboarding state tracking (local only)
 .onboarding-state
 

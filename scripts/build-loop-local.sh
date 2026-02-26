@@ -1543,6 +1543,59 @@ fi
 
 show_preflight_summary "$TOPO_LINES"
 
+# ── Launch eval sidecar (background quality assessment) ───────────────────
+EVAL_SIDECAR_PID=""
+DRAIN_SENTINEL="$PROJECT_DIR/.sdd-eval-drain"
+
+start_eval_sidecar() {
+    if [ "${EVAL_SIDECAR:-true}" = "false" ]; then
+        log "Eval sidecar disabled (EVAL_SIDECAR=false)"
+        return
+    fi
+    local sidecar_script="$SCRIPT_DIR/eval-sidecar.sh"
+    if [ ! -f "$sidecar_script" ]; then
+        warn "Eval sidecar script not found: $sidecar_script"
+        return
+    fi
+    log "Starting eval sidecar..."
+    PROJECT_DIR="$PROJECT_DIR" bash "$sidecar_script" &
+    EVAL_SIDECAR_PID=$!
+    log "Eval sidecar started (PID: $EVAL_SIDECAR_PID)"
+}
+
+stop_eval_sidecar() {
+    if [ -z "$EVAL_SIDECAR_PID" ]; then
+        return
+    fi
+    # Check if sidecar is still running
+    if ! kill -0 "$EVAL_SIDECAR_PID" 2>/dev/null; then
+        log "Eval sidecar already exited"
+        EVAL_SIDECAR_PID=""
+        return
+    fi
+    # Write drain sentinel — tells sidecar to finish remaining evals and exit
+    log "Signaling eval sidecar to drain..."
+    touch "$DRAIN_SENTINEL"
+    # Wait for sidecar to exit naturally (up to 120s)
+    local waited=0
+    local timeout=120
+    while kill -0 "$EVAL_SIDECAR_PID" 2>/dev/null && [ "$waited" -lt "$timeout" ]; do
+        sleep 2
+        waited=$((waited + 2))
+    done
+    if kill -0 "$EVAL_SIDECAR_PID" 2>/dev/null; then
+        warn "Eval sidecar did not exit within ${timeout}s — sending SIGTERM"
+        kill "$EVAL_SIDECAR_PID" 2>/dev/null || true
+        wait "$EVAL_SIDECAR_PID" 2>/dev/null || true
+    else
+        log "Eval sidecar exited cleanly"
+    fi
+    rm -f "$DRAIN_SENTINEL"
+    EVAL_SIDECAR_PID=""
+}
+
+start_eval_sidecar
+
 if [ "$BRANCH_STRATEGY" = "both" ]; then
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # BOTH MODE: Run chained first, then independent
@@ -1841,3 +1894,6 @@ else
         clean_state
     fi
 fi
+
+# ── Stop eval sidecar (cooperative drain → timeout → SIGTERM) ─────────────
+stop_eval_sidecar

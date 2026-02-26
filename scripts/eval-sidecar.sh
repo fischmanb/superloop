@@ -36,6 +36,11 @@ EVAL_AGENT="${EVAL_AGENT:-true}"
 EVAL_MODEL="${EVAL_MODEL:-${AGENT_MODEL:-}}"
 EVAL_OUTPUT_DIR="${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}"
 
+# ── Drain sentinel ──────────────────────────────────────────────────────
+# The build loop writes this file to signal "finish up". The sidecar sees it,
+# drains remaining unevaluated commits, generates the campaign summary, and exits.
+DRAIN_SENTINEL="$PROJECT_DIR/.sdd-eval-drain"
+
 # ── Source libraries ──────────────────────────────────────────────────────
 source "$LIB_DIR/reliability.sh"
 source "$LIB_DIR/eval.sh"
@@ -69,12 +74,16 @@ log "=============================="
 # ── Ensure output directory ───────────────────────────────────────────────
 mkdir -p "$EVAL_OUTPUT_DIR"
 
+# ── Clean up stale sentinel from prior SIGKILL/crash ─────────────────────
+rm -f "$DRAIN_SENTINEL"
+
 # ── State tracking ────────────────────────────────────────────────────────
 # Track the last evaluated commit so we only process new ones
 LAST_EVALUATED_COMMIT=""
 AGENT_EVALS_DISABLED=false
 EVAL_COUNT=0
 EVAL_ERRORS=0
+DRAINING=false
 
 # ── Campaign summary on exit ─────────────────────────────────────────────
 generate_campaign_summary() {
@@ -236,17 +245,36 @@ fi
 log "Starting from commit: ${LAST_EVALUATED_COMMIT:0:8}"
 
 while true; do
-    sleep "$EVAL_INTERVAL"
+    # Check for drain sentinel — cooperative shutdown from build loop
+    if [ -f "$DRAIN_SENTINEL" ]; then
+        if [ "$DRAINING" = false ]; then
+            log "Drain sentinel detected — processing remaining evals..."
+            DRAINING=true
+        fi
+    fi
+
+    # Sleep between polls (skip during drain to process remaining quickly)
+    if [ "$DRAINING" = false ]; then
+        sleep "$EVAL_INTERVAL"
+    fi
 
     # Get current HEAD
     current_head=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || echo "")
     if [ -z "$current_head" ]; then
+        if [ "$DRAINING" = true ]; then
+            warn "Could not read HEAD during drain — finishing"
+            break
+        fi
         warn "Could not read HEAD — will retry next cycle"
         continue
     fi
 
-    # If HEAD hasn't changed, nothing to do
+    # If HEAD hasn't changed
     if [ "$current_head" = "$LAST_EVALUATED_COMMIT" ]; then
+        if [ "$DRAINING" = true ]; then
+            # No more commits to evaluate — drain complete
+            break
+        fi
         continue
     fi
 
@@ -256,6 +284,9 @@ while true; do
     if [ -z "$new_commits" ]; then
         # Only merge commits since last check, or range error — advance pointer
         LAST_EVALUATED_COMMIT="$current_head"
+        if [ "$DRAINING" = true ]; then
+            break
+        fi
         continue
     fi
 
@@ -352,3 +383,12 @@ while true; do
     # Advance pointer
     LAST_EVALUATED_COMMIT="$current_head"
 done
+
+# ── Drain complete — generate full campaign summary and exit ──────────────
+if [ "$DRAINING" = true ]; then
+    log "Drain complete — all commits evaluated"
+    generate_campaign_summary
+    rm -f "$DRAIN_SENTINEL"
+    log "Exiting cleanly (evaluated $EVAL_COUNT commits, $EVAL_ERRORS errors)"
+    exit 0
+fi

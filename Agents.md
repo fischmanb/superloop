@@ -770,6 +770,25 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 ---
 
+### Round 29: Eval sidecar cooperative drain shutdown (branch: claude/apply-hard-constraints-gbk3o)
+
+**Date**: Feb 26, 2026
+
+**What was asked**: Fix the eval sidecar shutdown sequence so it always drains its eval queue before generating the campaign summary. Previously, SIGTERM on exit could produce incomplete campaign summaries if the sidecar had unevaluated commits remaining. Replace the hard SIGTERM shutdown with a cooperative drain signal using a sentinel file.
+
+**What actually happened**:
+- `scripts/eval-sidecar.sh`: Added drain sentinel support. New `DRAIN_SENTINEL` variable (`$PROJECT_DIR/.sdd-eval-drain`). Stale sentinel cleaned up on startup (`rm -f`). New `DRAINING` state variable. Main loop checks for sentinel each iteration — when found, skips sleep between polls and processes all remaining commits without delay. When no more new commits exist during drain, breaks out of loop, generates complete campaign summary, removes sentinel, and exits cleanly. SIGTERM trap kept as hard fallback (still generates summary from whatever's been evaluated so far).
+- `scripts/build-loop-local.sh`: Added eval sidecar lifecycle management. New `start_eval_sidecar()` launches the sidecar as a background process (configurable via `EVAL_SIDECAR` env var, defaults to true). New `stop_eval_sidecar()` writes the drain sentinel, waits up to 120s for the sidecar to exit naturally, then falls back to SIGTERM if it hangs. Called at script end after all build loops and cleanup complete.
+- `scripts/overnight-autonomous.sh`: Same sidecar lifecycle pattern as build-loop-local.sh — `start_eval_sidecar()` and `stop_eval_sidecar()` functions, launched after pre-flight summary, stopped before Step 4 (Summary).
+- `.gitignore`: Added `.sdd-eval-drain` sentinel file.
+- `Agents.md`: This entry.
+
+**What was NOT changed**: lib/eval.sh, lib/reliability.sh, lib/claude-wrapper.sh, lib/validation.sh, lib/codebase-summary.sh, all tests, all other scripts. The campaign summary generation function (`generate_campaign_summary`) is unchanged. The SIGTERM trap in eval-sidecar.sh is unchanged (kept as hard fallback).
+
+**Verification**: `bash -n` clean on all three scripts. All test suites pass (68/68 reliability, 10/10 validation, 23/23 codebase-summary, 53/53 eval). Sentinel check confirmed in sidecar loop, sentinel write confirmed in both build script cleanup functions, sentinel filename confirmed in .gitignore. `git diff --stat` shows only the 5 expected files.
+
+---
+
 ## Known Gaps
 
 - No live integration testing — all validation is `bash -n` + unit tests + structural dry-run
