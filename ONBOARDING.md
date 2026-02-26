@@ -37,19 +37,39 @@ Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capabi
 
 - **Build loop runs end-to-end.** Validated Feb 22, 2026: 2 features built autonomously against a React+TS+Vite app. 19 tests passing, TypeScript clean, drift auto-reconciled.
 - **Reliability layer**: locking, exponential backoff, context truncation, cycle detection, crash recovery with `--resume`.
+- **Resume state persistence**: resume.json committed to git after each successful feature build — survives crashes across runs (Round 21).
+- **Nested session guard**: detects `CLAUDECODE` env var at startup, exits with clear instructions instead of hanging silently (Round 21).
+- **Retry hardening**: 30-second minimum delay between retries regardless of failure type. Branch reuse on retry instead of creating orphan branches per attempt. Overnight script now has retry mechanism + credit exhaustion detection (Round 22).
+- **Build log auto-rotation**: all output tee'd to `logs/build-{timestamp}.log` (Round 23).
+- **Model logging per feature**: actual model used recorded in build summary JSON and human-readable table (Round 23).
+- **Post-run branch cleanup**: merged `auto/chained-*` and `auto/independent-*` branches auto-deleted after build summary (Round 23).
+- **NODE_ENV guard**: explicitly sets `NODE_ENV=development` before agent calls (Round 23).
 - **Test suite**: 68 unit assertions (`test-reliability.sh`), 10 validation assertions (`test-validation.sh`), structural dry-run.
 - **Cost tracking**: `lib/claude-wrapper.sh` logs token/cost data as JSONL.
-- **Build summary reports**: per-feature timing, test counts, token usage, written to `logs/build-summary-{timestamp}.json`.
+- **Build summary reports**: per-feature timing, test counts, token usage, model used, written to `logs/build-summary-{timestamp}.json`.
 - **Git stash hardening**: dirty worktree can't cascade failures across features.
-- **Credit exhaustion detection**: loop halts immediately when API credits run out instead of retrying doomed calls.
+- **Credit exhaustion detection**: both scripts halt immediately when API credits run out instead of retrying doomed calls.
 - **Topological sort + pre-flight**: shell-side Kahn's algorithm orders features by dependency, pre-flight summary with user confirmation before build starts.
 
 ### What's next
 
 1. **Codebase summary injection** — generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift.
 2. **Local model integration** — replace cloud API with local LM Studio on Mac Studio
-3. **stakd issue triage — COMPLETE** — 36 findings documented in `build-loop-failure-investigation.md`. Map page fix done (commit 42d7a3a). Root causes identified: credit exhaustion detection not in script during any run, resume state not committed (lost on crash), no Next.js 15 rules in CLAUDE.md, no codebase summary between features. Prioritized remediation plan in the investigation file. Next: implement P0 fixes before next build campaign.
-4. **Adaptive routing / parallelism** — only if data from 1-3 shows remaining sequential bottleneck justifies the complexity
+3. **Adaptive routing / parallelism** — only if data from 1-2 shows remaining sequential bottleneck justifies the complexity
+
+### Completed remediation (Rounds 21-23)
+
+Build loop remediation from `build-loop-failure-investigation.md` (37 findings). Rounds 21-23 merged to main. Round 24 (stakd CLAUDE.md + learnings) prompt written, not yet run.
+
+- ~~Resume state lost on crash~~ — ✅ Fixed Round 21 (findings #17, #28, #34)
+- ~~Nested Claude Code session hang~~ — ✅ Fixed Round 21 (finding #8)
+- ~~No retry delay / orphan branches on retry~~ — ✅ Fixed Round 22 (findings #2, #18, #35)
+- ~~Overnight script missing retry mechanism~~ — ✅ Fixed Round 22 (bonus: credit exhaustion also ported)
+- ~~No build log for runs 2-3~~ — ✅ Fixed Round 23 (finding #20)
+- ~~Model not logged per feature~~ — ✅ Fixed Round 23 (findings #14, #37)
+- ~~Orphan branches never cleaned~~ — ✅ Fixed Round 23 (finding #19)
+- ~~NODE_ENV=production breaks dev builds~~ — ✅ Fixed Round 23 (finding #5)
+- **stakd CLAUDE.md + learnings** — Round 24 prompt ready, not yet run (findings #3, #12, #22, #25, #26, #27, #33)
 
 ### Known gaps
 
@@ -73,8 +93,8 @@ Ordered by efficiency gain per complexity added:
 1. ~~**Topological sort + pre-flight summary**~~ — ✅ Done (Rounds 17-18). Shell-side Kahn's algorithm for feature ordering in both `build-loop-local.sh` and `overnight-autonomous.sh`. Pre-flight prints sorted feature list with t-shirt sizes, requires user confirmation (`AUTO_APPROVE=true` skips for overnight). 68 test assertions passing.
 2. **Codebase summary injection** — Generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift. Each build agent currently has no knowledge of what previous agents produced, causing type redeclarations and interface drift. High quality gain, moderate speed gain (fewer retries), low complexity. *Not started.*
 3. **Local model integration** — Replace cloud API calls with local LM Studio endpoints on Mac Studio. The archived `archive/local-llm-pipeline/` system is reference material. *Not started.*
-4. ~~**stakd/ build campaign + issue triage**~~ — ✅ Build campaign done (2026-02-25). Issue triage complete (2026-02-26). 36 findings in `build-loop-failure-investigation.md` covering credit exhaustion, resume state loss, agent pattern confusion, framework rule gaps, orphan branches, cost analysis. Prioritized remediation: P0 = commit resume.json per feature, add Next.js 15 rules to CLAUDE.md, verify script version before campaigns. See investigation file for full list.
-5. **Adaptive routing / parallelism** — Only if data from 1–3 shows remaining sequential bottleneck justifies the complexity. Investigated in Round 14 (results lost to compaction), re-analyzed in Round 16. Full edge case analysis done: diamond deps, merge conflicts at convergence, complex resume state, drift check ordering, resource contention, partial parallel failure. Conclusion: ~400-500 new lines and new failure classes don't justify savings until simpler levers are exhausted. *Deprioritized.*
+4. ~~**stakd/ build campaign + issue triage**~~ — ✅ Build campaign done (2026-02-25). Issue triage complete (2026-02-26). 37 findings in `build-loop-failure-investigation.md`. **Remediation: Rounds 21-23 merged to main** (resume persist, retry hardening, operational hygiene). Round 24 (stakd CLAUDE.md + learnings) prompt written, not yet run. See "Completed remediation" in Current State for full checklist.
+5. **Adaptive routing / parallelism** — Only if data from 1–3 shows remaining sequential bottleneck justifies the complexity. *Deprioritized.*
 
 ### Historical build estimator (designed, not yet built)
 
@@ -82,9 +102,8 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 
 ### Other active items
 
-- **Build loop remediation (2026-02-26)**: Staged agent rounds addressing 37 findings from `build-loop-failure-investigation.md`. Round 21 (resume state persistence + CLAUDECODE guard, commit `1e8d4bc`) and Round 22 (retry hardening + overnight retry mechanism + credit exhaustion ported to overnight, commit `fea1542`) complete on branches, not yet merged. Remaining: Round 23 (operational hygiene — build log rotation, model logging, branch cleanup, NODE_ENV), Round 24 (stakd CLAUDE.md Next.js 15 rules + learnings). Prompt lesson: keep prompts concise, describe intent not implementation code.
+- **Build loop remediation (2026-02-26)**: Rounds 21-23 merged to main (resume persist, CLAUDECODE guard, retry hardening with branch reuse, overnight retry+credit detection, build log rotation, model logging, branch cleanup, NODE_ENV guard). Round 24 (stakd CLAUDE.md Next.js 15 rules + learnings) prompt written, not yet run. Process lessons from this batch: (1) keep agent prompts concise — describe intent, not implementation code; (2) push main to origin before running agent prompts, otherwise agents fork from stale `origin/main` and require merge cleanup after each round.
 - **Onboarding state protocol**: Implemented 2026-02-25. Mechanical enforcement via `~/auto-sdd/.onboarding-state` file — tracks prompt count, buffers pending captures, triggers interval checks. Memory instruction points all future chats to the protocol. See "Keeping This File Current" section.
-- **stakd issue triage (2026-02-26)**: Root cause of all browser 500s was map page — agent put `"use client"` on a server component using `dynamic(ssr:false)`, which Next.js 15 disallows. Fix: DealMapLoader client wrapper (commit 42d7a3a). Cascade behavior: single broken module poisoned webpack graph, causing unrelated routes (/news, /data) to 500 with the map error. Middleware EvalError was also cascade, not independent. Separate issue: `NODE_ENV=production` in shell breaks Tailwind PostCSS processing on cold start — transient session variable, not in shell config. stakd branch merged to main locally (fast-forward, 132 files, 20k lines). No GitHub remote for stakd yet.
 
 ---
 
@@ -93,15 +112,15 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 | File | What it contains | When to read |
 |------|-----------------|--------------|
 | **ONBOARDING.md** (this file) | Full project context for a fresh chat | Always read first |
-| **Agents.md** | Agent work log (Rounds 1-15), architecture reference, signal protocol, verification checklist, known gaps, process lessons | Before making ANY changes — this is the source of truth for what happened and what works |
+| **Agents.md** | Agent work log (Rounds 1-23), architecture reference, signal protocol, verification checklist, known gaps, process lessons | Before making ANY changes — this is the source of truth for what happened and what works |
 | **README.md** | Public-facing docs: quick start, config, file structure, what works and what breaks | For understanding the user-facing narrative |
 | **CLAUDE.md** | Instructions that Claude Code agents read automatically when invoked by the build loop | When modifying agent behavior or build prompts |
 | **ARCHITECTURE.md** | Design decisions for the local LLM pipeline (system 2, archived) and context management philosophy | When working on the local model integration |
 | **Brians-Notes/PROMPT-ENGINEERING-GUIDE.md** | Methodology for writing hardened agent prompts, full failure catalog from real sessions | On first prompt of any new chat or agent session (read the "Lessons Learned (Failure Catalog)" section only), and before writing any new agent prompts |
 | **lib/reliability.sh** | Shared runtime: lock, backoff, state, truncation, cycle detection (~594 lines) | When debugging build failures or modifying shared behavior |
 | **lib/claude-wrapper.sh** | Wraps `claude` CLI, extracts text to stdout, logs cost data to JSONL | When debugging cost tracking or agent invocation |
-| **scripts/build-loop-local.sh** | Main orchestration script (~1730 lines) | When modifying the build loop |
-| **scripts/overnight-autonomous.sh** | Overnight automation variant (~944 lines) | When modifying overnight runs |
+| **scripts/build-loop-local.sh** | Main orchestration script (~1806 lines) | When modifying the build loop |
+| **scripts/overnight-autonomous.sh** | Overnight automation variant (~1041 lines) | When modifying overnight runs |
 | **.env.local.example** | Full config reference (167 lines) | When setting up or changing config |
 
 ---
@@ -186,6 +205,11 @@ Full details in `Agents.md`. Here's the arc:
 | 16 | ONBOARDING.md + maintenance protocol + adaptive routing analysis | Created onboarding file, mechanical state-tracking protocol, full edge case analysis of adaptive routing → deprioritized in favor of codebase summary + topo sort |
 | 17 | Topological sort + pre-flight summary | `emit_topo_order()` in reliability.sh, `build_feature_prompt()` + `show_preflight_summary()` in build-loop-local.sh, 10 new tests (68 total) |
 | 18 | Overnight script parity for topo sort | `build_feature_prompt_overnight()` + topo iteration in overnight-autonomous.sh |
+| 19 | stakd map page fix + build campaign triage | Root cause: "use client" on server component. DealMapLoader wrapper (42d7a3a). 28 features built. |
+| 20 | Build loop failure investigation | 37 findings across 4 batches. Prioritized remediation plan. |
+| 21 | Resume state persistence + nested session guard | `git add -f resume.json` after each feature. CLAUDECODE env var guard. |
+| 22 | Retry hardening | 30s min delay, branch reuse on retry. Overnight retry mechanism + credit exhaustion ported. |
+| 23 | Operational hygiene | Build log rotation, model logging per feature, post-run branch cleanup, NODE_ENV guard. |
 
 **Key lesson that repeats**: Agent self-assessments are unreliable. Always verify with grep, `bash -n`, and tests. Never trust the agent's narrative summary.
 
@@ -202,6 +226,7 @@ These are documented in detail in `Brians-Notes/PROMPT-ENGINEERING-GUIDE.md` and
 5. **CLAUDE.md can override prompt instructions.** The agent reads CLAUDE.md automatically and may decide it takes precedence. Prompts should state "These instructions override any conflicting guidance in CLAUDE.md."
 6. **`git add -A` is dangerous in agent context.** Always use explicit file lists.
 7. **Edit approval ≠ commit approval.** Approving a file edit does not implicitly approve committing it. Each operation requires its own explicit "yes." (Violation: commit 2f77ea9.)
+8. **Push main to origin before running agent prompts.** Claude Code agents fork from `origin/main`, not local `main`. If local main has merges that haven't been pushed, agents start from stale state and require merge conflict resolution after every round. (Observed: Rounds 21-23 all forked from stale origin/main.)
 
 ---
 
@@ -247,8 +272,8 @@ git branch -r | grep claude/ | while read b; do git push origin --delete "${b#or
 ```
 auto-sdd/
 ├── scripts/
-│   ├── build-loop-local.sh        # Main build loop (1730 lines)
-│   ├── overnight-autonomous.sh    # Overnight variant (944 lines)
+│   ├── build-loop-local.sh        # Main build loop (1806 lines)
+│   ├── overnight-autonomous.sh    # Overnight variant (1041 lines)
 │   ├── nightly-review.sh          # Extract learnings from commits
 │   ├── generate-mapping.sh        # Auto-generate .specs/mapping.md
 │   ├── setup-overnight.sh         # Install macOS launchd jobs
