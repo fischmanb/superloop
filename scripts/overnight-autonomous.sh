@@ -532,13 +532,76 @@ STEP_TIMINGS+=("Step 2 - Triage: $(format_duration $STEP_DURATION)")
 # ── Circular dependency check (from lib/reliability.sh) ──
 check_circular_deps
 
+# ── build_feature_prompt_overnight <feature_id> <feature_name> ──────────
+# Generates the build prompt for a specific feature. Overnight variant
+# includes Jira sync. Replaces the old inline BUILD_PROMPT_OVERNIGHT.
+build_feature_prompt_overnight() {
+    local feature_id="$1"
+    local feature_name="$2"
+
+    cat <<PROMPT_EOF
+Build feature #${feature_id}: ${feature_name}
+
+Instructions:
+1. Read .specs/roadmap.md and locate feature #${feature_id} ("${feature_name}")
+2. Update roadmap to mark it 🔄 in progress
+3. Run /spec-first ${feature_name} --full to build it (includes /compound)
+4. Update roadmap to mark it ✅ completed
+5. Sync Jira status if configured
+6. Regenerate mapping: run ./scripts/generate-mapping.sh
+7. Commit all changes with a descriptive message
+8. If build fails, output: BUILD_FAILED: {reason}
+
+After completion, output EXACTLY these signals (each on its own line):
+FEATURE_BUILT: ${feature_name}
+SPEC_FILE: {path to the .feature.md file you created/updated}
+SOURCE_FILES: {comma-separated paths to source files created/modified}
+
+Or if build fails:
+BUILD_FAILED: {reason}
+
+The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
+They are used by the automated drift-check that runs after your build.
+PROMPT_EOF
+}
+
+# ── show_preflight_summary_overnight <topo_lines> ──────────────────────
+# Simplified pre-flight summary for unattended overnight runs.
+# Logs the feature list and proceeds (no interactive prompt).
+show_preflight_summary_overnight() {
+    local topo_lines="$1"
+    local count=0
+    local line
+
+    log "Pre-flight build plan:"
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local fid fname fcmplx
+        fid="${line%%|*}"
+        local rest="${line#*|}"
+        fname="${rest%%|*}"
+        fcmplx="${rest##*|}"
+        log "  #$fid  $fname  [$fcmplx]"
+        count=$((count + 1))
+    done <<< "$topo_lines"
+
+    log "Total features: $count (capped at MAX_FEATURES=$MAX_FEATURES)"
+
+    if [ "${AUTO_APPROVE:-true}" != "true" ]; then
+        printf "  Proceed with build? [Y/n] "
+        read -r answer </dev/tty
+        if [ -n "$answer" ] && [[ ! "$answer" =~ ^[Yy] ]]; then
+            log "Build cancelled by user"
+            exit 0
+        fi
+    fi
+}
+
 # ── Handle --resume ──────────────────────────────────────────────────────
-RESUME_START_INDEX=0
 BUILT_FEATURE_NAMES=()
 if [ "$RESUME_MODE" = true ]; then
     if read_state; then
-        RESUME_START_INDEX=$RESUME_INDEX
-        log "Resuming from feature index $RESUME_START_INDEX"
+        log "Resuming — ${#BUILT_FEATURE_NAMES[@]} features already completed"
         if [ -n "$RESUME_BRANCH" ]; then
             LAST_FEATURE_BRANCH="$RESUME_BRANCH"
         fi
@@ -554,26 +617,72 @@ fi
 section "STEP 3: Build features from roadmap"
 STEP_START=$(date +%s)
 
+# ── Topological sort + pre-flight summary ──
+# emit_topo_order is provided by lib/reliability.sh
+TOPO_LINES=$(emit_topo_order)
+
+if [ -z "$TOPO_LINES" ]; then
+    log "No pending (⬜) features found in roadmap — nothing to build"
+    release_lock
+    STEP_DURATION=$(( $(date +%s) - STEP_START ))
+    STEP_TIMINGS+=("Step 3 - Build features: $(format_duration $STEP_DURATION)")
+    # Jump to summary
+    BUILT=0; FAILED=0; FEATURE_TIMINGS=()
+else
+
+show_preflight_summary_overnight "$TOPO_LINES"
+
 BUILT=0
 FAILED=0
 LAST_FEATURE_BRANCH="${LAST_FEATURE_BRANCH:-}"
 FEATURE_TIMINGS=()
 
-for i in $(seq 1 "$MAX_FEATURES"); do
-    # ── Resume: skip already-completed features ──
-    if [ "$ENABLE_RESUME" = "true" ] && [ "$i" -le "$RESUME_START_INDEX" ]; then
-        log "Skipping feature $i (already completed in previous run)"
+# Parse topo_lines into arrays for iteration
+TOPO_IDS=()
+TOPO_NAMES=()
+TOPO_CMPLX=()
+_line=""
+while IFS= read -r _line; do
+    [ -z "$_line" ] && continue
+    TOPO_IDS+=("${_line%%|*}")
+    _rest="${_line#*|}"
+    TOPO_NAMES+=("${_rest%%|*}")
+    TOPO_CMPLX+=("${_rest##*|}")
+done <<< "$TOPO_LINES"
+
+topo_count=${#TOPO_IDS[@]}
+loop_limit=$topo_count
+if [ "$loop_limit" -gt "$MAX_FEATURES" ]; then
+    loop_limit=$MAX_FEATURES
+fi
+
+idx=0
+while [ "$idx" -lt "$loop_limit" ]; do
+    i="${TOPO_IDS[$idx]}"
+    feature_label="${TOPO_NAMES[$idx]}"
+
+    # ── Resume: skip already-completed features (by name) ──
+    already_built=false
+    for _built_name in "${BUILT_FEATURE_NAMES[@]}"; do
+        if [ "$_built_name" = "$feature_label" ]; then
+            already_built=true
+            break
+        fi
+    done
+    if [ "$already_built" = true ]; then
+        log "Skipping already-built feature: $feature_label"
+        idx=$((idx + 1))
         continue
     fi
 
     FEATURE_START=$(date +%s)
     elapsed_so_far=$(( FEATURE_START - SCRIPT_START ))
-    log "Build iteration $i/$MAX_FEATURES... (elapsed: $(format_duration $elapsed_so_far))"
-    
+    log "Build #$i: $feature_label ($((idx + 1))/$loop_limit) | elapsed: $(format_duration $elapsed_so_far)"
+
     # Create a new branch for this feature based on strategy
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
     BRANCH_NAME="auto/feature-$TIMESTAMP"
-    
+
     if [ "$BRANCH_STRATEGY" = "chained" ]; then
         # Chained: Branch from previous feature's branch (or main if first)
         base_branch="${LAST_FEATURE_BRANCH:-$MAIN_BRANCH}"
@@ -592,36 +701,14 @@ for i in $(seq 1 "$MAX_FEATURES"); do
         # Independent: Always branch from main
         git checkout "$MAIN_BRANCH"
     fi
-    
+
     git checkout -b "$BRANCH_NAME"
-    
+
     # Run /build-next
     BUILD_OUTPUT=$(mktemp)
-    
+
     AGENT_EXIT=0
-    BUILD_PROMPT_OVERNIGHT="
-Run the /build-next command to:
-1. Read .specs/roadmap.md and find the next pending feature
-2. Check that all dependencies are completed
-3. If a feature is ready:
-   - Update roadmap to mark it 🔄 in progress
-   - Run /spec-first {feature} --full to build it (includes /compound)
-   - Update roadmap to mark it ✅ completed
-   - Sync Jira status if configured
-4. If no features are ready, output: NO_FEATURES_READY
-5. If build fails, output: BUILD_FAILED: {reason}
-
-After completion, output EXACTLY these signals (each on its own line):
-FEATURE_BUILT: {feature name}
-SPEC_FILE: {path to the .feature.md file you created/updated}
-SOURCE_FILES: {comma-separated paths to source files created/modified}
-
-Or: NO_FEATURES_READY
-Or: BUILD_FAILED: {reason}
-
-The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
-"
-    run_agent_with_backoff "$BUILD_OUTPUT" $(agent_cmd "$BUILD_MODEL") "$BUILD_PROMPT_OVERNIGHT"
+    run_agent_with_backoff "$BUILD_OUTPUT" $(agent_cmd "$BUILD_MODEL") "$(build_feature_prompt_overnight "$i" "$feature_label")"
 
     if [ "$AGENT_EXIT" -ne 0 ]; then
         warn "Agent exited with code $AGENT_EXIT (will check signals for actual status)"
@@ -637,15 +724,16 @@ The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported
         git branch -D "$BRANCH_NAME" 2>/dev/null || true
         break
     fi
-    
+
     if echo "$BUILD_RESULT" | grep -q "BUILD_FAILED"; then
         REASON=$(parse_signal "BUILD_FAILED" "$BUILD_RESULT")
         FEATURE_DURATION=$(( $(date +%s) - FEATURE_START ))
         warn "Build failed: $REASON ($(format_duration $FEATURE_DURATION))"
-        FEATURE_TIMINGS+=("✗ feature $i: $(format_duration $FEATURE_DURATION)")
+        FEATURE_TIMINGS+=("✗ $feature_label: $(format_duration $FEATURE_DURATION)")
         FAILED=$((FAILED + 1))
         git checkout "$MAIN_BRANCH"
         git branch -D "$BRANCH_NAME" 2>/dev/null || true
+        idx=$((idx + 1))
         continue
     fi
     
@@ -655,22 +743,7 @@ The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported
         
         # Extract feature name from output
         FEATURE_NAME=$(parse_signal "FEATURE_BUILT" "$BUILD_RESULT")
-        FEATURE_NAME="${FEATURE_NAME:-feature}"
-
-        # ── Skip if this feature was already built (resume case) ──
-        already_built=false
-        for _built_name in "${BUILT_FEATURE_NAMES[@]}"; do
-            if [ "$_built_name" = "$FEATURE_NAME" ]; then
-                already_built=true
-                break
-            fi
-        done
-        if [ "$already_built" = true ]; then
-            log "Skipping already-built feature: $FEATURE_NAME"
-            git checkout "$MAIN_BRANCH" 2>/dev/null || true
-            git branch -D "$BRANCH_NAME" 2>/dev/null || true
-            continue
-        fi
+        FEATURE_NAME="${FEATURE_NAME:-$feature_label}"
 
         git commit -m "feat(auto): $FEATURE_NAME" 2>/dev/null || true
         
@@ -793,12 +866,16 @@ EOF
     if [ "$BRANCH_STRATEGY" != "chained" ]; then
         git checkout "$MAIN_BRANCH" 2>/dev/null
     fi
+
+    idx=$((idx + 1))
 done
 
 # Clean resume state on successful completion of all features
 if [ "$ENABLE_RESUME" = "true" ] && [ "$FAILED" -eq 0 ]; then
     clean_state
 fi
+
+fi  # end of TOPO_LINES non-empty block
 
 # ─────────────────────────────────────────────
 # STEP 4: Summary

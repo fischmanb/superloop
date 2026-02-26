@@ -327,6 +327,22 @@ The loop ran to completion without human intervention.
 
 ---
 
+### Round 18: Port topological sort + pre-flight to overnight-autonomous.sh (branch: `claude/topological-sort-preflight-9LWFH`)
+
+**Date**: Feb 26, 2026
+
+**What was asked**: Port the Round 17 topological sort + pre-flight summary pattern from build-loop-local.sh to scripts/overnight-autonomous.sh, achieving script parity.
+
+**What was changed**:
+- `scripts/overnight-autonomous.sh`: Removed inline `BUILD_PROMPT_OVERNIGHT` variable. Added `build_feature_prompt_overnight()` function (generates per-feature prompt with specific ID and name, includes Jira sync instruction). Added `show_preflight_summary_overnight()` (logs feature list; proceeds automatically when `AUTO_APPROVE=true` which is the default for overnight). Replaced `for i in $(seq 1 "$MAX_FEATURES")` with `emit_topo_order` iteration (parses topo lines into arrays, caps at `MAX_FEATURES`). Resume skip logic changed from numeric index comparison (`$i -le $RESUME_START_INDEX`) to name-in-array check against `BUILT_FEATURE_NAMES[]`. Removed duplicate `already_built` check that was inside the "Feature built" section (now handled at top of loop). Feature failure timings now use feature name instead of `feature $i`.
+- `Agents.md`: This entry.
+
+**What was NOT changed**: lib/reliability.sh, tests/, build-loop-local.sh, all existing behavior preserved (branch setup, retry logic, drift check, signal parsing, PR creation, code review, Slack notification).
+
+**Verification**: `bash -n` passes, 68/68 unit tests pass, `emit_topo_order` called from script, `build_feature_prompt_overnight` called from script, no remaining `BUILD_PROMPT_OVERNIGHT` references.
+
+---
+
 ## What This Is
 
 A spec-driven development system optimized for 256GB unified memory. Uses multiple local LLMs with **fresh contexts per stage** to avoid context rot.
@@ -515,7 +531,7 @@ Both `scripts/build-loop-local.sh` and `scripts/overnight-autonomous.sh` source
 | `run_agent_with_backoff` | Exponential backoff retry for rate limits | Both scripts |
 | `truncate_for_context` | Truncate large specs to Gherkin-only for context budget | Both scripts (drift check) |
 | `check_circular_deps` | DFS cycle detection on roadmap dependency graph | Both scripts |
-| `emit_topo_order` | Kahn's BFS topological sort of ⬜ features; outputs ID\|NAME\|COMPLEXITY | build-loop only |
+| `emit_topo_order` | Kahn's BFS topological sort of ⬜ features; outputs ID\|NAME\|COMPLEXITY | Both scripts |
 | `write_state` / `read_state` / `clean_state` | JSON resume state persistence; `write_state` escapes special characters in branch and strategy fields; `read_state` populates `BUILT_FEATURE_NAMES[]` from completed_features | Both scripts |
 | `completed_features_json` | Build JSON array from bash array (with escaping) | Both scripts |
 | `get_cpu_count` | Detect CPU count (nproc/sysctl) | build-loop only |
