@@ -19,7 +19,11 @@ Cross-cutting patterns learned in this codebase. Updated via `/compound`.
 
 <!-- /compound adds recent learnings here - newest first -->
 
-_No learnings yet. Run `/compound` at the end of implementation sessions._
+### 2026-02-26 — stakd features 1-28 campaign audit
+- **Performance**: Browser-dependent lib loading via `dynamic(ssr: false)` must use client wrapper component pattern (performance.md)
+- **General**: Next.js 15 server/client boundary rules, params-as-Promise, Drizzle schema exports (general.md)
+- **Design**: Auth gate teasers, URL-synced tabs, responsive layout patterns, avatar fallbacks (design.md)
+- **Security**: HMAC session tokens, cookie config, bcrypt timing resistance, edge middleware auth, secrets management (security.md)
 
 ---
 
