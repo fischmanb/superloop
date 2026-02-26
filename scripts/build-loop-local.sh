@@ -120,6 +120,7 @@ error() { echo "[$(date '+%H:%M:%S')] ✗ $1"; }
 
 # ── Source shared reliability library ─────────────────────────────────────
 source "$SCRIPT_DIR/../lib/reliability.sh"
+source "$SCRIPT_DIR/../lib/codebase-summary.sh"
 
 # Guard: detect nested Claude Code session (finding #8)
 if [ -n "${CLAUDECODE:-}" ]; then
@@ -843,6 +844,9 @@ build_feature_prompt() {
     local feature_id="$1"
     local feature_name="$2"
 
+    local codebase_summary
+    codebase_summary=$(generate_codebase_summary "$PROJECT_DIR" 2>/dev/null || true)
+
     cat <<PROMPT_EOF
 Build feature #${feature_id}: ${feature_name}
 
@@ -862,6 +866,9 @@ CRITICAL IMPLEMENTATION RULES:
 - Features must work end-to-end or they are not done.
 - Real validation, real error handling, real flows.
 
+${codebase_summary:+## Codebase Summary (auto-generated)
+${codebase_summary}
+}
 After completion, output EXACTLY these signals (each on its own line):
 FEATURE_BUILT: ${feature_name}
 SPEC_FILE: {path to the .feature.md file you created/updated}

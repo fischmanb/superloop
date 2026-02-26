@@ -720,6 +720,23 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 ---
 
+### Round 26: Wire codebase summary into build prompts (branch: claude/fix-empty-summary-pattern-3PA5I)
+
+**Date**: Feb 26, 2026
+
+**What was asked**: Wire the `generate_codebase_summary` function (created in Round 25) into both build prompt functions so that build agents receive a snapshot of the project's component registry, type exports, import graph, and recent learnings. Use the `${codebase_summary:+...}` pattern so nothing is emitted when the summary is empty (e.g., first feature in an empty project). Findings #11, #21, #23.
+
+**What actually happened**:
+- `scripts/build-loop-local.sh`: Added `source "$SCRIPT_DIR/../lib/codebase-summary.sh"` after the existing `source reliability.sh` line. In `build_feature_prompt()`, added `codebase_summary=$(generate_codebase_summary "$PROJECT_DIR" 2>/dev/null || true)` before the heredoc, and `${codebase_summary:+## Codebase Summary (auto-generated)\n${codebase_summary}\n}` inside the heredoc between the implementation rules and the signal protocol.
+- `scripts/overnight-autonomous.sh`: Same pattern — sourced the library after `reliability.sh`, captured the summary in `build_feature_prompt_overnight()`, injected it between the instructions and the signal protocol.
+- `Agents.md`: This entry.
+
+**What was NOT changed**: lib/codebase-summary.sh, lib/reliability.sh, tests/, any other files.
+
+**Verification**: `bash -n` passes on all three scripts. Source lines confirmed (1 match per file). Summary injection confirmed (variable assignment + heredoc usage in both files). `generate_codebase_summary` called with `$PROJECT_DIR` in both files. Test suites pass (68/68 reliability, 10/10 validation, 23/23 codebase-summary). `git diff --stat` shows only the 3 expected files.
+
+---
+
 ## Known Gaps
 
 - No live integration testing — all validation is `bash -n` + unit tests + structural dry-run

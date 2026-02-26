@@ -114,6 +114,7 @@ fi
 
 # ── Source shared reliability library ─────────────────────────────────────
 source "$SCRIPT_DIR/../lib/reliability.sh"
+source "$SCRIPT_DIR/../lib/codebase-summary.sh"
 
 # Guard: detect nested Claude Code session (finding #8)
 if [ -n "${CLAUDECODE:-}" ]; then
@@ -549,6 +550,9 @@ build_feature_prompt_overnight() {
     local feature_id="$1"
     local feature_name="$2"
 
+    local codebase_summary
+    codebase_summary=$(generate_codebase_summary "$PROJECT_DIR" 2>/dev/null || true)
+
     cat <<PROMPT_EOF
 Build feature #${feature_id}: ${feature_name}
 
@@ -562,6 +566,9 @@ Instructions:
 7. Commit all changes with a descriptive message
 8. If build fails, output: BUILD_FAILED: {reason}
 
+${codebase_summary:+## Codebase Summary (auto-generated)
+${codebase_summary}
+}
 After completion, output EXACTLY these signals (each on its own line):
 FEATURE_BUILT: ${feature_name}
 SPEC_FILE: {path to the .feature.md file you created/updated}
