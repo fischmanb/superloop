@@ -671,6 +671,25 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 **Verification**: `bash -n` passes on all 3 scripts. `test-reliability.sh` 68/68 pass. `DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh` passes. grep confirms `git add -f .sdd-state/resume.json` on non-comment lines in both scripts (1 line in build-loop-local.sh, 2 lines in overnight-autonomous.sh). grep confirms CLAUDECODE guard in both scripts. `git diff --stat` shows only 3 allowed files.
 
+---
+
+### Round 22: Retry hardening — minimum delay + branch reuse (branch: `claude/retry-hardening-MPuLQ`)
+
+**Date**: Feb 26, 2026
+
+**What was asked**: Fix two problems discovered during the stakd campaign (findings #2, #18, #35): (1) no minimum delay between retries — when an agent fails instantly (e.g., credit exhaustion), the loop retries immediately, causing 4 branches in 35 seconds and 84 wasted API calls in 12 minutes; (2) new branch created per retry attempt, leaving orphan branches.
+
+**What was changed**:
+- `scripts/build-loop-local.sh`: Added `MIN_RETRY_DELAY` config (default 30s). Added `sleep $MIN_RETRY_DELAY` in the retry path (when `attempt > 0`). Saved branch starting commit (`BRANCH_START_COMMIT`) before retry loop; on retry, resets branch to starting point with `git reset --hard` + `git clean -fd` instead of creating a new branch. Added min retry delay to config display output.
+- `scripts/overnight-autonomous.sh`: Added `MAX_RETRIES` config (default 1), `MIN_RETRY_DELAY` config (default 30s). Added `build_retry_prompt_overnight()` function for retry attempts. Wrapped build attempt in a retry loop matching build-loop-local.sh pattern: retries up to `MAX_RETRIES` times with `MIN_RETRY_DELAY` sleep, reuses same branch (resets to `BRANCH_START_COMMIT`), uses retry prompt on subsequent attempts. Added API credit exhaustion detection (ported from build-loop-local.sh). Added retry config to display output.
+- `Agents.md`: This entry.
+
+**What was NOT changed**: lib/reliability.sh (not in scope), tests/, run_agent_with_backoff (its existing 429-specific exponential backoff is unchanged — the new MIN_RETRY_DELAY is at the build-loop level, covering all failure types).
+
+**Verification**: `bash -n` passes for all three scripts, 68/68 unit tests pass, dry-run passes, `MIN_RETRY_DELAY` grep confirms presence in both scripts.
+
+---
+
 ## Known Gaps
 
 - No live integration testing — all validation is `bash -n` + unit tests + structural dry-run
