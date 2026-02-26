@@ -107,6 +107,11 @@ if [ -f "$PROJECT_DIR/.env.local" ]; then
     done < "$PROJECT_DIR/.env.local"
 fi
 
+# ── NODE_ENV guard ────────────────────────────────────────────────────────
+# WHY: NODE_ENV=production leaking from the shell environment breaks Tailwind
+# PostCSS on cold start (finding #5). Force development mode for build agents.
+export NODE_ENV=development
+
 # ── Logging ───────────────────────────────────────────────────────────────
 log() { echo "[$(date '+%H:%M:%S')] $1"; }
 success() { echo "[$(date '+%H:%M:%S')] ✓ $1"; }
@@ -283,6 +288,14 @@ format_tokens() {
 SCRIPT_START=$(date +%s)
 
 cd "$PROJECT_DIR"
+
+# ── Build log auto-rotation (finding #20) ────────────────────────────────
+# WHY: Runs 2 and 3 of the stakd campaign had no build log because output
+# wasn't piped to a file. Tee all output to logs/build-{timestamp}.log.
+mkdir -p "$PROJECT_DIR/logs"
+BUILD_LOG="$PROJECT_DIR/logs/build-$(date '+%Y%m%d-%H%M%S').log"
+exec > >(tee -a "$BUILD_LOG") 2>&1
+log "Build log: $BUILD_LOG"
 
 # Validate BRANCH_STRATEGY
 if [[ ! "$BRANCH_STRATEGY" =~ ^(chained|independent|both|sequential)$ ]]; then
@@ -1124,6 +1137,7 @@ run_build_loop() {
                                 FEATURE_TEST_COUNTS+=("${LAST_TEST_COUNT:-}")
                                 FEATURE_TOKEN_USAGE+=("$(parse_token_usage "$BUILD_RESULT")")
                                 FEATURE_STATUSES+=("built")
+                                FEATURE_MODELS+=("${BUILD_MODEL:-${AGENT_MODEL:-default}}")
 
                                 # Save resume state
                                 if [ "$ENABLE_RESUME" = "true" ]; then
@@ -1182,6 +1196,7 @@ run_build_loop() {
             FEATURE_TEST_COUNTS+=("")
             FEATURE_TOKEN_USAGE+=("$(parse_token_usage "${BUILD_RESULT:-}")")
             FEATURE_STATUSES+=("failed")
+            FEATURE_MODELS+=("${BUILD_MODEL:-${AGENT_MODEL:-default}}")
 
             error "Feature failed after $((MAX_RETRIES + 1)) attempt(s). Skipping. ($(format_duration $feature_duration))"
             clean_working_tree
@@ -1275,6 +1290,7 @@ write_build_summary() {
         local ftests="${FEATURE_TEST_COUNTS[$idx]:-}"
         local ftokens="${FEATURE_TOKEN_USAGE[$idx]:-}"
         local fstatus="${FEATURE_STATUSES[$idx]:-built}"
+        local fmodel="${FEATURE_MODELS[$idx]:-${AGENT_MODEL:-default}}"
 
         # Escape feature name for JSON
         fname=$(echo "$fname" | sed 's/\\/\\\\/g; s/"/\\"/g')
@@ -1313,11 +1329,16 @@ write_build_summary() {
             tokens_json="$ftokens"
         fi
 
+        # Escape model for JSON
+        local model_escaped
+        model_escaped=$(echo "$fmodel" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
         local feature_entry
         feature_entry=$(cat <<FEATURE_EOF
     {
       "name": "$fname",
       "status": "$fstatus",
+      "model": "$model_escaped",
       "time_seconds": $ftime,
       "source_files": $src_json,
       "test_count": $tests_json,
@@ -1365,8 +1386,8 @@ SUMMARY_EOF
     echo "  Total tests: $total_tests"
 
     if [ "${#BUILT_FEATURE_NAMES[@]}" -gt 0 ]; then
-        printf "  %-36s %-10s %-8s %-9s %s\n" "Feature" "Time" "Tests" "Tokens" "Status"
-        echo "  ─────────────────────────────────────────────────────────────────"
+        printf "  %-30s %-18s %-10s %-8s %-9s %s\n" "Feature" "Model" "Time" "Tests" "Tokens" "Status"
+        echo "  ────────────────────────────────────────────────────────────────────────────────"
         idx=0
         while [ "$idx" -lt "${#BUILT_FEATURE_NAMES[@]}" ]; do
             local fname="${BUILT_FEATURE_NAMES[$idx]}"
@@ -1374,10 +1395,14 @@ SUMMARY_EOF
             local ftests="${FEATURE_TEST_COUNTS[$idx]:-}"
             local ftokens="${FEATURE_TOKEN_USAGE[$idx]:-}"
             local fstatus="${FEATURE_STATUSES[$idx]:-built}"
+            local fmodel="${FEATURE_MODELS[$idx]:-${AGENT_MODEL:-default}}"
 
-            # Truncate long feature names
-            if [ ${#fname} -gt 34 ]; then
-                fname="${fname:0:31}..."
+            # Truncate long feature names and model names
+            if [ ${#fname} -gt 28 ]; then
+                fname="${fname:0:25}..."
+            fi
+            if [ ${#fmodel} -gt 16 ]; then
+                fmodel="${fmodel:0:13}..."
             fi
 
             local time_str
@@ -1390,13 +1415,37 @@ SUMMARY_EOF
                 status_str="✗"
             fi
 
-            printf "  %-36s %-10s %-8s %-9s %s\n" "$fname" "$time_str" "$tests_str" "$tokens_str" "$status_str"
+            printf "  %-30s %-18s %-10s %-8s %-9s %s\n" "$fname" "$fmodel" "$time_str" "$tests_str" "$tokens_str" "$status_str"
             idx=$((idx + 1))
         done
     fi
     echo ""
     echo "  Summary written to: logs/build-summary-${file_timestamp}.json"
     echo ""
+}
+
+# ── Post-run branch cleanup (finding #19) ────────────────────────────────
+# WHY: Each feature attempt creates a branch. Failed attempts leave dead
+# branches (39 orphans after the stakd campaign). Clean up merged branches
+# matching the auto-sdd naming pattern after the build loop completes.
+cleanup_merged_branches() {
+    local merged_branches
+    merged_branches=$(git branch --merged 2>/dev/null | grep -E '^\s*(auto/chained-|auto/independent-)' | sed 's/^[[:space:]]*//' || true)
+
+    if [ -z "$merged_branches" ]; then
+        log "No merged auto-sdd branches to clean up"
+        return 0
+    fi
+
+    log "Cleaning up merged auto-sdd branches:"
+    local count=0
+    while IFS= read -r branch; do
+        [ -z "$branch" ] && continue
+        log "  Deleting: $branch"
+        git branch -d "$branch" 2>/dev/null || warn "  Failed to delete: $branch"
+        count=$((count + 1))
+    done <<< "$merged_branches"
+    success "Cleaned up $count merged branch(es)"
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────
@@ -1442,6 +1491,7 @@ FEATURE_SOURCE_FILES=()
 FEATURE_TEST_COUNTS=()
 FEATURE_TOKEN_USAGE=()
 FEATURE_STATUSES=()
+FEATURE_MODELS=()
 LAST_TEST_COUNT=""
 
 # ── Topological sort + pre-flight summary (shown once, even in "both" mode) ──
@@ -1694,6 +1744,9 @@ BUILD_FAILED: {reason}
     # Write build summary report (JSON + human-readable)
     write_build_summary "$total_elapsed" "$CHAINED_BUILT" "$CHAINED_FAILED"
 
+    # Clean up merged auto-sdd branches
+    cleanup_merged_branches
+
     # Clean resume state on successful completion
     if [ "$ENABLE_RESUME" = "true" ]; then
         clean_state
@@ -1742,6 +1795,9 @@ else
 
     # Write build summary report (JSON + human-readable)
     write_build_summary "$total_elapsed" "$LOOP_BUILT" "$LOOP_FAILED"
+
+    # Clean up merged auto-sdd branches
+    cleanup_merged_branches
 
     # Clean resume state on successful completion of all features
     if [ "$ENABLE_RESUME" = "true" ] && [ "$LOOP_FAILED" -eq 0 ]; then
