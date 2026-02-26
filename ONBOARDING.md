@@ -57,9 +57,9 @@ Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capabi
 2. **Local model integration** — replace cloud API with local LM Studio on Mac Studio
 3. **Adaptive routing / parallelism** — only if data from 1-2 shows remaining sequential bottleneck justifies the complexity
 
-### Completed remediation (Rounds 21-23)
+### Completed remediation (Rounds 21-24)
 
-Build loop remediation from `build-loop-failure-investigation.md` (37 findings). Rounds 21-23 merged to main. Round 24 (stakd CLAUDE.md + learnings) prompt written, not yet run.
+Build loop remediation from `build-loop-failure-investigation.md` (37 findings). **All remediation rounds complete (21-24).**
 
 - ~~Resume state lost on crash~~ — ✅ Fixed Round 21 (findings #17, #28, #34)
 - ~~Nested Claude Code session hang~~ — ✅ Fixed Round 21 (finding #8)
@@ -69,7 +69,8 @@ Build loop remediation from `build-loop-failure-investigation.md` (37 findings).
 - ~~Model not logged per feature~~ — ✅ Fixed Round 23 (findings #14, #37)
 - ~~Orphan branches never cleaned~~ — ✅ Fixed Round 23 (finding #19)
 - ~~NODE_ENV=production breaks dev builds~~ — ✅ Fixed Round 23 (finding #5)
-- **stakd CLAUDE.md + learnings** — Round 24 prompt ready, not yet run (findings #3, #12, #22, #25, #26, #27, #33)
+- ~~stakd CLAUDE.md + learnings~~ — ✅ Fixed Round 24 (findings #3, #12, #22, #25, #26, #27, #33). stakd CLAUDE.md has Next.js 15 rules. Primary learnings catalog populated.
+- ~~Learnings consolidation~~ — ✅ Done (2026-02-26). All learnings in `.specs/learnings/`. Agent process lessons consolidated in `agent-operations.md`. Duplicates removed from Agents.md, ONBOARDING.md, PROMPT-ENGINEERING-GUIDE.md.
 
 ### Known gaps
 
@@ -93,7 +94,7 @@ Ordered by efficiency gain per complexity added:
 1. ~~**Topological sort + pre-flight summary**~~ — ✅ Done (Rounds 17-18). Shell-side Kahn's algorithm for feature ordering in both `build-loop-local.sh` and `overnight-autonomous.sh`. Pre-flight prints sorted feature list with t-shirt sizes, requires user confirmation (`AUTO_APPROVE=true` skips for overnight). 68 test assertions passing.
 2. **Codebase summary injection** — Generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift. Each build agent currently has no knowledge of what previous agents produced, causing type redeclarations and interface drift. High quality gain, moderate speed gain (fewer retries), low complexity. *Not started.*
 3. **Local model integration** — Replace cloud API calls with local LM Studio endpoints on Mac Studio. The archived `archive/local-llm-pipeline/` system is reference material. *Not started.*
-4. ~~**stakd/ build campaign + issue triage**~~ — ✅ Build campaign done (2026-02-25). Issue triage complete (2026-02-26). 37 findings in `build-loop-failure-investigation.md`. **Remediation: Rounds 21-23 merged to main** (resume persist, retry hardening, operational hygiene). Round 24 (stakd CLAUDE.md + learnings) prompt written, not yet run. See "Completed remediation" in Current State for full checklist.
+4. ~~**stakd/ build campaign + issue triage**~~ — ✅ Build campaign done (2026-02-25). Issue triage complete (2026-02-26). 37 findings in `build-loop-failure-investigation.md`. **All remediation complete (Rounds 21-24)**. Learnings consolidated into `.specs/learnings/` (single source of truth). See "Completed remediation" in Current State for full checklist.
 5. **Adaptive routing / parallelism** — Only if data from 1–3 shows remaining sequential bottleneck justifies the complexity. *Deprioritized.*
 
 ### Historical build estimator (designed, not yet built)
@@ -102,7 +103,7 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 
 ### Other active items
 
-- **Build loop remediation (2026-02-26)**: Rounds 21-23 merged to main (resume persist, CLAUDECODE guard, retry hardening with branch reuse, overnight retry+credit detection, build log rotation, model logging, branch cleanup, NODE_ENV guard). Round 24 (stakd CLAUDE.md Next.js 15 rules + learnings) prompt written, not yet run. Process lessons from this batch: (1) keep agent prompts concise — describe intent, not implementation code; (2) push main to origin before running agent prompts, otherwise agents fork from stale `origin/main` and require merge cleanup after each round.
+- **Build loop remediation (2026-02-26)**: All rounds complete (21-24). Rounds 21-23: resume persist, CLAUDECODE guard, retry hardening with branch reuse, overnight retry+credit detection, build log rotation, model logging, branch cleanup, NODE_ENV guard. Round 24: stakd CLAUDE.md Next.js 15 rules + learnings populated. Learnings consolidated into `.specs/learnings/` with `agent-operations.md` as single source of truth for process lessons. Process lessons from this batch: (1) keep agent prompts concise — describe intent, not implementation code; (2) push main to origin before running agent prompts, otherwise agents fork from stale `origin/main` and require merge cleanup after each round; (3) all learnings go in primary repos, not project-specific dirs.
 - **Onboarding state protocol**: Implemented 2026-02-25. Mechanical enforcement via `~/auto-sdd/.onboarding-state` file — tracks prompt count, buffers pending captures, triggers interval checks. Memory instruction points all future chats to the protocol. See "Keeping This File Current" section.
 
 ---
