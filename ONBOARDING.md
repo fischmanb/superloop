@@ -31,7 +31,7 @@ Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capabi
 
 ---
 
-## Current State (as of 2026-02-25)
+## Current State (as of 2026-02-26)
 
 ### What works
 
@@ -66,7 +66,7 @@ Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capabi
 
 > What's next and what's in-flight. Priority stack is the execution plan; everything below it is context a fresh chat should pick up.
 
-### Priority stack (updated 2026-02-25)
+### Priority stack (updated 2026-02-26)
 
 Ordered by efficiency gain per complexity added:
 
@@ -96,10 +96,10 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 | **CLAUDE.md** | Instructions that Claude Code agents read automatically when invoked by the build loop | When modifying agent behavior or build prompts |
 | **ARCHITECTURE.md** | Design decisions for the local LLM pipeline (system 2, archived) and context management philosophy | When working on the local model integration |
 | **Brians-Notes/PROMPT-ENGINEERING-GUIDE.md** | Methodology for writing hardened agent prompts, full failure catalog from real sessions | On first prompt of any new chat or agent session (read the "Lessons Learned (Failure Catalog)" section only), and before writing any new agent prompts |
-| **lib/reliability.sh** | Shared runtime: lock, backoff, state, truncation, cycle detection (~385 lines) | When debugging build failures or modifying shared behavior |
+| **lib/reliability.sh** | Shared runtime: lock, backoff, state, truncation, cycle detection (~594 lines) | When debugging build failures or modifying shared behavior |
 | **lib/claude-wrapper.sh** | Wraps `claude` CLI, extracts text to stdout, logs cost data to JSONL | When debugging cost tracking or agent invocation |
-| **scripts/build-loop-local.sh** | Main orchestration script (~1311 lines) | When modifying the build loop |
-| **scripts/overnight-autonomous.sh** | Overnight automation variant (~790 lines) | When modifying overnight runs |
+| **scripts/build-loop-local.sh** | Main orchestration script (~1730 lines) | When modifying the build loop |
+| **scripts/overnight-autonomous.sh** | Overnight automation variant (~944 lines) | When modifying overnight runs |
 | **.env.local.example** | Full config reference (167 lines) | When setting up or changing config |
 
 ---
@@ -244,14 +244,14 @@ git branch -r | grep claude/ | while read b; do git push origin --delete "${b#or
 ```
 auto-sdd/
 ├── scripts/
-│   ├── build-loop-local.sh        # Main build loop (1311 lines)
-│   ├── overnight-autonomous.sh    # Overnight variant (790 lines)
+│   ├── build-loop-local.sh        # Main build loop (1730 lines)
+│   ├── overnight-autonomous.sh    # Overnight variant (944 lines)
 │   ├── nightly-review.sh          # Extract learnings from commits
 │   ├── generate-mapping.sh        # Auto-generate .specs/mapping.md
 │   ├── setup-overnight.sh         # Install macOS launchd jobs
 │   └── uninstall-overnight.sh     # Remove launchd jobs
 ├── lib/
-│   ├── reliability.sh             # Shared runtime (385 lines)
+│   ├── reliability.sh             # Shared runtime (594 lines)
 │   ├── claude-wrapper.sh          # Claude CLI wrapper + cost logging
 │   └── validation.sh              # YAML frontmatter validation
 ├── tests/
