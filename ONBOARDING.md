@@ -33,10 +33,10 @@ Forked from [AdrianRogowski/auto-sdd](https://github.com/AdrianRogowski/auto-sdd
 
 ### What's next
 
-1. **Codebase summary injection** — generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift.
-2. **Topological sort** — emit optimal feature order from existing dependency graph parser. Independent features first, then dependents.
+1. **Topological sort + pre-flight summary** — shell-side Kahn's algorithm for feature ordering, pre-flight confirmation before build start
+2. **Codebase summary injection** — generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift.
 3. **Local model integration** — replace cloud API with local LM Studio on Mac Studio
-4. **stakd/ build campaign** — full 28-feature test run
+4. **stakd/ build campaign + issue triage** — full 28-feature test run, then triage last run's issues
 5. **Adaptive routing / parallelism** — only if data from 1-3 shows remaining sequential bottleneck justifies the complexity
 
 ### Known gaps
@@ -52,15 +52,19 @@ Forked from [AdrianRogowski/auto-sdd](https://github.com/AdrianRogowski/auto-sdd
 
 > What's next and what's in-flight. Priority stack is the execution plan; everything below it is context a fresh chat should pick up.
 
-### Priority stack (decided 2026-02-25)
+### Priority stack (updated 2026-02-25)
 
 Ordered by efficiency gain per complexity added:
 
-1. **Codebase summary injection** — Generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift. Each build agent currently has no knowledge of what previous agents produced, causing type redeclarations and interface drift. High quality gain, moderate speed gain (fewer retries), low complexity. *Not started.*
-2. **Topological sort** — Use the existing `check_circular_deps` dependency graph parser to emit optimal feature order. Independent features first, then dependents. Gets 80% of adaptive routing's benefit with near-zero complexity. *Not started.*
+1. **Topological sort + pre-flight summary** — Use the existing `check_circular_deps` dependency graph parser to emit optimal feature order via Kahn's algorithm (shell-side, not agent-side). Independent features first, then dependents. Gets 80% of adaptive routing's benefit with near-zero complexity. Pre-flight prints sorted feature list with t-shirt sizes and total count, requires user confirmation before build starts (`AUTO_APPROVE=true` skips for overnight). Design decided; implementation via dedicated Claude Code agent. *Not started.*
+2. **Codebase summary injection** — Generate summary after each commit, pass to next agent. Fixes cross-feature type/interface drift. Each build agent currently has no knowledge of what previous agents produced, causing type redeclarations and interface drift. High quality gain, moderate speed gain (fewer retries), low complexity. *Not started.*
 3. **Local model integration** — Replace cloud API calls with local LM Studio endpoints on Mac Studio. The archived `archive/local-llm-pipeline/` system is reference material. *Not started.*
-4. **stakd/ build campaign** — Full 28-feature end-to-end run against the Traded.co clone (3 phases). Benefits from codebase summary being in place first for clean cross-feature builds. *Not started.*
+4. **stakd/ build campaign + issue triage** — Full 28-feature end-to-end run against the Traded.co clone (3 phases). Benefits from codebase summary being in place first. After topo sort, triage issues from last stakd build run. *Not started.*
 5. **Adaptive routing / parallelism** — Only if data from 1–3 shows remaining sequential bottleneck justifies the complexity. Investigated in Round 14 (results lost to compaction), re-analyzed in Round 16. Full edge case analysis done: diamond deps, merge conflicts at convergence, complex resume state, drift check ordering, resource contention, partial parallel failure. Conclusion: ~400-500 new lines and new failure classes don't justify savings until simpler levers are exhausted. *Deprioritized.*
+
+### Historical build estimator (designed, not yet built)
+
+After at least one full campaign, a function will correlate t-shirt sizes from roadmap with actual metrics from `logs/build-summary-*.json` and write aggregate stats to `logs/estimation-model.json` (avg seconds, avg tokens, sample count, success rate per t-shirt size). Pre-flight then uses this to project total run cost/time. Self-correcting — updates running averages after each `write_build_summary()`. `MAX_FEATURES` becomes an optional backstop once estimator provides informed consent via real projections. Build after stakd campaign provides real data.
 
 ### Other active items
 
