@@ -23,6 +23,7 @@
 #   run_agent_with_backoff  (sets global AGENT_EXIT)
 #   truncate_for_context
 #   check_circular_deps
+#   emit_topo_order
 #   get_cpu_count, run_parallel_drift_checks
 #   count_files  (returns associative array via nameref)
 #
@@ -349,6 +350,122 @@ check_circular_deps() {
                 exit 3
             fi
         fi
+    done
+
+    return 0
+}
+
+# ── Topological sort of pending features ──────────────────────────────────────
+# Kahn's algorithm (BFS) over ⬜ features in roadmap.md.
+# Deps pointing to ✅ features are satisfied and ignored.
+# Output: one line per feature in sorted order, format ID|FEATURE_NAME|COMPLEXITY.
+# Uses global PROJECT_DIR.
+
+emit_topo_order() {
+    local roadmap="${PROJECT_DIR:-.}/.specs/roadmap.md"
+    if [ ! -f "$roadmap" ]; then
+        return 0  # No roadmap, nothing to sort
+    fi
+
+    # Parse roadmap table rows: extract ID, feature name, complexity, deps, status
+    # Format: | # | Feature | Source | Jira | Complexity | Deps | Status |
+    local raw_rows
+    raw_rows=$(awk -F'|' '
+        /^\|[[:space:]]*[0-9]+[[:space:]]*\|/ {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)  # ID
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $3)  # Feature name
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $6)  # Complexity
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $7)  # Deps
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $8)  # Status
+            if ($2 ~ /^[0-9]+$/) {
+                print $2 "\t" $3 "\t" $6 "\t" $7 "\t" $8
+            }
+        }
+    ' "$roadmap" 2>/dev/null)
+
+    if [ -z "$raw_rows" ]; then
+        return 0  # No features found
+    fi
+
+    # Build data structures: separate completed vs pending features
+    local -A completed=()    # ID → 1 for ✅ features
+    local -A pending_name=() # ID → feature name
+    local -A pending_cmplx=() # ID → complexity
+    local -A pending_deps=() # ID → space-separated dep IDs (only pending deps)
+    local -A in_degree=()    # ID → count of unsatisfied deps
+    local pending_ids=()     # ordered list of pending IDs
+
+    while IFS=$'\t' read -r fid fname fcmplx fdeps fstatus; do
+        [ -z "$fid" ] && continue
+        if echo "$fstatus" | grep -q "✅"; then
+            completed[$fid]=1
+        elif echo "$fstatus" | grep -q "⬜"; then
+            pending_name[$fid]="$fname"
+            pending_cmplx[$fid]="$fcmplx"
+            pending_ids+=("$fid")
+            in_degree[$fid]=0
+            pending_deps[$fid]=""
+        fi
+        # Skip 🔄, ⏸️, ❌ features — they are not pending
+    done <<< "$raw_rows"
+
+    # If no pending features, nothing to sort
+    if [ ${#pending_ids[@]} -eq 0 ]; then
+        return 0
+    fi
+
+    # Re-parse deps: only keep deps that point to other pending features
+    while IFS=$'\t' read -r fid fname fcmplx fdeps fstatus; do
+        [ -z "$fid" ] && continue
+        # Skip if not pending
+        [ -z "${pending_name[$fid]+x}" ] && continue
+        if [ "$fdeps" != "-" ] && [ -n "$fdeps" ]; then
+            IFS=',' read -ra dep_parts <<< "$fdeps"
+            for dep in "${dep_parts[@]}"; do
+                dep=$(echo "$dep" | tr -dc '0-9')
+                [ -z "$dep" ] && continue
+                # If dep is completed, it's satisfied — ignore
+                [ -n "${completed[$dep]+x}" ] && continue
+                # If dep is another pending feature, it's an unsatisfied dep
+                if [ -n "${pending_name[$dep]+x}" ]; then
+                    pending_deps[$fid]="${pending_deps[$fid]} $dep"
+                    in_degree[$fid]=$(( ${in_degree[$fid]} + 1 ))
+                fi
+            done
+        fi
+    done <<< "$raw_rows"
+
+    # Kahn's algorithm: BFS from nodes with in_degree 0
+    local queue=()
+    for fid in "${pending_ids[@]}"; do
+        if [ "${in_degree[$fid]}" -eq 0 ]; then
+            queue+=("$fid")
+        fi
+    done
+
+    local sorted=()
+    local qi=0
+    while [ "$qi" -lt "${#queue[@]}" ]; do
+        local current="${queue[$qi]}"
+        qi=$((qi + 1))
+        sorted+=("$current")
+
+        # For each pending feature that depends on current, decrement in_degree
+        for fid in "${pending_ids[@]}"; do
+            for dep in ${pending_deps[$fid]}; do
+                if [ "$dep" = "$current" ]; then
+                    in_degree[$fid]=$(( ${in_degree[$fid]} - 1 ))
+                    if [ "${in_degree[$fid]}" -eq 0 ]; then
+                        queue+=("$fid")
+                    fi
+                fi
+            done
+        done
+    done
+
+    # Output sorted features
+    for fid in "${sorted[@]}"; do
+        echo "${fid}|${pending_name[$fid]}|${pending_cmplx[$fid]}"
     done
 
     return 0

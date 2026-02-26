@@ -771,18 +771,67 @@ cleanup_branch_sequential() {
 
 # ── Prompts ──────────────────────────────────────────────────────────────
 
-BUILD_PROMPT='
-Run the /build-next command to:
-1. Read .specs/roadmap.md and find the next pending feature
-2. Check that all dependencies are completed
-3. If a feature is ready:
-   - Update roadmap to mark it 🔄 in progress
-   - Run /spec-first {feature} --full to build it (includes /compound)
-   - Update roadmap to mark it ✅ completed
-   - Regenerate mapping: run ./scripts/generate-mapping.sh
-   - Commit all changes with a descriptive message
-4. If no features are ready, output: NO_FEATURES_READY
-5. If build fails, output: BUILD_FAILED: {reason}
+# show_preflight_summary <topo_lines>
+# Prints the sorted feature list with t-shirt sizes and total count.
+# If AUTO_APPROVE is not "true", prompts user for confirmation.
+show_preflight_summary() {
+    local topo_lines="$1"
+    local count=0
+    local line
+
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║  Pre-Flight Build Plan                                   ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo ""
+    printf "  %-4s %-40s %s\n" "#" "Feature" "Size"
+    echo "  ──── ──────────────────────────────────────── ────"
+
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local fid fname fcmplx
+        fid="${line%%|*}"
+        local rest="${line#*|}"
+        fname="${rest%%|*}"
+        fcmplx="${rest##*|}"
+        printf "  %-4s %-40s %s\n" "$fid" "$fname" "$fcmplx"
+        count=$((count + 1))
+    done <<< "$topo_lines"
+
+    echo ""
+    echo "  Total features: $count (capped at MAX_FEATURES=$MAX_FEATURES)"
+    echo ""
+
+    if [ "${AUTO_APPROVE:-false}" != "true" ]; then
+        printf "  Proceed with build? [Y/n] "
+        read -r answer </dev/tty
+        if [ -n "$answer" ] && [[ ! "$answer" =~ ^[Yy] ]]; then
+            log "Build cancelled by user"
+            exit 0
+        fi
+    else
+        log "AUTO_APPROVE=true — skipping confirmation"
+    fi
+}
+
+# build_feature_prompt <feature_id> <feature_name>
+# Generates the build prompt for a specific feature. Replaces the old
+# static BUILD_PROMPT variable.
+build_feature_prompt() {
+    local feature_id="$1"
+    local feature_name="$2"
+
+    cat <<PROMPT_EOF
+Build feature #${feature_id}: ${feature_name}
+
+Instructions:
+1. Read .specs/roadmap.md and locate feature #${feature_id} ("${feature_name}")
+2. Update roadmap to mark it 🔄 in progress
+3. Run /spec-first ${feature_name} --full to build it (includes /compound)
+4. Update roadmap to mark it ✅ completed
+5. Regenerate mapping: run ./scripts/generate-mapping.sh
+6. Commit all changes with a descriptive message
+7. If build fails, output: BUILD_FAILED: {reason}
 
 CRITICAL IMPLEMENTATION RULES:
 - Seed data is fine; stub functions are not. Use seed data, fixtures, or realistic sample data to make features work.
@@ -792,19 +841,17 @@ CRITICAL IMPLEMENTATION RULES:
 - Real validation, real error handling, real flows.
 
 After completion, output EXACTLY these signals (each on its own line):
-FEATURE_BUILT: {feature name}
+FEATURE_BUILT: ${feature_name}
 SPEC_FILE: {path to the .feature.md file you created/updated}
 SOURCE_FILES: {comma-separated paths to source files created/modified}
-
-Or if no features are ready:
-NO_FEATURES_READY
 
 Or if build fails:
 BUILD_FAILED: {reason}
 
 The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.
 They are used by the automated drift-check that runs after your build.
-'
+PROMPT_EOF
+}
 
 build_retry_prompt() {
     local prompt='The previous build attempt FAILED. There are uncommitted changes or build errors from the last attempt.
@@ -850,13 +897,17 @@ BUILD_FAILED: {reason}
 
 # ── Build loop function ──────────────────────────────────────────────────
 #
-# run_build_loop <strategy>
+# run_build_loop <strategy> <topo_lines>
 #
-# Runs the build loop with the given strategy. Sets these globals:
+# Runs the build loop with the given strategy over topo-sorted features.
+# topo_lines: newline-separated "ID|NAME|COMPLEXITY" from emit_topo_order().
+# Iteration is capped at MAX_FEATURES.
+# Sets these globals:
 #   LOOP_BUILT, LOOP_FAILED, LOOP_SKIPPED, BUILT_FEATURE_NAMES[]
 #
 run_build_loop() {
     local strategy="$1"
+    local topo_lines="$2"
     LOOP_BUILT=0
     LOOP_FAILED=0
     LOOP_SKIPPED=""
@@ -867,10 +918,41 @@ run_build_loop() {
     # Reset drift pairs to prevent cross-run contamination
     DRIFT_PAIRS=()
 
-    for i in $(seq 1 "$MAX_FEATURES"); do
-        # ── Resume: skip already-completed features ──
-        if [ "$ENABLE_RESUME" = "true" ] && [ "$i" -le "$RESUME_START_INDEX" ]; then
-            log "[$strategy] Skipping feature $i (already completed in previous run)"
+    # Parse topo_lines into arrays for iteration
+    local -a TOPO_IDS=()
+    local -a TOPO_NAMES=()
+    local -a TOPO_CMPLX=()
+    local _line
+    while IFS= read -r _line; do
+        [ -z "$_line" ] && continue
+        TOPO_IDS+=("${_line%%|*}")
+        local _rest="${_line#*|}"
+        TOPO_NAMES+=("${_rest%%|*}")
+        TOPO_CMPLX+=("${_rest##*|}")
+    done <<< "$topo_lines"
+
+    local topo_count=${#TOPO_IDS[@]}
+    local loop_limit=$topo_count
+    if [ "$loop_limit" -gt "$MAX_FEATURES" ]; then
+        loop_limit=$MAX_FEATURES
+    fi
+
+    local idx=0
+    while [ "$idx" -lt "$loop_limit" ]; do
+        local i="${TOPO_IDS[$idx]}"
+        local feature_label="${TOPO_NAMES[$idx]}"
+
+        # ── Resume: skip already-completed features (by name) ──
+        local already_built=false
+        for _built_name in "${BUILT_FEATURE_NAMES[@]}"; do
+            if [ "$_built_name" = "$feature_label" ]; then
+                already_built=true
+                break
+            fi
+        done
+        if [ "$already_built" = true ]; then
+            log "[$strategy] Skipping already-built feature: $feature_label"
+            idx=$((idx + 1))
             continue
         fi
 
@@ -879,17 +961,17 @@ run_build_loop() {
 
         echo ""
         echo "═══════════════════════════════════════════════════════════"
-        log "[$strategy] Build $i/$MAX_FEATURES (built: $LOOP_BUILT, failed: $LOOP_FAILED) | elapsed: $(format_duration $elapsed_so_far)"
+        log "[$strategy] Build #$i: $feature_label ($((idx + 1))/$loop_limit, built: $LOOP_BUILT, failed: $LOOP_FAILED) | elapsed: $(format_duration $elapsed_so_far)"
         echo "═══════════════════════════════════════════════════════════"
         echo ""
 
         # ── Setup branch based on strategy ──
         case "$strategy" in
             chained)
-                setup_branch_chained || { error "Failed to setup chained branch"; continue; }
+                setup_branch_chained || { error "Failed to setup chained branch"; idx=$((idx + 1)); continue; }
                 ;;
             independent)
-                setup_branch_independent || { error "Failed to setup independent worktree"; continue; }
+                setup_branch_independent || { error "Failed to setup independent worktree"; idx=$((idx + 1)); continue; }
                 ;;
             sequential)
                 setup_branch_sequential
@@ -914,7 +996,7 @@ run_build_loop() {
 
             local AGENT_EXIT=0
             if [ "$attempt" -eq 0 ]; then
-                run_agent_with_backoff "$BUILD_OUTPUT" $(agent_cmd "$BUILD_MODEL") "$BUILD_PROMPT"
+                run_agent_with_backoff "$BUILD_OUTPUT" $(agent_cmd "$BUILD_MODEL") "$(build_feature_prompt "$i" "$feature_label")"
             else
                 run_agent_with_backoff "$BUILD_OUTPUT" $(agent_cmd "$RETRY_MODEL") "$(build_retry_prompt)"
             fi
@@ -1070,11 +1152,11 @@ run_build_loop() {
             LOOP_FAILED=$((LOOP_FAILED + 1))
             local feature_end=$(date +%s)
             local feature_duration=$((feature_end - FEATURE_START))
-            LOOP_SKIPPED="${LOOP_SKIPPED}\n  - feature $i ($(format_duration $feature_duration))"
-            LOOP_TIMINGS+=("✗ feature $i: $(format_duration $feature_duration)")
+            LOOP_SKIPPED="${LOOP_SKIPPED}\n  - #$i $feature_label ($(format_duration $feature_duration))"
+            LOOP_TIMINGS+=("✗ #$i $feature_label: $(format_duration $feature_duration)")
 
             # Track failed feature in build summary
-            BUILT_FEATURE_NAMES+=("feature $i")
+            BUILT_FEATURE_NAMES+=("#$i $feature_label")
             FEATURE_TIMINGS+=("$feature_duration")
             FEATURE_SOURCE_FILES+=("")
             FEATURE_TEST_COUNTS+=("")
@@ -1101,6 +1183,7 @@ run_build_loop() {
                     ;;
             esac
         fi
+        idx=$((idx + 1))
     done
 
     # After the build loop, run any accumulated parallel drift checks
@@ -1341,6 +1424,18 @@ FEATURE_TOKEN_USAGE=()
 FEATURE_STATUSES=()
 LAST_TEST_COUNT=""
 
+# ── Topological sort + pre-flight summary (shown once, even in "both" mode) ──
+# emit_topo_order is provided by lib/reliability.sh
+TOPO_LINES=$(emit_topo_order)
+
+if [ -z "$TOPO_LINES" ]; then
+    log "No pending (⬜) features found in roadmap — nothing to build"
+    release_lock
+    exit 0
+fi
+
+show_preflight_summary "$TOPO_LINES"
+
 if [ "$BRANCH_STRATEGY" = "both" ]; then
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # BOTH MODE: Run chained first, then independent
@@ -1353,7 +1448,7 @@ if [ "$BRANCH_STRATEGY" = "both" ]; then
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo ""
 
-    run_build_loop "chained"
+    run_build_loop "chained" "$TOPO_LINES"
     CHAINED_BUILT=$LOOP_BUILT
     CHAINED_FAILED=$LOOP_FAILED
     CHAINED_SKIPPED="$LOOP_SKIPPED"
@@ -1589,7 +1684,7 @@ else
     # SINGLE MODE: chained, independent, or sequential
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    run_build_loop "$BRANCH_STRATEGY"
+    run_build_loop "$BRANCH_STRATEGY" "$TOPO_LINES"
 
     # ── Final cleanup ──
     cd "$PROJECT_DIR"

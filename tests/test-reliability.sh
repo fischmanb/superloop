@@ -11,6 +11,7 @@
 #   4. acquire_lock/release_lock: acquire, verify file exists, release, verify gone
 #   5. completed_features_json: special characters produce valid JSON
 #   6. grep check: verify all library functions are actually CALLED from scripts
+#   7. emit_topo_order: empty/all-done/linear-chain/mixed-status/output-format
 
 set -u
 
@@ -358,6 +359,7 @@ test_functions_called() {
         "run_agent_with_backoff"
         "truncate_for_context"
         "check_circular_deps"
+        "emit_topo_order"
         "write_state"
         "read_state"
         "clean_state"
@@ -592,6 +594,126 @@ test_write_state_strategy_with_double_quote() {
     teardown
 }
 
+# ── Test: emit_topo_order ──────────────────────────────────────────────────
+
+test_emit_topo_order() {
+    echo ""
+    echo "=== emit_topo_order ==="
+
+    # Test 1: no roadmap → empty output, return 0
+    setup
+    local result exit_code=0
+    result=$(emit_topo_order) || exit_code=$?
+    assert_exit_code "no roadmap returns 0" "0" "$exit_code"
+    assert_eq "no roadmap produces empty output" "" "$result"
+    teardown
+
+    # Test 2: all ✅ → empty output, return 0
+    setup
+    mkdir -p "$TEST_TMPDIR/.specs"
+    cat > "$TEST_TMPDIR/.specs/roadmap.md" << 'EOF'
+# Roadmap
+
+| # | Feature | Source | Jira | Complexity | Deps | Status |
+|---|---------|--------|------|------------|------|--------|
+| 1 | Auth | clone | - | M | - | ✅ |
+| 2 | Dashboard | clone | - | L | 1 | ✅ |
+| 3 | Settings | clone | - | S | 1 | ✅ |
+EOF
+    result=$(emit_topo_order)
+    exit_code=$?
+    assert_exit_code "all completed returns 0" "0" "$exit_code"
+    assert_eq "all completed produces empty output" "" "$result"
+    teardown
+
+    # Test 3: linear chain (1→2→3, all ⬜) → order 1, 2, 3
+    setup
+    mkdir -p "$TEST_TMPDIR/.specs"
+    cat > "$TEST_TMPDIR/.specs/roadmap.md" << 'EOF'
+# Roadmap
+
+| # | Feature | Source | Jira | Complexity | Deps | Status |
+|---|---------|--------|------|------------|------|--------|
+| 1 | Auth | clone | - | M | - | ⬜ |
+| 2 | Dashboard | clone | - | L | 1 | ⬜ |
+| 3 | Settings | clone | - | S | 2 | ⬜ |
+EOF
+    result=$(emit_topo_order)
+    local line1 line2 line3
+    line1=$(echo "$result" | sed -n '1p')
+    line2=$(echo "$result" | sed -n '2p')
+    line3=$(echo "$result" | sed -n '3p')
+    assert_eq "linear chain: first is Auth" "1|Auth|M" "$line1"
+    assert_eq "linear chain: second is Dashboard" "2|Dashboard|L" "$line2"
+    assert_eq "linear chain: third is Settings" "3|Settings|S" "$line3"
+    teardown
+
+    # Test 4: mixed ✅ and ⬜ with independent features → verify ordering constraints
+    # Feature 1 ✅ (done), Feature 2 ⬜ depends on 1 (satisfied), Feature 3 ⬜ no deps,
+    # Feature 4 ⬜ depends on 2. Constraint: 2 before 4. 3 can be anywhere.
+    setup
+    mkdir -p "$TEST_TMPDIR/.specs"
+    cat > "$TEST_TMPDIR/.specs/roadmap.md" << 'EOF'
+# Roadmap
+
+| # | Feature | Source | Jira | Complexity | Deps | Status |
+|---|---------|--------|------|------------|------|--------|
+| 1 | Auth | clone | - | M | - | ✅ |
+| 2 | Dashboard | clone | - | L | 1 | ⬜ |
+| 3 | Profile | clone | - | S | - | ⬜ |
+| 4 | Reports | clone | - | XL | 2 | ⬜ |
+EOF
+    result=$(emit_topo_order)
+    local line_count
+    line_count=$(echo "$result" | wc -l | tr -d ' ')
+    assert_eq "mixed: 3 pending features" "3" "$line_count"
+
+    # Verify ordering constraint: Dashboard (2) must come before Reports (4)
+    local pos_dashboard=0 pos_reports=0 pos=0
+    while IFS= read -r _tline; do
+        pos=$((pos + 1))
+        case "$_tline" in
+            2\|*) pos_dashboard=$pos ;;
+            4\|*) pos_reports=$pos ;;
+        esac
+    done <<< "$result"
+    if [ "$pos_dashboard" -lt "$pos_reports" ] && [ "$pos_dashboard" -gt 0 ] && [ "$pos_reports" -gt 0 ]; then
+        echo "  PASS: Dashboard before Reports"
+        PASS=$((PASS + 1))
+    else
+        echo "  FAIL: Dashboard (pos $pos_dashboard) should be before Reports (pos $pos_reports)"
+        FAIL=$((FAIL + 1))
+    fi
+    teardown
+
+    # Test 5: output format — lines match ID|NAME|COMPLEXITY
+    setup
+    mkdir -p "$TEST_TMPDIR/.specs"
+    cat > "$TEST_TMPDIR/.specs/roadmap.md" << 'EOF'
+# Roadmap
+
+| # | Feature | Source | Jira | Complexity | Deps | Status |
+|---|---------|--------|------|------------|------|--------|
+| 1 | Auth: Signup | clone | - | M | - | ⬜ |
+| 2 | Dashboard View | clone | - | L | 1 | ⬜ |
+EOF
+    result=$(emit_topo_order)
+    local format_ok=true
+    while IFS= read -r _tline; do
+        [ -z "$_tline" ] && continue
+        if ! echo "$_tline" | grep -qE '^[0-9]+\|.+\|.+$'; then
+            format_ok=false
+            echo "  FAIL: line does not match ID|NAME|COMPLEXITY format: $_tline"
+            FAIL=$((FAIL + 1))
+        fi
+    done <<< "$result"
+    if [ "$format_ok" = true ]; then
+        echo "  PASS: all lines match ID|NAME|COMPLEXITY format"
+        PASS=$((PASS + 1))
+    fi
+    teardown
+}
+
 # ── Run all tests ────────────────────────────────────────────────────────────
 
 echo "Running lib/reliability.sh test suite..."
@@ -606,6 +728,7 @@ test_read_state_built_feature_names
 test_write_state_branch_with_double_quote
 test_write_state_branch_with_backslash
 test_write_state_strategy_with_double_quote
+test_emit_topo_order
 test_functions_called
 test_syntax
 

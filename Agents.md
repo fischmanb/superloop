@@ -229,7 +229,7 @@ The loop ran to completion without human intervention.
 
 **Verification**:
 - `bash -n scripts/build-loop-local.sh` passes (no syntax errors)
-- `./tests/test-reliability.sh` passes (57/57 assertions)
+- `./tests/test-reliability.sh` passes (57/68 assertions)
 - 5 stash guards cover all 8 real checkout calls
 - Credit exhaustion detection present with pattern matching for billing/quota/402/429 signals
 - `git diff --stat` shows only build-loop-local.sh and Agents.md
@@ -275,7 +275,7 @@ The loop ran to completion without human intervention.
 
 **Verification**:
 - `bash -n scripts/build-loop-local.sh` passes (no syntax errors)
-- `./tests/test-reliability.sh` passes (57/57 assertions)
+- `./tests/test-reliability.sh` passes (57/68 assertions)
 - Accumulator grep count: 19 (FEATURE_TIMINGS, FEATURE_TEST_COUNTS, FEATURE_SOURCE_FILES)
 - JSON summary grep count: 3 (build-summary, logs/)
 - Human-readable summary grep count: 13 (Build Summary, ═══)
@@ -306,6 +306,24 @@ The loop ran to completion without human intervention.
 **What was changed**: ONBOARDING.md (created), CLAUDE.md (protocol reference), Agents.md (Round 14 merge + Round 16), .onboarding-state (created, gitignored), .gitignore (added .onboarding-state)
 
 **What was NOT changed**: No scripts, no lib/, no tests, no build logic
+
+---
+
+### Round 17: Topological sort for feature ordering + pre-flight build summary (branch: `claude/topological-sort-AJRoq`)
+
+**Date**: Feb 26, 2026
+
+**What was asked**: Move feature ordering from the agent to the shell. The build loop previously iterated `seq 1 $MAX_FEATURES` and told the agent "find the next pending feature" — a reliability problem because the agent decided feature order. Three things to build: (1) `emit_topo_order()` in lib/reliability.sh, (2) `show_preflight_summary()` and `build_feature_prompt()` in build-loop-local.sh, (3) modify `run_build_loop()` to iterate the topo-sorted list.
+
+**What was changed**:
+- `lib/reliability.sh`: Added `emit_topo_order()` — Kahn's algorithm (BFS topological sort) over ⬜ features in roadmap.md. Deps pointing to ✅ features are satisfied and ignored. Output: one line per feature `ID|NAME|COMPLEXITY`. Inserted after `check_circular_deps`, before `get_cpu_count`.
+- `scripts/build-loop-local.sh`: Removed static `BUILD_PROMPT` variable. Added `show_preflight_summary()` (prints sorted feature list with t-shirt sizes, prompts for confirmation unless `AUTO_APPROVE=true`). Added `build_feature_prompt()` (generates per-feature prompt with specific ID and name). Modified `run_build_loop()` to accept topo_lines as second argument and iterate over them (capped at `MAX_FEATURES`). Resume skip logic now checks feature name against `BUILT_FEATURE_NAMES[]` instead of numeric index. Pre-flight shows once even in "both" mode. Main section computes topo order before entering build modes.
+- `tests/test-reliability.sh`: Added 10 assertions for `emit_topo_order()` (no roadmap, all completed, linear chain, mixed status with ordering constraint, output format). Added `emit_topo_order` to grep-check list. Total: 68 assertions.
+- `Agents.md`: This entry.
+
+**What was NOT changed**: `build_retry_prompt()` (works by finding 🔄 feature), `scripts/overnight-autonomous.sh` (Round 18), all existing behavior preserved (branch setup, retry logic, drift check, signal parsing, credit exhaustion check, git stash guards, summary data capture).
+
+**Verification**: `bash -n` passes all 3 scripts, 68/68 unit tests pass, dry-run passes, `emit_topo_order`/`show_preflight_summary`/`build_feature_prompt` all called from scripts, no remaining `BUILD_PROMPT=` references.
 
 ---
 
@@ -343,7 +361,7 @@ auto-sdd/
 │       ├── framework/ai-dev    # CLI entry for stages pipeline
 │       └── demo.sh             # Demonstration script
 ├── tests/                      # Test suite
-│   ├── test-reliability.sh     # Unit tests for lib/reliability.sh (57 assertions)
+│   ├── test-reliability.sh     # Unit tests for lib/reliability.sh (68 assertions)
 │   ├── test-validation.sh      # Unit tests for lib/validation.sh (10 assertions)
 │   ├── dry-run.sh              # Integration test for build-loop-local.sh (e2e validation, --verbose, idempotent cleanup)
 │   └── fixtures/dry-run/       # Test fixtures (roadmap, vision)
@@ -497,6 +515,7 @@ Both `scripts/build-loop-local.sh` and `scripts/overnight-autonomous.sh` source
 | `run_agent_with_backoff` | Exponential backoff retry for rate limits | Both scripts |
 | `truncate_for_context` | Truncate large specs to Gherkin-only for context budget | Both scripts (drift check) |
 | `check_circular_deps` | DFS cycle detection on roadmap dependency graph | Both scripts |
+| `emit_topo_order` | Kahn's BFS topological sort of ⬜ features; outputs ID\|NAME\|COMPLEXITY | build-loop only |
 | `write_state` / `read_state` / `clean_state` | JSON resume state persistence; `write_state` escapes special characters in branch and strategy fields; `read_state` populates `BUILT_FEATURE_NAMES[]` from completed_features | Both scripts |
 | `completed_features_json` | Build JSON array from bash array (with escaping) | Both scripts |
 | `get_cpu_count` | Detect CPU count (nproc/sysctl) | build-loop only |
@@ -542,7 +561,7 @@ Review agents must output: `REVIEW_CLEAN` | `REVIEW_FIXED: {summary}` | `REVIEW_
 ## Testing
 
 ```bash
-# Unit tests for lib/reliability.sh (57 assertions, all passing)
+# Unit tests for lib/reliability.sh (68 assertions, all passing)
 ./tests/test-reliability.sh
 
 # Unit tests for lib/validation.sh (10 assertions, all passing)
