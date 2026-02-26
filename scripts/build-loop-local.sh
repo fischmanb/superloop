@@ -159,6 +159,7 @@ fi
 
 MAX_FEATURES="${MAX_FEATURES:-${MAX_FEATURES_PER_RUN:-25}}"
 MAX_RETRIES="${MAX_RETRIES:-1}"
+MIN_RETRY_DELAY="${MIN_RETRY_DELAY:-30}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
 DRIFT_CHECK="${DRIFT_CHECK:-true}"
 MAX_DRIFT_RETRIES="${MAX_DRIFT_RETRIES:-1}"
@@ -981,6 +982,10 @@ run_build_loop() {
         # ── Pre-flight: ensure working tree is clean ──
         clean_working_tree
 
+        # Save branch starting point for clean retries (findings #2, #18, #35)
+        local BRANCH_START_COMMIT
+        BRANCH_START_COMMIT=$(git rev-parse HEAD)
+
         # ── Build attempt ──
         local attempt=0
         local feature_done=false
@@ -988,7 +993,11 @@ run_build_loop() {
         while [ "$attempt" -le "$MAX_RETRIES" ]; do
             if [ "$attempt" -gt 0 ]; then
                 echo ""
-                warn "Retry $attempt/$MAX_RETRIES"
+                warn "Retry $attempt/$MAX_RETRIES — waiting ${MIN_RETRY_DELAY}s before retry (findings #2, #18, #35)"
+                sleep "$MIN_RETRY_DELAY"
+                # Reset branch to starting point for clean retry (reuse branch, don't create new one)
+                git reset --hard "$BRANCH_START_COMMIT" 2>/dev/null || true
+                git clean -fd 2>/dev/null || true
                 echo ""
             fi
 
@@ -1388,7 +1397,7 @@ echo ""
 echo "Build loop (local only, no remote/push/PR)"
 echo "Base branch: $MAIN_BRANCH"
 echo "Branch strategy: $BRANCH_STRATEGY"
-echo "Max features: $MAX_FEATURES | Max retries per feature: $MAX_RETRIES"
+echo "Max features: $MAX_FEATURES | Max retries per feature: $MAX_RETRIES | Min retry delay: ${MIN_RETRY_DELAY}s"
 if [ -n "$BUILD_CMD" ]; then
     echo "Build check: $BUILD_CMD"
 else

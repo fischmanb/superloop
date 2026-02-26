@@ -137,6 +137,8 @@ done
 
 # Defaults
 MAX_FEATURES="${MAX_FEATURES:-4}"
+MAX_RETRIES="${MAX_RETRIES:-1}"
+MIN_RETRY_DELAY="${MIN_RETRY_DELAY:-30}"
 BRANCH_STRATEGY="${BRANCH_STRATEGY:-chained}"
 # BASE_BRANCH: develop, main, or "current" (use git branch --show-current)
 BASE_BRANCH="${BASE_BRANCH:-main}"
@@ -157,7 +159,7 @@ section "OVERNIGHT AUTONOMOUS RUN"
 log "Project: $PROJECT_DIR"
 log "Base branch: $BASE_BRANCH"
 log "Branch strategy: $BRANCH_STRATEGY"
-log "Max features: $MAX_FEATURES"
+log "Max features: $MAX_FEATURES | Max retries: $MAX_RETRIES | Min retry delay: ${MIN_RETRY_DELAY}s"
 log "Slack channel: $SLACK_FEATURE_CHANNEL"
 log "Jira project: ${JIRA_PROJECT_KEY:-not configured}"
 
@@ -565,6 +567,42 @@ They are used by the automated drift-check that runs after your build.
 PROMPT_EOF
 }
 
+build_retry_prompt_overnight() {
+    local prompt='The previous build attempt FAILED. There are uncommitted changes or build errors from the last attempt.
+
+Your job:
+1. Run "git status" to understand the current state
+2. Look at .specs/roadmap.md to find the feature marked 🔄 in progress
+3. Fix whatever is broken — type errors, missing imports, incomplete implementation, failing tests
+4. Make sure the feature works end-to-end. Seed data is fine; stub functions are not.
+5. Run the test suite to verify everything passes: '"$TEST_CMD"'
+6. Commit all changes with a descriptive message
+7. Update roadmap to mark the feature ✅ completed
+'
+    if [ -n "$LAST_BUILD_OUTPUT" ]; then
+        prompt="$prompt
+BUILD CHECK FAILURE OUTPUT (last 50 lines):
+$LAST_BUILD_OUTPUT
+"
+    fi
+    if [ -n "$LAST_TEST_OUTPUT" ]; then
+        prompt="$prompt
+TEST SUITE FAILURE OUTPUT (last 80 lines):
+$LAST_TEST_OUTPUT
+"
+    fi
+    prompt="$prompt
+After completion, output EXACTLY these signals (each on its own line):
+FEATURE_BUILT: {feature name}
+SPEC_FILE: {path to the .feature.md file}
+SOURCE_FILES: {comma-separated paths to source files created/modified}
+
+Or if build fails:
+BUILD_FAILED: {reason}
+"
+    echo "$prompt"
+}
+
 # ── show_preflight_summary_overnight <topo_lines> ──────────────────────
 # Simplified pre-flight summary for unattended overnight runs.
 # Logs the feature list and proceeds (no interactive prompt).
@@ -703,40 +741,85 @@ while [ "$idx" -lt "$loop_limit" ]; do
     fi
 
     git checkout -b "$BRANCH_NAME"
+    BRANCH_START_COMMIT=$(git rev-parse HEAD)
 
-    # Run /build-next
-    BUILD_OUTPUT=$(mktemp)
+    # ── Build attempt with retry loop (findings #2, #18, #35) ──
+    attempt=0
+    feature_done=false
 
-    AGENT_EXIT=0
-    run_agent_with_backoff "$BUILD_OUTPUT" $(agent_cmd "$BUILD_MODEL") "$(build_feature_prompt_overnight "$i" "$feature_label")"
+    while [ "$attempt" -le "$MAX_RETRIES" ]; do
+        if [ "$attempt" -gt 0 ]; then
+            warn "Retry $attempt/$MAX_RETRIES — waiting ${MIN_RETRY_DELAY}s before retry (findings #2, #18, #35)"
+            sleep "$MIN_RETRY_DELAY"
+            # Reset branch to starting point for clean retry (reuse branch, don't create new one)
+            git reset --hard "$BRANCH_START_COMMIT" 2>/dev/null || true
+            git clean -fd 2>/dev/null || true
+        fi
 
-    if [ "$AGENT_EXIT" -ne 0 ]; then
-        warn "Agent exited with code $AGENT_EXIT (will check signals for actual status)"
-    fi
+        BUILD_OUTPUT=$(mktemp)
 
-    BUILD_RESULT=$(cat "$BUILD_OUTPUT")
-    rm -f "$BUILD_OUTPUT"
-    
-    # Check result
-    if echo "$BUILD_RESULT" | grep -q "NO_FEATURES_READY"; then
-        log "No more features ready to build"
-        git checkout "$MAIN_BRANCH"
-        git branch -D "$BRANCH_NAME" 2>/dev/null || true
-        break
-    fi
+        AGENT_EXIT=0
+        if [ "$attempt" -eq 0 ]; then
+            run_agent_with_backoff "$BUILD_OUTPUT" $(agent_cmd "$BUILD_MODEL") "$(build_feature_prompt_overnight "$i" "$feature_label")"
+        else
+            run_agent_with_backoff "$BUILD_OUTPUT" $(agent_cmd "${RETRY_MODEL:-$BUILD_MODEL}") "$(build_retry_prompt_overnight)"
+        fi
 
-    if echo "$BUILD_RESULT" | grep -q "BUILD_FAILED"; then
-        REASON=$(parse_signal "BUILD_FAILED" "$BUILD_RESULT")
+        if [ "$AGENT_EXIT" -ne 0 ]; then
+            warn "Agent exited with code $AGENT_EXIT (will check signals for actual status)"
+        fi
+
+        BUILD_RESULT=$(cat "$BUILD_OUTPUT")
+        rm -f "$BUILD_OUTPUT"
+
+        # ── Check for API credit exhaustion ──
+        if echo "$BUILD_RESULT" | grep -qiE '(credit|billing|insufficient_quota|quota exceeded|402 Payment|429 Too Many|payment required)'; then
+            error "✗ API credits exhausted — halting build loop"
+            exit 1
+        fi
+
+        # Check result
+        if echo "$BUILD_RESULT" | grep -q "NO_FEATURES_READY"; then
+            log "No more features ready to build"
+            git checkout "$MAIN_BRANCH"
+            git branch -D "$BRANCH_NAME" 2>/dev/null || true
+            feature_done=true
+            break
+        fi
+
+        if echo "$BUILD_RESULT" | grep -q "FEATURE_BUILT"; then
+            feature_done=true
+            break
+        fi
+
+        # Build failed — log reason and retry
+        if echo "$BUILD_RESULT" | grep -q "BUILD_FAILED"; then
+            REASON=$(parse_signal "BUILD_FAILED" "$BUILD_RESULT")
+            warn "Build failed: $REASON"
+        else
+            warn "Build did not produce a clear success signal"
+        fi
+
+        attempt=$((attempt + 1))
+    done
+
+    # ── If all attempts failed ──
+    if [ "$feature_done" != true ]; then
         FEATURE_DURATION=$(( $(date +%s) - FEATURE_START ))
-        warn "Build failed: $REASON ($(format_duration $FEATURE_DURATION))"
+        warn "Feature failed after $((MAX_RETRIES + 1)) attempt(s) ($(format_duration $FEATURE_DURATION))"
         FEATURE_TIMINGS+=("✗ $feature_label: $(format_duration $FEATURE_DURATION)")
         FAILED=$((FAILED + 1))
-        git checkout "$MAIN_BRANCH"
+        git checkout "$MAIN_BRANCH" 2>/dev/null || true
         git branch -D "$BRANCH_NAME" 2>/dev/null || true
         idx=$((idx + 1))
         continue
     fi
-    
+
+    # ── If NO_FEATURES_READY was detected, exit the loop ──
+    if echo "$BUILD_RESULT" | grep -q "NO_FEATURES_READY"; then
+        break
+    fi
+
     # Feature built - check for changes
     if [ -n "$(git status --porcelain)" ]; then
         git add -A
