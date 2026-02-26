@@ -53,7 +53,7 @@ Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capabi
 
 ### What's next
 
-1. **Remediation Rounds 25-26: Codebase summary injection** — Round 25: generation function + tests. Round 26: wire into build loop. Findings #11, #21, #23. Write hardened agent prompts first.
+1. **Remediation Round 26: Codebase summary wiring** — Findings #11, #21, #23. Round 25 done (function + tests). Round 26: source lib and inject summary into build prompts in both scripts. Prompt drafted.
 2. **Local model integration** — replace cloud API with local LM Studio on Mac Studio
 3. **Adaptive routing / parallelism** — only if data from 1-2 shows remaining sequential bottleneck justifies the complexity
 
@@ -71,8 +71,8 @@ Build loop remediation from `build-loop-failure-investigation.md` (37 findings).
 - ~~NODE_ENV=production breaks dev builds~~ — ✅ Fixed Round 23 (finding #5)
 - ~~stakd CLAUDE.md + learnings~~ — ✅ Fixed Round 24 (findings #3, #12, #22, #25, #26, #27, #33). stakd CLAUDE.md has Next.js 15 rules. Primary learnings catalog populated.
 - ~~Learnings consolidation~~ — ✅ Done (2026-02-26). All learnings in `.specs/learnings/`. Agent process lessons consolidated in `agent-operations.md`. Duplicates removed from Agents.md, ONBOARDING.md, PROMPT-ENGINEERING-GUIDE.md.
-- **Codebase summary generation function + tests** — Round 25 (findings #11, #21, #23). New function (likely `lib/codebase-summary.sh` or similar) that scans a project dir and emits a summary: component registry, type exports, import graph, recent learnings. Output to stdout or file path. Tests for the function. *Not started.*
-- **Codebase summary wiring into build loop** — Round 26 (same findings, completes integration). Call summary generation after each feature commit. Inject summary into the next agent's build prompt via `build_feature_prompt()` / `build_feature_prompt_overnight()`. *Not started.*
+- **Codebase summary generation function + tests** — ✅ Done Round 25 (findings #11, #21, #23). `lib/codebase-summary.sh` provides `generate_codebase_summary()`. 23-assertion test suite in `tests/test-codebase-summary.sh`.
+- **Codebase summary wiring into build loop** — Round 26 (same findings, completes integration). Source `lib/codebase-summary.sh` in both scripts. Call `generate_codebase_summary "$PROJECT_DIR"` inside `build_feature_prompt()` and `build_feature_prompt_overnight()` to inject summary into agent prompts. *Prompt drafted, not yet executed.*
 
 ### Known gaps
 
@@ -93,7 +93,7 @@ Build loop remediation from `build-loop-failure-investigation.md` (37 findings).
 
 Ordered by efficiency gain per complexity added:
 
-1. **Remediation Rounds 25-26: Codebase summary injection** — Findings #11, #21, #23. Round 25: generation function + tests (scan project dir, emit component registry, type exports, import graph, recent learnings). Round 26: wire into build loop (call after each feature commit, inject into next agent's prompt). Fixes cross-feature type/interface drift — each build agent currently has no knowledge of what previous agents produced. *Not started. Write hardened agent prompts per PROMPT-ENGINEERING-GUIDE.md methodology.*
+1. **Remediation Rounds 25-26: Codebase summary injection** — Findings #11, #21, #23. **Round 25: COMPLETE** — `lib/codebase-summary.sh` merged to main with 23-assertion test suite (`tests/test-codebase-summary.sh`). Function scans project dir, emits component registry, type exports, import graph, recent learnings to stdout. Round 26: wire into build loop (call `generate_codebase_summary` inside `build_feature_prompt()` and `build_feature_prompt_overnight()`, source lib in both scripts). *Round 26 prompt drafted, not yet executed.*
 2. ~~**Topological sort + pre-flight summary**~~ — ✅ Done (Rounds 17-18). Shell-side Kahn's algorithm for feature ordering in both `build-loop-local.sh` and `overnight-autonomous.sh`. Pre-flight prints sorted feature list with t-shirt sizes, requires user confirmation (`AUTO_APPROVE=true` skips for overnight). 68 test assertions passing.
 3. ~~**stakd/ build campaign + issue triage**~~ — ✅ Build campaign done (2026-02-25). Issue triage complete (2026-02-26). 37 findings in `build-loop-failure-investigation.md`. **Remediation Rounds 21-24 complete. Rounds 25-26 above.** See "Remediation status" in Current State for full checklist.
 4. **Local model integration** — Replace cloud API calls with local LM Studio endpoints on Mac Studio. The archived `archive/local-llm-pipeline/` system is reference material. *Not started.*
@@ -107,6 +107,7 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 
 - **Build loop remediation (2026-02-26)**: Rounds 21-24 complete. Rounds 25-26 remaining (codebase summary generation function + wiring into build loop, findings #11, #21, #23). Rounds 21-23: resume persist, CLAUDECODE guard, retry hardening with branch reuse, overnight retry+credit detection, build log rotation, model logging, branch cleanup, NODE_ENV guard. Round 24: stakd CLAUDE.md Next.js 15 rules + learnings populated. Learnings consolidated into `.specs/learnings/` with `agent-operations.md` as single source of truth for process lessons. Process lessons from this batch: (1) keep agent prompts concise — describe intent, not implementation code; (2) push main to origin before running agent prompts, otherwise agents fork from stale `origin/main` and require merge cleanup after each round; (3) all learnings go in primary repos, not project-specific dirs.
 - **Onboarding state protocol**: Implemented 2026-02-25. Mechanical enforcement via `~/auto-sdd/.onboarding-state` file — tracks prompt count, buffers pending captures, triggers interval checks. Memory instruction points all future chats to the protocol. See "Keeping This File Current" section.
+- **Agent git discipline**: Updated 2026-02-26. CLAUDE.md now has "Git Discipline" section (no merge, no push, always include Agents.md entry). PROMPT-ENGINEERING-GUIDE.md clarified: allowlist always includes Agents.md for implementation prompts, Section 5 renamed "Commit (no merge)", merge prompts are Brian-initiated only.
 
 ---
 
