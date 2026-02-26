@@ -81,7 +81,7 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 | **README.md** | Public-facing docs: quick start, config, file structure, what works and what breaks | For understanding the user-facing narrative |
 | **CLAUDE.md** | Instructions that Claude Code agents read automatically when invoked by the build loop | When modifying agent behavior or build prompts |
 | **ARCHITECTURE.md** | Design decisions for the local LLM pipeline (system 2, archived) and context management philosophy | When working on the local model integration |
-| **Brians-Notes/PROMPT-ENGINEERING-GUIDE.md** | Methodology for writing hardened agent prompts, full failure catalog from real sessions | Before writing any new agent prompts |
+| **Brians-Notes/PROMPT-ENGINEERING-GUIDE.md** | Methodology for writing hardened agent prompts, full failure catalog from real sessions | On first prompt of any new chat or agent session (read the "Lessons Learned (Failure Catalog)" section only), and before writing any new agent prompts |
 | **lib/reliability.sh** | Shared runtime: lock, backoff, state, truncation, cycle detection (~385 lines) | When debugging build failures or modifying shared behavior |
 | **lib/claude-wrapper.sh** | Wraps `claude` CLI, extracts text to stdout, logs cost data to JSONL | When debugging cost tracking or agent invocation |
 | **scripts/build-loop-local.sh** | Main orchestration script (~1311 lines) | When modifying the build loop |
@@ -301,6 +301,7 @@ A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
 
 **Fresh onboard (state file missing or `last_check_ts` > 24h stale)**:
 - Full read of ONBOARDING.md. This is the only case where the whole file gets read.
+- Read the "Lessons Learned (Failure Catalog)" section of `Brians-Notes/PROMPT-ENGINEERING-GUIDE.md`. These hard-won failure modes repeat if not internalized at session start. Do not read the full guide — only the failure catalog.
 
 **Cost profile**: 95% of responses = read/write a 5-line file (negligible). Every ~4th response = one md5 + maybe 15 lines (minimal). New chat after a break = full read (appropriate).
 
