@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # lib/reliability.sh — Shared reliability utilities for SDD orchestration scripts
 #
 # Source this file after defining logging functions (log, warn, success, error).

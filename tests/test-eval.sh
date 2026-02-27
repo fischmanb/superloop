@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # tests/test-eval.sh — Unit tests for lib/eval.sh
 #
 # Run: ./tests/test-eval.sh

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # overnight-autonomous.sh
 # Autonomous overnight feature implementation using roadmap
 #

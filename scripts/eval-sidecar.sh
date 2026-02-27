@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # eval-sidecar.sh
 # Runs alongside the build loop, watching for new feature commits and evaluating them.
 # Purely observational — never modifies the project, never blocks the build, fails gracefully.

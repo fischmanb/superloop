@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # tests/test-reliability.sh — Unit tests for lib/reliability.sh
 #
 # Run: ./tests/test-reliability.sh

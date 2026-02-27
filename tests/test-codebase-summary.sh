@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # tests/test-codebase-summary.sh — Unit tests for lib/codebase-summary.sh
 #
 # Run: ./tests/test-codebase-summary.sh

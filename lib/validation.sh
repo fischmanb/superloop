@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # lib/validation.sh — Shared validation utilities for SDD orchestration scripts
 #
 # Source this file after defining logging/color variables if needed.

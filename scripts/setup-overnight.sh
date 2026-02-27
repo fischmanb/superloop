@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # setup-overnight.sh
 # Sets up the overnight automation launchd jobs
 # Run this once to enable scheduled overnight runs

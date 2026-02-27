@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # uninstall-overnight.sh
 # Removes the overnight automation launchd jobs
 

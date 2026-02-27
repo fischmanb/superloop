@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # build-loop-local.sh
 # Run /build-next in a loop locally. No git remote, no push, no PRs.
 # Use when you want to build roadmap features without connecting to a remote.

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # tests/dry-run.sh — Integration test for build-loop-local.sh
 #
 # Creates a minimal toy project and runs build-loop-local.sh with MAX_FEATURES=1.
