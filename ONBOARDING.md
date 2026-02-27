@@ -2,7 +2,7 @@
 
 > **Read this file first.** It gives a fresh Claude instance everything needed to pick up work on `auto-sdd` with Brian.
 >
-> Last updated: 2026-02-27
+> Last updated: 2026-02-28
 
 > **⚠️ Per-response protocol**: Read and update `.onboarding-state` on every project-related response. See "Keeping This File Current" for full rules.
 
@@ -54,7 +54,8 @@ Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capabi
 
 ### What's next
 
-1. **Rerun stakd 28-feature campaign** — First real validation of Rounds 21-30 remediation including new mechanical gates (test regression, dead exports, lint) and eval sidecar with cooperative drain. Use the existing `stakd/.specs/vision.md` and `stakd/.specs/roadmap.md` from the previous campaign — do not rewrite specs. Run on **Sonnet 4.6** (`BUILD_MODEL=claude-sonnet-4-6`). Run build loop with eval sidecar in parallel. Data from this run informs all future decisions.
+1. **Sidecar feedback loop implementation** — Agent prompt ready (in chat). Wires eval sidecar findings into build agent prompts so agents learn from prior feature mistakes. Spec: `.specs/features/reliability/sidecar-feedback-loop.feature.md`. Execute before next campaign.
+2. **Rerun stakd 28-feature campaign** — First real validation of Rounds 21-30 remediation plus sidecar feedback loop. Use existing `stakd/.specs/vision.md` and `stakd/.specs/roadmap.md`. Run on **Sonnet 4.6** (`BUILD_MODEL=claude-sonnet-4-6`). Run build loop with eval sidecar in parallel. Data from this run informs all future decisions.
 2. **Local model integration** — replace cloud API with local LM Studio on Mac Studio
 3. **Adaptive routing / parallelism** — only if data from 1-2 shows remaining sequential bottleneck justifies the complexity
 
@@ -139,6 +140,8 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 - **Retry resilience + signal hardening + shell fixes (2026-02-27)**: Round 31: git clean exclusions, signal fallback, cascade failure fix. Round 31.1: Parameterized retry prompt. Rounds 32-34: Shell portability (`#!/usr/bin/env bash` on 17 scripts), PROJECT_DIR absolute resolution, claude-wrapper.sh rewrite (no `set -e`, stderr to file, unset CLAUDECODE), MAIN_BRANCH rejects `auto/*`. Round 35: Sidecar source/dedup/health fixes, model log jq fix. All merged to main (`dbf2997`). **154 assertions passing.**
 - **PROMPT-ENGINEERING-GUIDE.md (2026-02-27)**: Verification section updated to require all 5 test suites (test-reliability, test-eval, test-validation, test-codebase-summary, dry-run).
 - **Agent push discipline (2026-02-27)**: Agents ignore "do NOT push" instructions 100% of the time (Rounds 32-34). Documented as expected behavior — prompt wording makes no difference. Not a bug to fix.
+- **Sidecar feedback loop (2026-02-28)**: Spec written (`.specs/features/reliability/sidecar-feedback-loop.feature.md`). Agent prompt ready for execution — delivered in chat per PROMPT-ENGINEERING-GUIDE.md. Adds three functions to `build-loop-local.sh`: reads latest eval JSON, maintains cumulative repeated-mistakes list, injects both into `build_feature_prompt()`. Advisory only — no blocking gates. Targets HEAD `5eb0c6c`. Sidecar findings analysis documented in `campaign-results/reports/sidecar-findings.md` (5 systematic patterns from v3 Haiku evals).
+- **Prompt self-containment requirement (2026-02-28)**: Agent prompts must be fully self-contained for fresh context execution. No file references ("read the spec first") — agent in a fresh context has no access to prior files. All necessary context must be inline in the prompt itself. This applies to all prompts delivered in chat.
 
 ---
 
@@ -156,7 +159,7 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 | **lib/codebase-summary.sh** | Generates cross-feature context summary (component registry, type exports, import graph, learnings) | When modifying the summary format or debugging agent context issues |
 | **lib/eval.sh** | Eval functions: mechanical checks, prompt generation, signal parsing, result writing | When modifying eval behavior or adding new eval signals |
 | **lib/claude-wrapper.sh** | Wraps `claude` CLI, extracts text to stdout, logs cost data to JSONL | When debugging cost tracking or agent invocation |
-| **scripts/build-loop-local.sh** | Main orchestration script (~1806 lines) | When modifying the build loop |
+| **scripts/build-loop-local.sh** | Main orchestration script (~2162 lines) | When modifying the build loop |
 | **scripts/overnight-autonomous.sh** | Overnight automation variant (~1041 lines) | When modifying overnight runs |
 | **scripts/eval-sidecar.sh** | Eval sidecar — runs alongside build loop, polls for commits, evaluates features (~354 lines) | When modifying eval behavior or running evals |
 | **.env.local.example** | Full config reference (167 lines) | When setting up or changing config |
@@ -319,7 +322,7 @@ git branch -r | grep claude/ | while read b; do git push origin --delete "${b#or
 ```
 auto-sdd/
 ├── scripts/
-│   ├── build-loop-local.sh        # Main build loop (1813 lines)
+│   ├── build-loop-local.sh        # Main build loop (2162 lines)
 │   ├── overnight-autonomous.sh    # Overnight variant (1041 lines)
 │   ├── eval-sidecar.sh            # Eval sidecar (354 lines)
 │   ├── nightly-review.sh          # Extract learnings from commits
