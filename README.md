@@ -150,7 +150,7 @@ auto-sdd/
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code): `npm install -g @anthropic-ai/claude-code`
 - `ANTHROPIC_API_KEY` in your shell environment
 - `yq`: `brew install yq`
-- **bash 5+** (required — macOS ships bash 3.2 which cannot run these scripts): `brew install bash`. Invoke scripts with `/opt/homebrew/bin/bash` explicitly since the system `bash` remains 3.2.
+- **bash 5+** (required — macOS ships bash 3.2): `brew install bash`. All scripts use `#!/usr/bin/env bash` so `./script` works directly as long as Homebrew bash is in your PATH (default after install).
 - `gh` (GitHub CLI) for PR creation: `brew install gh`
 
 For overnight automation: macOS (launchd scheduling)
@@ -171,16 +171,16 @@ cp .env.local.example .env.local
 # Edit .env.local — set TEST_CHECK_CMD, BUILD_CHECK_CMD, model preferences
 
 # Verify the test suite passes
-/opt/homebrew/bin/bash ./tests/test-reliability.sh        # 54 assertions
-/opt/homebrew/bin/bash ./tests/test-validation.sh         # 10 assertions
-DRY_RUN_SKIP_AGENT=true /opt/homebrew/bin/bash ./tests/dry-run.sh
+./tests/test-reliability.sh        # 54 assertions
+./tests/test-validation.sh         # 10 assertions
+DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 # Define your app
 /vision "A task management app for small teams with projects and due dates"
 /roadmap create
 
 # Build
-/opt/homebrew/bin/bash ./scripts/build-loop-local.sh
+./scripts/build-loop-local.sh
 ```
 
 ---
@@ -254,26 +254,26 @@ The productivity gain is real. So is the ceiling. Both are documented in `Agents
 
 ```bash
 # Unit tests — lib/reliability.sh
-/opt/homebrew/bin/bash ./tests/test-reliability.sh        # 54 assertions, all passing
+./tests/test-reliability.sh        # 54 assertions, all passing
 
 # Unit tests — lib/validation.sh
-/opt/homebrew/bin/bash ./tests/test-validation.sh         # 10 assertions, all passing
+./tests/test-validation.sh         # 10 assertions, all passing
 
 # Structural integration test (no agent required)
-DRY_RUN_SKIP_AGENT=true /opt/homebrew/bin/bash ./tests/dry-run.sh
+DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 # Full integration test (requires Claude Code + ANTHROPIC_API_KEY)
-/opt/homebrew/bin/bash ./tests/dry-run.sh
+./tests/dry-run.sh
 ```
 
 Verification after any change:
 
 ```bash
-/opt/homebrew/bin/bash -n scripts/build-loop-local.sh
-/opt/homebrew/bin/bash -n scripts/overnight-autonomous.sh
-/opt/homebrew/bin/bash -n lib/reliability.sh
-/opt/homebrew/bin/bash ./tests/test-reliability.sh
-DRY_RUN_SKIP_AGENT=true /opt/homebrew/bin/bash ./tests/dry-run.sh
+bash -n scripts/build-loop-local.sh
+bash -n scripts/overnight-autonomous.sh
+bash -n lib/reliability.sh
+./tests/test-reliability.sh
+DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 ```
 
 ---
