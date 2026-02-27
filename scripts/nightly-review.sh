@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # nightly-review.sh
 # Nightly review that extracts learnings from the day's work
 # Run BEFORE overnight-autonomous.sh so learnings are available for implementation

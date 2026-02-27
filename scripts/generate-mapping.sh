@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # generate-mapping.sh
 # Auto-generates .specs/mapping.md from feature spec YAML frontmatter
 # Run manually or via Cursor hook after spec changes

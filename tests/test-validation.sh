@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # tests/test-validation.sh — Unit tests for lib/validation.sh
 #
 # Run: ./tests/test-validation.sh

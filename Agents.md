@@ -839,6 +839,26 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 ---
 
+### Round 32 — Shebang update (#!/usr/bin/env bash)
+
+**Date**: Feb 27, 2026
+
+**What was asked**: Update all 17 script shebangs from `#!/bin/bash` to `#!/usr/bin/env bash` for macOS bash 5+ compatibility.
+
+**What actually happened**: 14 of the 17 allowlisted scripts had `#!/bin/bash` and were updated. The other 3 (`lib/codebase-summary.sh`, `lib/eval.sh`, `lib/claude-wrapper.sh`) already had `#!/usr/bin/env bash`. All 17 files now have the correct shebang. Only line 1 was changed in each file.
+
+**What was NOT changed**: No logic, no other lines, no other files beyond the 14 updated scripts + this entry. `lib/codebase-summary.sh`, `lib/eval.sh`, `lib/claude-wrapper.sh` were already correct and untouched.
+
+**Verification**:
+- `grep -rn '#!/bin/bash' scripts/ lib/ tests/` → zero results
+- `grep -rn '#!/usr/bin/env bash' scripts/ lib/ tests/` → 17 results
+- `bash -n` passes on all 4 critical files (build-loop-local.sh, overnight-autonomous.sh, reliability.sh, eval.sh)
+- `tests/test-reliability.sh` → 68 passed, 0 failed
+- `tests/test-eval.sh` → 53 passed, 0 failed
+- `git diff --stat` → 14 files changed, 14 insertions, 14 deletions (only shebang lines)
+
+---
+
 ## Known Gaps
 
 - No live integration testing — all validation is `bash -n` + unit tests + structural dry-run
