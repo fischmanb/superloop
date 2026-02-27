@@ -94,18 +94,6 @@ Every Claude CLI invocation is wrapped through `lib/claude-wrapper.sh`, which ex
 
 ---
 
-## What Works and What Doesn't
-
-**Holds up well**: isolated frontend features built from tight Gherkin specs. The agent produces solid scaffolding with tests. TypeScript compiles. Drift checks catch spec misalignment before it compounds. Crash recovery with `--resume` survives interrupted overnight runs. Topological sort handles feature dependency ordering.
-
-**Where it breaks down**:
-
-Integration across features remains the hardest problem. Each agent builds in isolation. Codebase summary injection mitigates this significantly but doesn't eliminate it — complex cross-feature contracts (shared state, event buses, deeply nested type hierarchies) still produce integration issues that only surface at runtime.
-
-Backend spec layer is missing. The framework is frontend-oriented. Database schemas, API contracts, and migrations have no equivalent spec format. The orchestrator can't validate what it can't parse.
-
-Agent self-assessment is unreliable. This is stated multiple times because it's the single most important lesson. The reliability layer, validation gates, signal protocol, and eval sidecar all exist because of it. Any system that trusts agent self-reports will fail in ways that are invisible until they compound.
-
 ---
 
 ## File Structure
