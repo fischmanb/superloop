@@ -1,0 +1,64 @@
+3eb49388125e267627a77b07795d123330fa7df1 2026-02-27 16:51:39 -0500 fix: reconcile spec drift for trending-deals
+63046756432e37a27ec8e5fbdde3d3b3f674b1b8 2026-02-27 16:50:19 -0500 feat(trending): Trending deals (homepage) — #21
+22dd5589579d69c29db4bcb2a9667e5ea520787e 2026-02-27 16:47:40 -0500 state: checkpoint after Map view (deal locations, gated for logged-in)
+8b239efb7104ceab27d2d1ad3abc034300d13663 2026-02-27 16:43:16 -0500 feat(map): Map view — deal locations, gated for logged-in (#18)
+c426397c5d2b196be9c9cb4387aa09f72e125337 2026-02-27 16:35:36 -0500 state: checkpoint after Listings page (active for-sale/for-lease)
+0f44867ed43ba30100fb0e47b59071636354e4f1 2026-02-27 16:32:12 -0500 fix: reconcile spec drift for listings-page
+10f45cc8f4cf434118aba0ce9f748681aedd8fec 2026-02-27 16:29:23 -0500 feat(listings): Listings page — active for-sale/for-lease (#17)
+68b4dce414ca4be726f57bfcc2341449e141cfb2 2026-02-27 16:07:05 -0500 state: checkpoint after Rankings page (top brokers, investors, lenders)
+63e35f3a79f589dceacc2a61076dadbbf7348300 2026-02-27 16:04:09 -0500 fix: reconcile spec drift for rankings-page
+f26862942d07dae5bf39a45068b848c0d28378ea 2026-02-27 16:02:52 -0500 feat(rankings): Rankings page — top brokers, investors, lenders (#16)
+94078578ec4db8d52320d970f02e984f9be508c7 2026-02-27 15:51:43 -0500 state: checkpoint after Search (address, advanced filters)
+921f9be650a5ce7ae6c9515b4628168a350d52bb 2026-02-27 15:47:52 -0500 feat(deals): Search (address, advanced filters) (#13)
+a487881167b3d2bd76033ab18e1af925a0582d11 2026-02-27 15:40:56 -0500 state: checkpoint after Market/submarket filters (state, city, neighborhood)
+baad953f03a65cd9c9450e8426942f04d94a8140 2026-02-27 15:38:34 -0500 fix: reconcile spec drift for market-submarket-filters
+abb65439a309dfc6b3e0af7b8c7585850682ba9d 2026-02-27 15:36:55 -0500 feat(deals): Market/submarket filters — neighborhood dropdown (#12)
+0107cd8171692a946f56b7e5993161e1f6c10bbd 2026-02-27 15:32:16 -0500 state: checkpoint after Deal detail page
+2957a098358b4246c3dfd0fb7c31267bd5e80ffe 2026-02-27 15:29:59 -0500 fix: reconcile spec drift for deal detail page
+dda6f66de0da8d6383c30280ca71512ebcbf38c4 2026-02-27 15:28:13 -0500 feat(deals): Deal detail page (#10)
+c9476b0852eb77461055d757bad925ee68ccd8ab 2026-02-27 15:22:44 -0500 state: checkpoint after Agent profile page
+317c51cc4c496b49fa8a6a47afa32add673469bb 2026-02-27 15:19:41 -0500 feat(agents): Agent profile page (#15)
+a6365ab2335dae5e92bc7821d9994ab432e12a2f 2026-02-27 15:14:51 -0500 state: checkpoint after User settings & profile edit
+c25b173efc4c49dad3572d6ba99a18a50f01c540 2026-02-27 15:08:09 -0500 feat(settings): User settings & profile edit (#25)
+cc888b22807b3ba09ada071c92a2235099baa689 2026-02-27 13:42:14 -0500 feat(deals): Submit deal form & flow (#14)
+059990d7d1a47ee6140dad04dfff666e1fb769b0 2026-02-27 13:33:14 -0500 state: checkpoint after Deals list page (feed, filters, pagination)
+e2530aa486d428f8dafbf3f99fe18c19d274ab14 2026-02-27 13:30:43 -0500 fix: reconcile spec drift for Deals List Page
+4cbb9cc79c81b5fb67e20d45f82f0f7ffa06dfe0 2026-02-27 13:28:16 -0500 feat(deals): Deals list page (feed, filters, pagination) (#9)
+fae6c93e31d82768c3010be4b8fff2f7bf132474 2026-02-27 13:20:38 -0500 state: checkpoint after News section / industry news feed
+737797ba0ae79cced94c2fb6acb3e459aee75c1e 2026-02-27 13:18:32 -0500 fix: reconcile spec drift for News Section / Industry News Feed
+b649ac753b9917e8e4239272149940bcabdad8d0 2026-02-27 13:16:21 -0500 feat(news): News section / industry news feed (#19)
+2cff9434eb1e1fd5b49135ee7c2c3b7e23d62f8a 2026-02-27 13:05:10 -0500 state: checkpoint after Deal card component (status, image, amount, participants)
+fe9fc828fee43d380469327084a942d12b1c2337 2026-02-27 13:03:42 -0500 fix: reconcile spec drift for Deal card component (status, image, amount, participants)
+2710d40ee6616ebecaaf62b08013c45f4ca8fb0a 2026-02-27 13:02:08 -0500 feat(deals): Deal card component (status, image, amount, participants) (#11)
+681a90a550752af6d7ac6700776ba369d0cc9833 2026-02-27 12:58:50 -0500 state: checkpoint after Auth: Session & protected routes
+17d3a39f314cbe26d75808ec768f217ec1820dab 2026-02-27 12:57:23 -0500 fix: reconcile spec drift for Auth: Session & protected routes
+5da3d431ac25a39fb47af1bc8b64f9e01f883c06 2026-02-27 12:55:01 -0500 feat(auth): session management & protected routes (#5)
+13a7e56e89daa705fbd63c97614fe765cc698777 2026-02-27 12:48:29 -0500 state: checkpoint after Email newsletter signup (footer)
+a7f4cacbf83dd7e080b37d0a301bb254d24ed05d 2026-02-27 12:47:05 -0500 fix: reconcile spec drift for Email Newsletter Signup
+0dc8658a73aeb3fd8d94af48287b276e56bc9cf7 2026-02-27 12:45:33 -0500 feat(marketing): email newsletter signup in footer (#27)
+751ebd8521de58675ae5c965f6ccb6e100ffff8f 2026-02-27 12:41:24 -0500 state: checkpoint after Social links (footer, share)
+06389a0176f60b0fa356c5eda8910d8256c38cfc 2026-02-27 12:39:22 -0500 feat(social): social links in footer + ShareButton component (#26)
+b1609eefd39aff506bd0827753800e8902c7f4e6 2026-02-27 12:36:02 -0500 state: checkpoint after Dark mode toggle
+6e52421d7dc357db30488b57d39249cbe9115420 2026-02-27 12:34:49 -0500 fix: reconcile spec drift for Dark Mode Toggle
+30065aed577e62c937cfdf803dc59e9d02531c37 2026-02-27 12:33:50 -0500 feat(ui): dark mode toggle — ThemeProvider, anti-FOUC, localStorage persistence
+f5ccf638806dbdcc79630258fc155c3dd5fbcb53 2026-02-27 11:40:22 -0500 state: checkpoint after
+b656249a8fc7c85ba2114c942ca59c909ff41311 2026-02-27 11:38:58 -0500 feat(landing): landing page — hero, search bar, market filters, trending deals
+8298bfae6b4786022738658fc23464729c503902 2026-02-27 11:32:32 -0500 state: checkpoint after Agent/User profile model & schema
+00d06ce0b2d767606b47382c1d9b3dd8a7a5b28c 2026-02-27 11:31:27 -0500 fix: reconcile spec drift for Agent/User profile model & schema
+4c2fbdc9df8325c7865fc70780790d45ffc72716 2026-02-27 11:29:52 -0500 feat(db): agent/user profile model & schema — agent_profiles table, 9 tests
+4322c84038b5dc3e616648fa27f059bfb31a3c02 2026-02-27 11:27:05 -0500 state: checkpoint after Deal model & database schema
+3c32c31584b24f7ca975767dc96bcd2a5c637abb 2026-02-27 11:26:09 -0500 fix: reconcile spec drift for Deal model & database schema
+480189b914188fe89a87db3b7b8ce3cd13d0ed50 2026-02-27 11:23:40 -0500 feat(db): deal model & database schema — deals + deal_participants tables, 16 tests
+fb0f367a01b2617c503b9d9e80e0f4ff7dc19266 2026-02-27 11:18:40 -0500 state: checkpoint after Auth: Log in
+f67bbae2f22b430dcd6327a5d03ab95a58140f76 2026-02-27 11:18:05 -0500 fix: reconcile spec drift for Auth: Log in
+dac125bd2f6c49ad3e13ed1c746071012452fb84 2026-02-27 11:16:14 -0500 feat(auth): log in — login API, LoginForm, page, 10 tests
+b1b81a3d2cf8432670228e2accf8507e59fa5774 2026-02-27 11:12:12 -0500 state: checkpoint after Auth: Sign up
+b0ee437b115d19da3a0e3b1e6bc5a8789cd41125 2026-02-27 11:11:42 -0500 fix: reconcile spec drift for Auth: Sign up
+a9e44fef58ea9fd1ad62826c189a3408ee11e012 2026-02-27 11:09:39 -0500 feat(auth): sign up — users table, bcrypt hashing, JWT session, API + page
+840d77779f25ff6a8e7384d0a03d88bc3bef402e 2026-02-27 11:03:02 -0500 state: checkpoint after Core layout (header, nav, footer)
+0acb8f5c4d2372a3bc2d20f328eb4aeb5519136f 2026-02-27 11:02:41 -0500 fix: reconcile spec drift for Core Layout
+23f2d5773f73f9d8a6cede7f524d4625d658788a 2026-02-27 11:01:24 -0500 feat(layout): core layout shell — header, nav, mobile menu, footer
+fd2b4f29b25d0809084e7892d1d379560fb13393 2026-02-27 10:56:51 -0500 state: checkpoint after Project setup (Next.js, Tailwind, DB, env)
+a516009365b1ce808020ed93ae5ea32f2251edb0 2026-02-27 10:56:34 -0500 fix: reconcile spec drift for Project Setup
+1d39b624acd9b06b9435fb545a7b574885de3c36 2026-02-27 10:54:34 -0500 feat(foundation): project setup — Next.js 15, Tailwind, Drizzle, env
+16159d89252cefafcf181a0ef94b85f7db7437bd 2026-02-26 16:10:08 -0500 init: spec files for campaign rerun

@@ -1,0 +1,31 @@
+927f9eac2163d93be96d813fcbb3a3be4cf159bc 2026-02-27 16:05:38 -0500 state: mark feature #5 Auth: Session & protected routes as complete
+9ff268d56c586bb268d13c656170d250071ec2dc 2026-02-27 16:04:30 -0500 feat: implement Auth Session & protected routes #5
+ea97aa7863dd6c2132c01f37a199f847984df6e2 2026-02-27 15:56:56 -0500 state: checkpoint after Email newsletter signup (footer)
+f91569e56c840686c4fd41ceb6c050bf217bd939 2026-02-27 15:55:37 -0500 fix: reconcile spec drift for Email Newsletter Signup
+7be36ada0e4a6a70b734fc18d43817c8831251d1 2026-02-27 15:53:05 -0500 feat: implement email newsletter signup in footer #27
+46e5d2edc92d62c909c22bf948ce7d2d1f41db60 2026-02-27 15:44:42 -0500 feat: implement social links feature (footer, share) #26
+5f7f00d5886a4aa803377cef414ccb1507204c9d 2026-02-27 15:33:31 -0500 state: checkpoint after Dark mode toggle
+d6cfda4287c0c7f4f0015305971acd3008130f13 2026-02-27 15:32:31 -0500 fix: reconcile spec drift for Dark Mode Toggle
+9730a4d9a8c0b8eae57ad1ef8e25e414a298b901 2026-02-27 15:31:43 -0500 feat: implement dark mode toggle (feature #24)
+71da5f919f1932c638970ca03bddc1c1967967e6 2026-02-27 15:24:28 -0500 state: checkpoint after Landing page (hero, search bar, market filters)
+fc9fe7d4f1870bc1a252ff9e6cbb266812dc6883 2026-02-27 15:23:30 -0500 fix: reconcile spec drift for Landing Page (hero, search bar, market filters)
+8d3ac12b0a10a84f303000fc75a3bf1884c9e8ee 2026-02-27 15:22:12 -0500 chore: update landing page spec frontmatter with component list and date
+92e6298f47a0e6f63056374b815f5ad6039a70d9 2026-02-27 15:21:52 -0500 feat: implement landing page with hero, search, and market filters (feature #8)
+eec984357e436ef6cacd7ce0be8cb0bf81e5a953 2026-02-27 15:11:58 -0500 state: checkpoint after Agent/User profile model & schema
+c71011da1dda02c03e5c3fdf2f09bcd9c9d0ec2b 2026-02-27 15:09:38 -0500 fix: reconcile spec drift for Agent/User Profile Model & Database Schema
+57f4e52d85415da87cb5953257ff00728eb973f5 2026-02-27 15:07:35 -0500 feat: implement agent profile model & database schema (feature #7)
+2e8c6342b0ae25feef25a68965fc4d58b5f5b15a 2026-02-27 14:32:42 -0500 state: checkpoint after Deal model & database schema
+65b6983387d65ff83f6bc8ad12de8bb1625d6cf8 2026-02-27 14:00:38 -0500 fix: reconcile spec drift for Deal model & database schema
+46ff55930f19b7ac578e714129bbde10d298305e 2026-02-27 13:43:55 -0500 feat: implement deal model & database schema (feature #6)
+b00338b1fa2c80496c901c0aebc9183108ffc110 2026-02-27 13:39:23 -0500 state: checkpoint after Auth: Log in
+b54248a4cf64230c7741166d738a3ca16835fd7b 2026-02-27 13:38:47 -0500 fix: reconcile spec drift for Auth: Log in
+ded2b06ec5c4f2327df80e15beddd46bd47c1897 2026-02-27 13:36:47 -0500 feat: implement auth login (feature #4) - session management, API endpoint, login page
+3c54bda11279b533b2bea6a734920c887bc7d450 2026-02-27 13:31:11 -0500 state: checkpoint after Auth: Sign up
+bfc9c384bf2095fcdd3f856b63a784af694294e5 2026-02-27 13:30:40 -0500 fix: reconcile spec drift for Auth: Sign up
+35fc98e82a7410fa0583f1aeba1530c8855d8c0b 2026-02-27 13:29:03 -0500 feat: implement auth sign up (feature #3) - registration form, API, database schema
+aec6789347bc88e3e9c6b2746a02eaf3f2802d98 2026-02-27 13:25:15 -0500 state: checkpoint after Core layout (header, nav, footer)
+fe3f13bdb22c3e6ee68f13c036a43ff62f79cc6a 2026-02-27 13:24:52 -0500 fix: reconcile spec drift for Core Layout
+3da8b4a21476a21c9b454becfc5a0ed98b4d7f28 2026-02-27 13:23:33 -0500 feat: implement core layout (feature #2) - Header, Footer, MobileMenu
+24a9065629cb2bec6f81d622143f2223f33b1ee6 2026-02-27 13:17:05 -0500 state: checkpoint after
+2837157f0a4c087a6ee3cc3327e31f0d961431d3 2026-02-27 13:11:08 -0500 feat: implement project setup (feature #1) - Next.js, Tailwind, DB, env
+bd04151b6d498f29ded3c50d56b66cc07a72dc74 2026-02-27 13:05:53 -0500 init: spec files for Haiku campaign test

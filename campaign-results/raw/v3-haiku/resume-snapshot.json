@@ -1,0 +1,7 @@
+{
+  "feature_index": 27,
+  "branch_strategy": "chained",
+  "completed_features": ["", "Core layout (header, nav, footer)", "Auth: Sign up", "Auth: Log in", "Deal model & database schema", "Agent/User profile model & schema", "Landing page (hero, search bar, market filters)", "Dark mode toggle", "Email newsletter signup (footer)"],
+  "current_branch": "auto/chained-20260227-154457",
+  "timestamp": "2026-02-27T20:56:56Z"
+}

@@ -1,0 +1,7 @@
+{
+  "feature_index": 18,
+  "branch_strategy": "chained",
+  "completed_features": ["Project setup (Next.js, Tailwind, DB, env)", "Core layout (header, nav, footer)", "Auth: Sign up", "Auth: Log in", "Deal model & database schema", "Agent/User profile model & schema", "", "Dark mode toggle", "Social links (footer, share)", "Email newsletter signup (footer)", "Auth: Session & protected routes", "Deal card component (status, image, amount, participants)", "News section / industry news feed", "Deals list page (feed, filters, pagination)", "User settings & profile edit", "Agent profile page", "Deal detail page", "Market/submarket filters (state, city, neighborhood)", "Search (address, advanced filters)", "Rankings page (top brokers, investors, lenders)", "Listings page (active for-sale/for-lease)", "Map view (deal locations, gated for logged-in)"],
+  "current_branch": "auto/chained-20260227-163536",
+  "timestamp": "2026-02-27T21:47:40Z"
+}

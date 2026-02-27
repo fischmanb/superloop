@@ -1,0 +1,24 @@
+{
+  "eval_timestamp": "2026-02-27T20:54:33Z",
+  "mechanical": {
+  "commit": "7be36ada0e4a6a70b734fc18d43817c8831251d1",
+  "feature_name": "implement email newsletter signup in footer #27",
+  "files_changed": 8,
+  "files": [".specs/features/marketing/newsletter-signup.feature.md",".specs/roadmap.md","src/__tests__/components/layout/newsletter-signup.test.ts","src/app/api/newsletter/subscribe/route.ts","src/components/layout/Footer.tsx","src/components/layout/NewsletterSignup.tsx","src/db/schema/index.ts","src/db/schema/newsletter-subscriptions.ts"],
+  "lines_added": 382,
+  "lines_removed": 5,
+  "new_type_exports": 2,
+  "type_redeclarations": 0,
+  "redeclared_type_names": [],
+  "import_count": 11,
+  "test_files_touched": true
+},
+  "agent_eval_available": true,
+  "agent_eval": {
+    "framework_compliance": "warn",
+    "scope_assessment": "focused",
+    "integration_quality": "minor_issues",
+    "repeated_mistakes": "none",
+    "eval_notes": "Solid SDD-compliant feature with minor issues: unused .returning() result in route.ts, a trivially-passing test for subscription ID that doesn't verify actual response shape, and spec drift on duplicate-email response message and test file path in frontmatter."
+  }
+}

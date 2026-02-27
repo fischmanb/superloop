@@ -1,0 +1,25 @@
+{
+  "eval_timestamp": "2026-02-27T20:57:55Z",
+  "mechanical": {
+  "commit": "ea97aa7863dd6c2132c01f37a199f847984df6e2",
+  "feature_name": "checkpoint after Email newsletter signup (footer)",
+  "files_changed": 1,
+  "files": [".sdd-state/resume.json"],
+  "lines_added": 4,
+  "lines_removed": 4,
+  "new_type_exports": 0,
+  "type_redeclarations": 0,
+  "redeclared_type_names": [],
+  "import_count": 0
+0,
+  "test_files_touched": false
+},
+  "agent_eval_available": true,
+  "agent_eval": {
+    "framework_compliance": "warn",
+    "scope_assessment": "focused",
+    "integration_quality": "minor_issues",
+    "repeated_mistakes": "none",
+    "eval_notes": "State checkpoint correctly advances feature_index to 27 but completed_features array omits Social Links (#26); only Email newsletter signup was appended despite two features being built since last checkpoint"
+  }
+}

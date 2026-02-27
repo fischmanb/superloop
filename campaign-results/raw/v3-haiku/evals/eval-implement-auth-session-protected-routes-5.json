@@ -1,0 +1,24 @@
+{
+  "eval_timestamp": "2026-02-27T21:07:00Z",
+  "mechanical": {
+  "commit": "9ff268d56c586bb268d13c656170d250071ec2dc",
+  "feature_name": "implement Auth Session & protected routes #5",
+  "files_changed": 10,
+  "files": [".specs/roadmap.md","src/__tests__/auth/auth-login.test.ts","src/__tests__/auth/auth-session.test.ts","src/__tests__/layout/core-layout.test.ts","src/app/api/auth/logout/route.ts","src/app/auth/login/LoginForm.tsx","src/components/layout/Header.tsx","src/components/layout/HeaderClient.tsx","src/components/layout/MobileMenu.tsx","src/middleware.ts"],
+  "lines_added": 720,
+  "lines_removed": 87,
+  "new_type_exports": 0,
+  "type_redeclarations": 0,
+  "redeclared_type_names": [],
+  "import_count": 14,
+  "test_files_touched": true
+},
+  "agent_eval_available": true,
+  "agent_eval": {
+    "framework_compliance": "warn",
+    "scope_assessment": "focused",
+    "integration_quality": "minor_issues",
+    "repeated_mistakes": "none",
+    "eval_notes": "Correct server/client architecture and spec exists, but Header.tsx (server component) has an invalid onClick handler on the Log Out button causing a React RSC error and duplicate desktop button; roadmap left at 🔄 instead of ✅; Agents.md missing round entry for feature #5."
+  }
+}

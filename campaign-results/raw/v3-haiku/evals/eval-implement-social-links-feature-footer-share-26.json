@@ -1,0 +1,24 @@
+{
+  "eval_timestamp": "2026-02-27T20:45:46Z",
+  "mechanical": {
+  "commit": "46e5d2edc92d62c909c22bf948ce7d2d1f41db60",
+  "feature_name": "implement social links feature (footer, share) #26",
+  "files_changed": 8,
+  "files": [".specs/design-system/components/footer.md",".specs/design-system/components/share-button.md",".specs/features/foundation/social-links.feature.md",".specs/roadmap.md","src/__tests__/social/social-links.test.ts","src/app/deals/[slug]/page.tsx","src/components/deals/ShareButton.tsx","src/components/layout/Footer.tsx"],
+  "lines_added": 773,
+  "lines_removed": 7,
+  "new_type_exports": 0,
+  "type_redeclarations": 0,
+  "redeclared_type_names": [],
+  "import_count": 12,
+  "test_files_touched": true
+},
+  "agent_eval_available": true,
+  "agent_eval": {
+    "framework_compliance": "warn",
+    "scope_assessment": "moderate",
+    "integration_quality": "minor_issues",
+    "repeated_mistakes": "isApproved_filter_missing_on_deal_detail_page",
+    "eval_notes": "Social links (footer/ShareButton) correctly spec'd/tested/implemented, but deal detail page introduced outside feature #26 scope and omits the documented isApproved authorization filter"
+  }
+}
