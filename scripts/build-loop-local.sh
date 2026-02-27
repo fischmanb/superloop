@@ -1204,7 +1204,10 @@ run_build_loop() {
                 sleep "$MIN_RETRY_DELAY"
                 # Reset branch to starting point for clean retry (reuse branch, don't create new one)
                 git reset --hard "$BRANCH_START_COMMIT" 2>/dev/null || true
-                git clean -fd 2>/dev/null || true
+                # WHY: git clean -fd without exclusions nukes node_modules (and other critical
+                # untracked dirs) when .gitignore is absent at BRANCH_START_COMMIT. This causes
+                # cascade failure for all subsequent features. (Round 31, Bug 1 + Bug 3)
+                git clean -fd -e node_modules -e .env.local -e .sdd-state -e logs -e .build-worktrees 2>/dev/null || true
                 echo ""
             fi
 
@@ -1364,6 +1367,41 @@ run_build_loop() {
                 reason=$(parse_signal "BUILD_FAILED" "$BUILD_RESULT")
                 warn "Build failed: $reason"
             else
+                # ── Fallback: infer success on retries when agent forgot FEATURE_BUILT signal ──
+                # WHY: Retry agents sometimes fix everything and commit but forget to emit
+                # the FEATURE_BUILT signal. If HEAD advanced and build+tests pass, the feature
+                # is done — don't waste it. (Round 31, Bug 2)
+                local head_now
+                head_now=$(git rev-parse HEAD 2>/dev/null || echo "")
+                if [ "$attempt" -gt 0 ] && [ -n "$head_now" ] && [ "$head_now" != "$BRANCH_START_COMMIT" ]; then
+                    if check_working_tree_clean && check_build; then
+                        if ! should_run_step "test" || check_tests; then
+                            warn "Retry produced passing build without FEATURE_BUILT signal — inferring success"
+                            LOOP_BUILT=$((LOOP_BUILT + 1))
+                            local feature_end=$(date +%s)
+                            local feature_duration=$((feature_end - FEATURE_START))
+                            success "Feature $LOOP_BUILT inferred-built: $feature_label ($(format_duration $feature_duration))"
+                            LOOP_TIMINGS+=("✓ $feature_label (inferred): $(format_duration $feature_duration)")
+                            feature_done=true
+
+                            BUILT_FEATURE_NAMES+=("$feature_label")
+                            FEATURE_TIMINGS+=("$feature_duration")
+                            FEATURE_SOURCE_FILES+=("")
+                            FEATURE_TEST_COUNTS+=("${LAST_TEST_COUNT:-}")
+                            FEATURE_TOKEN_USAGE+=("$(parse_token_usage "$BUILD_RESULT")")
+                            FEATURE_STATUSES+=("built")
+                            FEATURE_MODELS+=("${RETRY_MODEL:-${AGENT_MODEL:-default}}")
+
+                            if [ "$ENABLE_RESUME" = "true" ]; then
+                                write_state "$i" "$strategy" "$(completed_features_json)" "${CURRENT_FEATURE_BRANCH:-}"
+                                git add -f .sdd-state/resume.json 2>/dev/null && \
+                                  git commit -m "state: checkpoint after ${feature_label} (inferred)" --no-verify 2>/dev/null || true
+                            fi
+
+                            break
+                        fi
+                    fi
+                fi
                 warn "Build did not produce a clear success signal"
             fi
 

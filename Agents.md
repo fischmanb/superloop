@@ -806,6 +806,23 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 **Verification**: `bash -n` clean on both scripts. All test suites pass. `git diff --stat` shows only the 3 allowed files (scripts/build-loop-local.sh, scripts/overnight-autonomous.sh, Agents.md).
 
+### Round 31: Retry resilience — protect node_modules, add signal fallback, fix cascade failure (branch: claude/update-build-loop-script-dc8rH)
+
+**Date**: Feb 27, 2026
+
+**What was asked**: Fix three bugs discovered in a 28-feature build campaign. Bug 1: `git clean -fd` nukes `node_modules` on retry because `BRANCH_START_COMMIT` has no `.gitignore`. Bug 2: Retry agent succeeds (39/39 tests, clean tsc) but loop doesn't detect it because agent didn't emit `FEATURE_BUILT:` signal. Bug 3: Features 2-28 instant-fail with exit code 1 after Feature 1 was marked failed. Investigate Bug 3 root cause before implementing.
+
+**What actually happened**:
+- **Bug 3 investigation**: Traced the full agent invocation chain (`agent_cmd` → `claude-wrapper.sh` → `run_agent_with_backoff`), `build_feature_prompt` dependencies, and `generate_codebase_summary` execution. Root cause: Bug 3 is a cascade failure caused by Bug 1. When Feature 1's retry runs `git reset --hard "$BRANCH_START_COMMIT"`, it restores a commit without `.gitignore`. The subsequent `git clean -fd` then operates with no exclusions, removing ALL untracked files (`node_modules/`, `.env.local`, `.sdd-state/`, `logs/`, etc.). These are never reinstalled between features, so Features 2-28 run in a degraded environment where the project cannot build or test, causing rapid agent failure (2-4 seconds per feature). Fix is entirely within `build-loop-local.sh`.
+- **Fix 1**: Changed `git clean -fd` at the retry reset path to `git clean -fd -e node_modules -e .env.local -e .sdd-state -e logs -e .build-worktrees`. Added WHY comment explaining the cascade failure mechanism.
+- **Fix 2**: Added signal fallback immediately before the "Build did not produce a clear success signal" warning. When `$attempt > 0` (retry) AND HEAD has advanced past `$BRANCH_START_COMMIT` AND working tree is clean AND `check_build` passes AND `check_tests` passes, the feature is inferred as successfully built. Logs "Retry produced passing build without FEATURE_BUILT signal — inferring success". Adds to `BUILT_FEATURE_NAMES`, increments `LOOP_BUILT`, persists resume state.
+- **Fix 3**: Addressed by Fix 1 — the git clean exclusions prevent the cascade failure that caused Features 2-28 to instant-fail.
+- `Agents.md`: This entry.
+
+**What was NOT changed**: `lib/reliability.sh`, `lib/codebase-summary.sh`, `lib/claude-wrapper.sh`, `lib/validation.sh`, `lib/eval.sh`, `scripts/overnight-autonomous.sh`, all test scripts, `.specs/`, `CLAUDE.md`, `ONBOARDING.md`. No functions removed or renamed. Existing `check_build()`, `check_tests()`, `should_run_step()`, `run_agent_with_backoff()` logic unchanged.
+
+**Verification**: `bash -n` clean. `grep -n 'git clean.*-e node_modules'` matches. `grep -n 'Retry produced passing build'` matches. `DRY_RUN_SKIP_AGENT=true bash tests/dry-run.sh` passes. `bash tests/test-reliability.sh` all assertions pass. `git diff --stat` shows only allowed files.
+
 ---
 
 ## Known Gaps
