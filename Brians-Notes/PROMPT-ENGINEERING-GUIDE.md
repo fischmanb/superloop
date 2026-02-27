@@ -59,13 +59,16 @@ Explicit file allowlist, banned commands, and a `git diff --stat` gate. This sec
 ```
 
 ### 2. Preconditions
-- Confirm working directory with `pwd`
-- Confirm clean working tree with `git status`
+Agents have landed on wrong branches and wrong commits multiple times. Preconditions must be defensive — verify state, don't assume it.
+
+- `cd ~/auto-sdd` (explicit, not assumed)
+- `git checkout main` (explicit — agents default to whatever branch is checked out)
+- `git log --oneline -1` — confirm HEAD matches the expected commit hash. **Always include the expected hash in the prompt.** If it doesn't match, STOP.
+- Confirm file state if the task targets specific lines (e.g., `wc -l`, `grep -c` for a known pattern). If it doesn't match, STOP.
 - `git fetch origin`
-- **Verify local main is pushed**: `git log --oneline origin/main..main` — if this shows ANY commits, STOP IMMEDIATELY. Local main is ahead of origin/main. Report the divergence and take no further action. Brian must `git push origin main` before the prompt can proceed. (Agents fork from `origin/main`, not local `main` — stale origin means the agent works against an old codebase and produces merge conflicts.)
-- Identify current state (main HEAD, latest claude/* branch)
-- Fork a new branch from the most recent
-- Report which branch was forked from and why
+- **Verify local main is pushed**: `git log --oneline origin/main..main` — if this shows ANY commits, STOP IMMEDIATELY. Local main is ahead of origin/main. Report the divergence and take no further action. Brian must `git push origin main` before the prompt can proceed.
+- `git checkout -b claude/<branch-name>-$(openssl rand -hex 3)`
+- Report which branch was forked from and the HEAD hash
 
 ### 3. Implementation
 - Specific, line-level instructions for each file change
@@ -117,6 +120,8 @@ Brian runs the investigation prompt, pastes the results, then Claude writes the 
 ## Prompt Sizing and Splitting
 
 The project's core principle — fresh contexts per stage to avoid context rot — applies to agent prompts themselves. A prompt that tries to do too much produces the same degradation it's trying to prevent: agents lose track of constraints, skip steps, define functions without calling them, and exceed scope.
+
+**Length discipline**: First drafts of prompts are consistently ~2x the effective length. This is a known pattern — cut aggressively before delivering. Describe intent, not implementation code. Agents write code; prompts tell them *what* to change and *why*, not *how* at the line level. If you're writing bash/code snippets in the prompt body, you're being too prescriptive — the agent has the codebase and can read it. Exception: short verification commands (grep, sed -n) that confirm the agent is looking at the right lines.
 
 **Rule of thumb**: A single implementation prompt should target one cohesive unit of work that modifies no more than 3-4 files with interrelated changes. When a task exceeds this, split it into sequential prompts where each round commits its work and the next round builds on a verified foundation.
 
