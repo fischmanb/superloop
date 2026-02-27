@@ -107,10 +107,20 @@ Ordered by efficiency gain per complexity added:
    - **stakd-v2 (Sonnet 4.6)**: 24/28 built as of 2026-02-27 ~16:00 EST. Eval sidecar + drift checks running. ~16.2 min/feature observed.
    - **stakd-v3 (Haiku 4.5)**: 14/28 built. Parallel speed test. Same 28 features, fresh repo at `~/auto-sdd/stakd-v3`. ~18.1 min/feature observed.
    - **Throughput finding**: Token speed does NOT translate to build speed. Haiku 2x faster tokens but only marginally faster builds (~16-18 min/feature both models) because npm install, TypeScript compile, tests, drift checks are fixed-cost CPU/disk-bound steps that dominate wall time. Model speed only affects agent thinking fraction. Parallelism across features matters more than per-feature model speed.
-   - **Build log recovery issue**: tee PIDs 76573 (v2) and 19527 (v3) hold open fds to build logs. Files active via lsof but stat/ls/cat fail — deleted dir entries with open inodes. macOS lacks /proc/pid/fd recovery path. v3 build log + cost log + evals captured to `~/auto-sdd/campaign-results/raw/`; v2 build log still unrecovered.
+   - **Build logs**: Located at `stakd-v2/logs/build-*.log` and `stakd-v3/logs/build-*.log`. tee processes write them live. If `ls` or `cat` fail, the files still exist — search harder (check exact paths, use `find`, verify tee PID is alive).
    - **Agent push discipline**: Agents ignore "do NOT push" instructions 100% of the time across Rounds 32-34. Documented as expected behavior, not a bug to fix.
-   - Round 35 merged to main but **not yet pushed to origin** (`git push origin main` pending).
-   - **Data snapshot**: `~/auto-sdd/campaign-results/` created with `raw/v2-sonnet/` and `raw/v3-haiku/` subdirs. Git logs, roadmap snapshots, v3 cost logs + evals captured. Reports pending campaign completion.
+   - Round 35 merged to main and pushed to origin.
+   - **Data snapshot**: `~/auto-sdd/campaign-results/` — central location for all campaign data and analysis. Structure:
+     ```
+     campaign-results/
+       raw/
+         v2-sonnet/       # git-log.txt, roadmap-snapshot.md, build logs, cost logs, evals
+         v3-haiku/        # same structure
+       reports/
+         v2-sonnet/       # generated analysis (throughput, quality, cost breakdowns)
+         v3-haiku/        # same structure
+     ```
+     After campaigns complete: copy final build logs, cost logs (`logs/cost-log.jsonl`), build summaries (`logs/build-summary-*.json`), and eval results into `raw/`. Generate reports from raw data into `reports/`. This folder is the single source of truth for campaign comparison.
 2. **Local model integration** — Replace cloud API calls with local LM Studio endpoints on Mac Studio. The archived `archive/local-llm-pipeline/` system is reference material. *Not started.*
 3. **Adaptive routing / parallelism** — Only if data from 1–2 shows remaining sequential bottleneck justifies the complexity. *Deprioritized.*
 
@@ -126,7 +136,7 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 - **Eval sidecar system (2026-02-26)**: Round 27: `lib/eval.sh` — four functions (mechanical eval, eval prompt generation, signal parsing, result writing). 53-assertion test suite. Round 28: `scripts/eval-sidecar.sh` — standalone sidecar that polls for new commits, runs mechanical evals (and optionally agent evals), writes per-feature JSON, aggregates campaign summary on exit. Round 28b: auto-launches sidecar from both build scripts as background process, `EVAL_AGENT=true` by default. Round 29: cooperative drain shutdown — sentinel file triggers graceful queue drain before campaign summary instead of hard SIGTERM. Both build scripts manage sidecar lifecycle (`start_eval_sidecar()` / `stop_eval_sidecar()`). Observational only — never blocks builds, never modifies files.
 - **claude-wrapper.sh path fix (2026-02-26)**: Relative path to `lib/claude-wrapper.sh` broke when `PROJECT_DIR` != repo root. Fixed in both `build-loop-local.sh` and `overnight-autonomous.sh` to use `$SCRIPT_DIR/../lib/` instead.
 - **Mechanical validation gates (2026-02-26)**: Round 30: Three non-blocking post-build gates added to both build scripts. (1) Test count regression — tracks high-water mark of passing tests across features, warns on drop. (2) Dead export detection — scans for exported symbols with zero import sites. (3) Static analysis — auto-detects linter config (ESLint, Biome, flake8, ruff, Clippy, golangci-lint) and runs if present. Default `POST_BUILD_STEPS` is now `test,dead-code,lint`. All gates warn only, never fail the build.
-- **Retry resilience + signal hardening + shell fixes (2026-02-27)**: Round 31: git clean exclusions, signal fallback, cascade failure fix. Round 31.1: Parameterized retry prompt. Rounds 32-34: Shell portability (`#!/usr/bin/env bash` on 17 scripts), PROJECT_DIR absolute resolution, claude-wrapper.sh rewrite (no `set -e`, stderr to file, unset CLAUDECODE), MAIN_BRANCH rejects `auto/*`. Round 35: Sidecar source/dedup/health fixes, model log jq fix. All merged to main (`dbf2997`). **154 assertions passing.** Not yet pushed to origin.
+- **Retry resilience + signal hardening + shell fixes (2026-02-27)**: Round 31: git clean exclusions, signal fallback, cascade failure fix. Round 31.1: Parameterized retry prompt. Rounds 32-34: Shell portability (`#!/usr/bin/env bash` on 17 scripts), PROJECT_DIR absolute resolution, claude-wrapper.sh rewrite (no `set -e`, stderr to file, unset CLAUDECODE), MAIN_BRANCH rejects `auto/*`. Round 35: Sidecar source/dedup/health fixes, model log jq fix. All merged to main (`dbf2997`). **154 assertions passing.**
 - **PROMPT-ENGINEERING-GUIDE.md (2026-02-27)**: Verification section updated to require all 5 test suites (test-reliability, test-eval, test-validation, test-codebase-summary, dry-run).
 - **Agent push discipline (2026-02-27)**: Agents ignore "do NOT push" instructions 100% of the time (Rounds 32-34). Documented as expected behavior — prompt wording makes no difference. Not a bug to fix.
 
