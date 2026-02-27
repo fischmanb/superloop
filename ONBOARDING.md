@@ -178,23 +178,27 @@ REVIEW_CLEAN / REVIEW_FIXED / REVIEW_FAILED    # Review agent
 ```bash
 cd ~/auto-sdd
 
+# macOS ships bash 3.2; these scripts require bash 5+.
+# Install: brew install bash
+# All invocations below use /opt/homebrew/bin/bash explicitly.
+
 # Syntax check all scripts
-bash -n scripts/build-loop-local.sh
-bash -n scripts/overnight-autonomous.sh
-bash -n lib/reliability.sh
-bash -n lib/validation.sh
+/opt/homebrew/bin/bash -n scripts/build-loop-local.sh
+/opt/homebrew/bin/bash -n scripts/overnight-autonomous.sh
+/opt/homebrew/bin/bash -n lib/reliability.sh
+/opt/homebrew/bin/bash -n lib/validation.sh
 
 # Unit tests
-./tests/test-reliability.sh        # 68 assertions
-./tests/test-validation.sh         # 10 assertions
-./tests/test-codebase-summary.sh   # 23 assertions
-./tests/test-eval.sh               # 53 assertions
+/opt/homebrew/bin/bash ./tests/test-reliability.sh        # 68 assertions
+/opt/homebrew/bin/bash ./tests/test-validation.sh         # 10 assertions
+/opt/homebrew/bin/bash ./tests/test-codebase-summary.sh   # 23 assertions
+/opt/homebrew/bin/bash ./tests/test-eval.sh               # 53 assertions
 
 # Structural dry-run (no agent/API needed)
-DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
+DRY_RUN_SKIP_AGENT=true /opt/homebrew/bin/bash ./tests/dry-run.sh
 
 # Full dry-run (requires claude CLI + ANTHROPIC_API_KEY)
-./tests/dry-run.sh
+/opt/homebrew/bin/bash ./tests/dry-run.sh
 ```
 
 ---
@@ -263,12 +267,12 @@ See `.specs/learnings/agent-operations.md` for the full consolidated catalog. Al
 **Run the build loop against a project:**
 ```bash
 cd ~/auto-sdd
-PROJECT_DIR=/path/to/project MAX_FEATURES=4 ./scripts/build-loop-local.sh
+PROJECT_DIR=/path/to/project MAX_FEATURES=4 /opt/homebrew/bin/bash ./scripts/build-loop-local.sh
 ```
 
 **Resume after a crash:**
 ```bash
-./scripts/build-loop-local.sh --resume
+/opt/homebrew/bin/bash ./scripts/build-loop-local.sh --resume
 ```
 
 **Check what's on GitHub vs local:**
