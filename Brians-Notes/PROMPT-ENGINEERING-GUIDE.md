@@ -123,9 +123,12 @@ The project's core principle — fresh contexts per stage to avoid context rot �
 
 **Length discipline**: First drafts of prompts are consistently ~2x the effective length. This is a known pattern — cut aggressively before delivering. Describe intent, not implementation code. Agents write code; prompts tell them *what* to change and *why*, not *how* at the line level. If you're writing bash/code snippets in the prompt body, you're being too prescriptive — the agent has the codebase and can read it. Exception: short verification commands (grep, sed -n) that confirm the agent is looking at the right lines.
 
+**Context budget rule**: Every prompt must be scoped so the agent's total context consumption — prompt text + files read + code written + tool output + verification — stays within the safely effective context window (no degradation or rot). Estimate this before delivering the prompt. If the estimated total scope would exceed ~75% of the effective window, split into multiple rounds. For example: if a task estimates at ~1.5x the safe window, split into two rounds each targeting ~0.75x, not one round that pushes the boundary. Agents that run hot against the context ceiling produce the "wait, actually..." pattern — repeated self-corrections, lost constraints, and unreliable output. The cost of a second round is near zero; the cost of context rot is a wasted run.
+
 **Rule of thumb**: A single implementation prompt should target one cohesive unit of work that modifies no more than 3-4 files with interrelated changes. When a task exceeds this, split it into sequential prompts where each round commits its work and the next round builds on a verified foundation.
 
 **Splitting criteria** (any one of these warrants a split):
+- Estimated total agent context consumption exceeds ~75% of the safe effective window
 - More than ~4 files being modified with non-trivial changes in each
 - Changes to core orchestration logic AND a new algorithm/function AND test additions AND prompt template rewrites in the same prompt
 - The prompt itself exceeds ~200 lines (the prompt is consuming the agent's context budget before implementation starts)
