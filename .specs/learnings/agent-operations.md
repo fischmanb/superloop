@@ -68,6 +68,15 @@ Every agent run that pushes creates a remote branch that never gets cleaned up. 
 ### Force push can destroy agent work
 Round 8: `git push --force-with-lease` to clean up node_modules also wiped agent branches with unmerged work. Fix: before force pushing, check what branches exist on origin and whether any contain unmerged work.
 
+### Client components transitively importing server-only modules
+Campaigns: stakd-v1, stakd-v2. The most common post-campaign build failure. A client component (`"use client"`) imports an intermediate file (e.g., `lib/news.ts`) that imports the database layer (`db/index.ts` → `postgres`). Webpack bundles the entire chain into the client bundle, which fails because `postgres` requires Node.js builtins (`net`, `tls`, `fs`, `perf_hooks`). The agent doesn't catch it because `npm run build` isn't always run as a post-implementation check, and the import chain is indirect.
+
+**Root cause**: Agents treat import boundaries as local decisions — they check whether *their* file is `"use client"` but don't trace the transitive import graph to verify nothing server-only leaks in.
+
+**Fix pattern**: Break the chain. Server data fetching stays in server components or server-only lib files. Client components receive data via props from parent server components. If an intermediate file serves both, split it: `lib/news-server.ts` (has db imports) and `lib/news-client.ts` (pure types/utils, no db).
+
+**Prevention**: Every feature build prompt must include a post-build `npm run build` check. The build loop already does this via the compile check step, but the agent's own implementation step should also verify. Additionally, the codebase summary's import graph should flag any `"use client"` file whose transitive imports include `db/` or `postgres` as a build-breaking violation. This is framework-agnostic — any SSR framework (Next.js, Remix, Nuxt, SvelteKit) with server/client code splitting will hit this if agents don't respect module boundaries.
+
 ---
 
 ## Operational Process Lessons

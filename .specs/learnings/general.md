@@ -38,7 +38,10 @@ _No learnings yet._
 
 <!-- Common issues, debugging techniques -->
 
-_No learnings yet._
+### 2026-02-28 (stakd-v2 post-campaign)
+- **Failure mode**: `Module not found: Can't resolve 'net'/'tls'/'fs'/'perf_hooks'` during `next build` — always means a client component is transitively importing a Node.js-only module (typically `postgres` via the db layer). Trace the import chain from the error's "Import trace" output to find where the server/client boundary is violated.
+- **Fix pattern**: Never import db layer or server-only libs from client components, even indirectly. If a utility file serves both server and client code, split it. Client components get server data via props, not imports.
+- **Scope**: Framework-agnostic principle — any SSR framework (Next.js, Remix, Nuxt, SvelteKit) with server/client code splitting will hit this if agents don't respect module boundaries.
 
 ---
 

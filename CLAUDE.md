@@ -444,6 +444,16 @@ MAX_DRIFT_RETRIES=1       # Retry attempts for fixing drift (default: 1)
 - Features must work end-to-end or they are not done.
 - Real validation, real error handling, real flows.
 
+### Transitive Import Boundary Check (CRITICAL — SSR frameworks)
+
+If the target project uses an SSR framework (Next.js, Remix, Nuxt, SvelteKit, etc.) with server/client code splitting:
+
+After implementing ANY feature that creates or modifies a client-side component (`"use client"` in Next.js, equivalent in other frameworks):
+1. Trace every import in the component. For each imported file, trace ITS imports recursively.
+2. If ANY file in the transitive chain imports server-only modules (database drivers like `postgres`/`mysql2`, Node.js builtins like `fs`/`net`/`tls`/`crypto`, or ORM server modules) — the production build WILL fail.
+3. Fix: move server-only data fetching to the parent server component and pass results as props. Split shared utility files into server and client variants if needed.
+4. Run the project's production build command (`npm run build`, `next build`, etc.) to verify. Dev mode lazy-loads and won't catch these errors.
+
 ## Git Discipline
 
 - **Before starting work**: After `git fetch origin`, run `git log --oneline origin/main..main`. If ANY commits appear, STOP IMMEDIATELY — local main is ahead of origin/main. Report the divergence and take no further action. Brian must push before work can proceed.
