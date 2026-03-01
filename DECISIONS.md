@@ -345,3 +345,17 @@
 
 **Decision:** Handoff protocol and response scope discipline documented in repo only (HANDOFF-PROTOCOL.md, L-0098), not as memory slots. Existing 15/30 slots are correct.
 **Why:** L-0097 — memory triggers (always-injected), repo specifies (on-demand). Handoff triggers on session retirement (rare), not every response. Response scope is covered by memory #10 (purposefulness). Adding memory slots for rare triggers wastes always-injected budget.
+
+---
+
+## 2026-03-01 — core.md created
+
+**Decision:** Created `.specs/learnings/core.md` with 16 curated entries from L-0042–L-0103, organized into 5 sections (Response Discipline, Agent Operations, Evidence Processing, System Architecture, Meta-Process). 52 lines total.
+**Why:** L-0090. ONBOARDING.md referenced core.md but file never existed. Fallback was reading all of agent-operations.md (780+ lines), hostile to fresh onboard. The 16 entries are the ones that, when not internalized, cause repeated failures.
+**Rejected:** Including all 62 entries (defeats curation purpose). Fewer than 15 (misses critical patterns). Organizing by type instead of theme (type is for storage; theme is for comprehension at onboard time).
+
+---
+
+## 2026-03-01 — Approval gate violation L-0104
+
+**Decision:** Logged L-0104. "Do what you need to do" ≠ "yes to push." Broad directives are not explicit push approval. Memory #8 rule stands as written.
