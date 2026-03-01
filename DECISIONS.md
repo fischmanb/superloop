@@ -251,3 +251,12 @@
 **Decision:** When outputting agent prompts, if subsequent actions in the same response will move HEAD (commits, pushes), either output the prompt AFTER those actions with the final HEAD hash, or explicitly warn Brian to wait before pasting. The prompt's precondition must always reflect the HEAD that will exist when he pastes it.
 **Why:** Brian pasted a prompt expecting HEAD `c7ffb4f`, but 3 more commits had moved HEAD to `dd5cdb4` by the time the response finished. Agent precondition check would have failed. Responsibility for sequencing is on Claude, not Brian — "no YOU need to tell me to wait."
 **Rejected:** Relying on user to notice HEAD drift mid-response (invisible to them until agent fails).
+
+
+---
+
+## 2026-03-01 — Tool call limit: qualitative not numeric
+
+**Decision:** Drop flat "10 tool calls per response" limit. Replace with qualitative guidance: be purposeful, use targeted reads over full reads when sufficient, stop at natural decision boundaries, don't explore recursively without reason. No-batching rule stays for auditability. Desktop Commander's fileReadLineLimit (1000) is per-call guard.
+**Why:** Repo's largest file is 439 lines (~1.5K tokens). All key context files total ~2000 lines (~8K tokens) — 4% of context window. A flat count of 10 was binding on checkpoints (10 calls, ~200 lines total output) while allowing 5 full-file reads that would consume 10x more context. The constraint was a blunt proxy for "don't spiral," but spiraling is a behavior problem, not a counting problem. Brian: "how many lines does a single full file have?"
+**Rejected:** Flat 10-call limit (penalized lightweight ops, didn't penalize expensive ones). Weighted counting (requires token measurement mid-response, which isn't available).
