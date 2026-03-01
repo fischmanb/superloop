@@ -31,7 +31,47 @@ Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capabi
 
 ---
 
-## Current State (as of 2026-02-28)
+## Design Principles
+
+These apply across the entire project — code, documentation, knowledge capture, agent prompts, and any future tooling. They are standing constraints, not suggestions.
+
+### 1. Grepability
+
+Every structured artifact (learnings, state files, specs, metadata) must be greppable by its key fields without parsing logic. No nested structures that require jq, regex groups, or multi-line matching to extract meaning. If `grep -i "tag:prompt-engineering"` can't find relevant entries, the format is wrong.
+
+This means: flat key-value metadata, one logical entry per block, consistent delimiters, IDs and tags on their own lines. Content can be prose; metadata cannot be.
+
+Why: The primary consumer of these files today is Claude grepping markdown in a chat session. The secondary consumer is a future script building a graph. Both need the same thing — fast, reliable extraction without brittle parsing.
+
+### 2. Graph-readiness
+
+All knowledge capture should be structured so that the transition to a graph store is a format conversion, not a knowledge extraction project. This means:
+
+- **Unique IDs** on every discrete knowledge entry (learning, decision, finding)
+- **Explicit relationships** between entries, using a small fixed set of edge types
+- **Consistent metadata** (type, tags, date, confidence, status) that maps directly to node properties
+- **No implicit knowledge** — if two things are related, there's a `Related:` field saying so. Don't rely on proximity in the file or shared section headings to imply connection.
+
+### 3. Relationship type schema (graph edge types)
+
+Defined here, enforced everywhere. Keep the set small — every new edge type increases graph density and query complexity. Specificity belongs in tags and body text, not edge types.
+
+| Edge type | Meaning | Example |
+|-----------|---------|---------|
+| `related_to` | General topical connection. Default when the relationship exists but doesn't fit a stronger type. | L-0042 (push discipline) ↔ L-0015 (agent behavior) |
+| `supersedes` | This entry replaces or updates an earlier one. The earlier entry's status should be `superseded`. | L-0051 (revised retry logic) supersedes L-0030 (original retry logic) |
+| `depends_on` | This entry's validity or applicability requires the referenced entry to hold. Directional. | L-0060 (sidecar feedback) depends_on L-0045 (eval system) |
+| `contradicts` | These entries are in tension. Both may be valid in different contexts, or one may be wrong. Requires human judgment to resolve. | L-0070 (agents are faster with concise prompts) contradicts L-0071 (agents miss requirements with terse prompts) |
+
+**Rules:**
+- Every `Related:` field must specify the edge type: `Related: L-0015 (related_to), L-0030 (supersedes)`
+- No new edge types without Brian's approval. If none of these four fit, use `related_to` and add context in the body.
+- `supersedes` and `depends_on` are directional. `related_to` and `contradicts` are bidirectional.
+- When an entry is created with a relationship, the referenced entry should be updated to include the back-reference. This is a maintenance task, not a blocker — missing back-references get caught during periodic sweeps.
+
+---
+
+## Current State (as of 2026-03-01)
 
 ### What works
 
@@ -372,9 +412,8 @@ A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
 **Fresh onboard (state file missing or `last_check_ts` > 24h stale)**:
 - Full read of ONBOARDING.md. This is the only case where the whole file gets read.
 - Read `.specs/learnings/agent-operations.md` — the consolidated failure catalog and process lessons. These hard-won failure modes repeat if not internalized at session start.
-- **Flush stale captures**: If `pending_captures` is non-empty, reconcile them into the **Active Considerations** section immediately.
-- **Staleness sweep**: Check each item in Active Considerations and Other active items. If an item is clearly done (has ✅, "merged", "complete", "done", or describes work that's already in the priority stack), remove it. This catches items that were marked done but never pruned by the session that completed them.
-- Report status. No other file writes, no commits, no edits beyond protocol housekeeping (flushes, pruning).
+- **Flush stale captures**: If `pending_captures` is non-empty, reconcile them into the **Active Considerations** section immediately. This is the only write permitted during fresh onboard.
+- Report status. No other file writes, no commits, no edits. First response is read-only.
 
 **Continuing session (state file < 24h, recognizably the same work context)**:
 - Read/write `.onboarding-state` per the per-response protocol. That's it.
@@ -409,7 +448,7 @@ These are as important as the capture rules. Capturing without pruning is how th
 
 **3. Remediation section is frozen:** The remediation checklist is historical and compressed. New work goes into Active Considerations while active, gets pruned per rule 1 when done. Nothing gets appended to the remediation section.
 
-**4. Fresh onboard staleness sweep:** Every fresh onboard (full read) includes checking Active Considerations for completed items. Anything with ✅, "merged," "complete," "done," or that describes work already captured in the priority stack gets removed. This is the safety net for items that slipped through same-session pruning.
+**4. Pre-write staleness check:** Before adding a new item to Active Considerations, scan existing items. If any are clearly done (✅, "merged," "complete," "done," or describes work already captured in the priority stack), move them to the learnings system (when available) or note for Brian. This keeps the section clean without requiring a special onboard ceremony.
 
 **5. Priority stack hygiene:** When a priority stack item is fully complete (not just "in progress"), move it out of the numbered list. Add a one-line "Recently completed" entry below the stack if the next session needs to know. The stack should only contain actionable next steps.
 
