@@ -110,6 +110,8 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 
 ### Other active items
 
+- **Learnings system design — Option C (2026-03-01)**: Constitutional "core learnings" file (curated, commonly read on fresh onboard, mix of types) + separate typed catalog files (comprehensive). Core entries duplicated in their proper type files — core is a self-contained read, not a pointer file. Standing design principles: (1) grepability — every entry greppable by ID, type, tag, date without parsing logic; (2) graph-readiness — format should make graph store transition a format conversion, not knowledge extraction. Relationship type schema must be defined before first entry — small set (~4-5 general types to keep graph sparse). All pruned knowledge from ONBOARDING.md active items must be preserved in the learnings system, not just git history. *Schema design phase — no implementation started.*
+- **ONBOARDING.md maintenance rules (2026-03-01)**: Added in `a8d0674` but needs revision — first-response fresh onboard must stay read-only (no staleness sweep writes). Pruning logic: check before new writes, not during onboard. Archive destination for pruned items TBD (pending learnings system design).
 - **Knowledge graph for workflow continuity (2026-02-28)**: Proposed as solution to cross-session context loss exposed by transcript isolation. Scope: personal workflow tool first (track entities/relationships across sessions), productize later. Real constraint is scope discipline. *Design phase — no implementation started.*
 
 ---
