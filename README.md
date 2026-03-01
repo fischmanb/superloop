@@ -54,7 +54,7 @@ Full campaign data, raw logs, and analysis in [`campaign-results/`](campaign-res
 
 **78% build failure rate was not a code problem.** Round 11 diagnosed a sustained failure rate. Root cause: API credit exhaustion, not context loss or bad prompts. The system was retrying doomed calls. Credit exhaustion detection now halts immediately instead of burning cycles.
 
-The full failure catalog with remediation details is in [`.specs/learnings/agent-operations.md`](.specs/learnings/agent-operations.md). The round-by-round work log is in [`Agents.md`](Agents.md).
+The full failure catalog lives in [`learnings/`](learnings/) — entries across 5 type files (failure patterns, process rules, empirical findings, domain knowledge, architectural rationale), with the highest-signal entries curated in [`learnings/core.md`](learnings/core.md). Each entry uses a flat key:value schema with global L-XXXX IDs. The round-by-round work log is in [`Agents.md`](Agents.md).
 
 ---
 
@@ -101,22 +101,28 @@ Every Claude CLI invocation is wrapped through `lib/claude-wrapper.sh`, which ex
 
 ---
 
+## Developer Workflow
+
+**Checkpoint command.** Saying "checkpoint" in a chat session (or `/checkpoint` in Claude Code) triggers a deterministic context management update: flush pending captures to `ACTIVE-CONSIDERATIONS.md`, append decisions to `DECISIONS.md`, flag learnings for review, verify `ONBOARDING.md` hash integrity, and commit. One word replaces manual reconciliation across five files. See [`.claude/commands/checkpoint.md`](.claude/commands/checkpoint.md).
+
+---
+
 ## File Structure
 
 ```
 auto-sdd/
 ├── scripts/
-│   ├── build-loop-local.sh        # Main build loop (2162 lines)
-│   ├── overnight-autonomous.sh    # Overnight automation variant (1310 lines)
-│   └── eval-sidecar.sh            # Eval sidecar — polls commits, runs evals (393 lines)
+│   ├── build-loop-local.sh        # Main build loop
+│   ├── overnight-autonomous.sh    # Overnight automation variant
+│   └── eval-sidecar.sh            # Eval sidecar — polls commits, runs evals
 │
 ├── lib/
 │   ├── reliability.sh             # Shared runtime: locking, backoff, state, truncation,
-│   │                              #   cycle detection, crash recovery (594 lines)
-│   ├── codebase-summary.sh        # Cross-feature context: components, types, imports (269 lines)
-│   ├── eval.sh                    # Eval functions: mechanical checks, prompt gen, signal parsing (391 lines)
-│   ├── claude-wrapper.sh          # Claude CLI wrapper + JSONL cost logging (62 lines)
-│   └── validation.sh              # YAML frontmatter validation (66 lines)
+│   │                              #   cycle detection, crash recovery
+│   ├── codebase-summary.sh        # Cross-feature context: components, types, imports
+│   ├── eval.sh                    # Eval functions: mechanical checks, prompt gen, signal parsing
+│   ├── claude-wrapper.sh          # Claude CLI wrapper + JSONL cost logging
+│   └── validation.sh              # YAML frontmatter validation
 │
 ├── tests/
 │   ├── test-reliability.sh
@@ -126,6 +132,14 @@ auto-sdd/
 │   ├── dry-run.sh                 # Structural integration test
 │   └── fixtures/dry-run/          # Test fixtures
 │
+├── learnings/                     # Failure catalog and process knowledge
+│   ├── core.md                    # Highest-signal entries curated for agent onboarding
+│   ├── failure-patterns.md        # How agents fail in production loops
+│   ├── process-rules.md           # Operational discipline learned the hard way
+│   ├── empirical-findings.md      # Measured data from campaigns
+│   ├── domain-knowledge.md        # Framework/tooling gotchas
+│   └── architectural-rationale.md # Why the architecture is shaped this way
+│
 ├── campaign-results/              # Campaign data, raw logs, generated reports
 │   ├── raw/v2-sonnet/             # Sonnet 4.6 campaign artifacts
 │   ├── raw/v3-haiku/              # Haiku 4.5 campaign artifacts
@@ -134,8 +148,11 @@ auto-sdd/
 ├── .specs/
 │   ├── vision.md                  # App vision template
 │   ├── roadmap.md                 # Feature roadmap (source of truth for builds)
-│   ├── features/                  # Feature specs (.feature.md)
-│   └── learnings/                 # Failure catalog and process lessons
+│   └── features/                  # Feature specs (.feature.md)
+│
+├── .claude/commands/              # Slash commands for Claude Code agents
+│   ├── checkpoint.md              # Context management checklist (one-word trigger)
+│   └── ...                        # build-next, catch-drift, vision, roadmap, etc.
 │
 ├── docs/
 │   └── campaign-data-recovery.md  # Recovery playbook for lost build logs
@@ -144,9 +161,13 @@ auto-sdd/
 │   └── PROMPT-ENGINEERING-GUIDE.md  # Prompt methodology for agent hardening
 │
 ├── ONBOARDING.md                  # Full project context for new sessions
+├── ACTIVE-CONSIDERATIONS.md       # Priority stack and in-flight work
+├── INDEX.md                       # One-line lookup table for all project files
+├── DECISIONS.md                   # Append-only decision log
+├── DESIGN-PRINCIPLES.md           # Architectural principles with rationale
 ├── CLAUDE.md                      # Instructions read by Claude Code agents automatically
-├── Agents.md                      # 35-round agent work log — asked vs actual
-├── .env.local.example             # Full config reference (167 lines)
+├── Agents.md                      # Round-by-round agent work log — asked vs actual
+├── .env.local.example             # Full config reference
 └── VERSION                        # 2.0.0
 ```
 
