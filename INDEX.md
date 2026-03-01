@@ -7,6 +7,8 @@
 | File | What |
 |------|------|
 | ONBOARDING.md | Full project context for fresh sessions — read first |
+| ACTIVE-CONSIDERATIONS.md | Priority stack, in-flight work, open questions |
+| INDEX.md | This file — one-line lookup table |
 | DESIGN-PRINCIPLES.md | Grepability, graph-readiness, relationship schema, enums |
 | Agents.md | Agent work log (Rounds 1-37), architecture, signal protocol, verification checklist |
 | CLAUDE.md | Instructions read automatically by Claude Code agents |

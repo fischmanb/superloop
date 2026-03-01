@@ -67,7 +67,7 @@ See **`DESIGN-PRINCIPLES.md`** — project-wide constraints on grepability, grap
 
 ### Remediation status
 
-All remediation rounds (21-37) complete. **154 assertions passing.** See Agents.md for per-round details and git history for individual commits. This section is frozen — new work items go into Active Considerations while active and get pruned when done.
+All remediation rounds (21-37) complete. **154 assertions passing.** See Agents.md for per-round details and git history for individual commits. This section is frozen — new work items go into ACTIVE-CONSIDERATIONS.md while active and get pruned when done.
 
 ### Known gaps
 
@@ -82,42 +82,7 @@ All remediation rounds (21-37) complete. **154 assertions passing.** See Agents.
 
 > **⚠️ Per-response protocol**: Read and update `.onboarding-state` on every project-related response. No exceptions.
 
-> What's next and what's in-flight. Priority stack is the execution plan; everything below it is context a fresh chat should pick up.
-
-### Priority stack (updated 2026-02-28)
-
-Ordered by efficiency gain per complexity added:
-
-1. **stakd 28-feature campaign — v2 COMPLETE, v3 STALLED.**
-   - **stakd-v2 (Sonnet 4.6)**: ✅ 28/28 features built. Post-campaign `npm run build` fails — client component (NewsCategoryFilter.tsx) transitively imports postgres via news.ts → db/index.ts. Same root cause as stakd-v1. Fix prompt drafted, pending execution.
-   - **stakd-v3 (Haiku 4.5)**: ⏸️ Stalled at 11/28 features. Hung `claude` process (PID 94635) killed 2026-02-28. Build loop needs restart.
-   - **Throughput finding**: Token speed does NOT translate to build speed. Haiku 2x faster tokens but only marginally faster builds (~16-18 min/feature both models) because npm install, TypeScript compile, tests, drift checks are fixed-cost CPU/disk-bound steps that dominate wall time. Model speed only affects agent thinking fraction. Parallelism across features matters more than per-feature model speed.
-   - **Build logs**: Located at `stakd-v2/logs/build-*.log` and `stakd-v3/logs/build-*.log`. tee processes write them live. If `ls` or `cat` fail, the files still exist — search harder (check exact paths, use `find`, verify tee PID is alive).
-   - **Agent push discipline**: Agents ignore "do NOT push" instructions 100% of the time across Rounds 32-34. Documented as expected behavior, not a bug to fix.
-   - Round 35 merged to main and pushed to origin.
-   - **Data snapshot**: `~/auto-sdd/campaign-results/` — central location for all campaign data and analysis. Structure:
-     ```
-     campaign-results/
-       raw/
-         v2-sonnet/       # git-log.txt, roadmap-snapshot.md, build logs, cost logs, evals
-         v3-haiku/        # same structure
-       reports/
-         v2-sonnet/       # generated analysis (throughput, quality, cost breakdowns)
-         v3-haiku/        # same structure
-     ```
-     After campaigns complete: copy final build logs, cost logs (`logs/cost-log.jsonl`), build summaries (`logs/build-summary-*.json`), and eval results into `raw/`. Generate reports from raw data into `reports/`. This folder is the single source of truth for campaign comparison.
-2. **Post-campaign validation pipeline** — Multi-agent pipeline that boots the built app, browses it blind via Playwright, generates acceptance criteria from specs vs discovery, tests them, catalogs failures, performs root cause analysis, and fixes through existing build gates. Seven phases (0-5, with Phase 4 split into 4a Catalog + 4b RCA). Spec: `WIP/post-campaign-validation.md` (v0.3). Phase 0 includes auth bootstrap via QA test account (build-phase deliverable). Phase 2a classifies spec-vs-discovery discrepancies as FOUND/MISSING/PARTIAL/DRIFTED/UNEXPECTED. Milestones prioritized: Runtime Bootstrap → Discovery → AC Generation → Playwright Validation → Failure Catalog → RCA → Fix Agents. *Spec complete, implementation not started.*
-3. **Local model integration** — Replace cloud API calls with local LM Studio endpoints on Mac Studio. The archived `archive/local-llm-pipeline/` system is reference material. *Not started.*
-4. **Adaptive routing / parallelism** — Only if data from 1–3 shows remaining sequential bottleneck justifies the complexity. *Deprioritized.*
-
-### Historical build estimator (designed, not yet built)
-
-After at least one full campaign, a function will correlate t-shirt sizes from roadmap with actual metrics from `logs/build-summary-*.json` and write aggregate stats to `logs/estimation-model.json` (avg seconds, avg tokens, sample count, success rate per t-shirt size). Pre-flight then uses this to project total run cost/time. Self-correcting — updates running averages after each `write_build_summary()`. `MAX_FEATURES` becomes an optional backstop once estimator provides informed consent via real projections. Build after stakd campaign provides real data.
-
-### Other active items
-
-- **Learnings system design — Option C (2026-03-01)**: Constitutional "core learnings" file (curated, commonly read on fresh onboard, mix of types) + separate typed catalog files (comprehensive). Core entries duplicated in their proper type files — core is a self-contained read, not a pointer file. Five learning types: failure_pattern, process_rule, empirical_finding, architectural_rationale, domain_knowledge. Separate file per type in `learnings/` at repo root (`learnings/core.md`, `learnings/failure-patterns.md`, `learnings/process-rules.md`, `learnings/empirical-findings.md`, `learnings/architectural-rationale.md`, `learnings/domain-knowledge.md`). Entry format defined (graph-ready markdown with ID, type, tags, confidence, related field with edge types). Design principles and relationship schema extracted to `DESIGN-PRINCIPLES.md`. All pruned knowledge from ONBOARDING.md active items must be preserved in the learnings system, not just git history. *Types pressure-tested 2026-02-28. Schema finalized 2026-02-28: flat K:V metadata, one `Related:` line per relationship, ISO 8601 datetime with timezone offset, global sequential IDs (`L-XXXX`). Confidence/Status enums in DESIGN-PRINCIPLES.md §4. Core.md curation: chat-proposed, Brian-approved — no algorithmic criteria. Schema design complete. Implementation complete 2026-02-28: 38 entries migrated from `.specs/learnings/agent-operations.md` across 5 type files. Core.md curated 2026-03-01: 8 entries (L-0001,0005,0011,0012,0016,0020,0026,0028). `.specs/learnings/agent-operations.md` deprecated — pointer added, entries live in `learnings/`. Back-references are a maintenance task, not yet fully bidirectional.*
-- **Knowledge graph for workflow continuity (2026-02-28)**: Proposed as solution to cross-session context loss exposed by transcript isolation. Scope: personal workflow tool first (track entities/relationships across sessions), productize later. Real constraint is scope discipline. *Design phase — no implementation started.*
+See **`ACTIVE-CONSIDERATIONS.md`** — priority stack, in-flight work, and open questions. Split out to keep this file focused on orientation.
 
 ---
 
@@ -126,6 +91,9 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 | File | What it contains | When to read |
 |------|-----------------|--------------|
 | **ONBOARDING.md** (this file) | Full project context for a fresh chat | Always read first |
+| **ACTIVE-CONSIDERATIONS.md** | Priority stack, in-flight work, open questions | After ONBOARDING.md on fresh onboard; interval checks reconcile here |
+| **INDEX.md** | One-line lookup table for the whole repo | When you need to find something |
+| **DECISIONS.md** | Append-only decision log with rationale | Before re-opening a settled question |
 | **DESIGN-PRINCIPLES.md** | Project-wide constraints: grepability, graph-readiness, relationship type schema, confidence/status enums, when to apply | Before writing prompts that produce structured output. Before designing new knowledge capture formats. |
 | **learnings/** | Learnings catalog: `core.md` (curated onboard read), `failure-patterns.md`, `process-rules.md`, `empirical-findings.md`, `architectural-rationale.md`, `domain-knowledge.md`. 38 entries (L-0001–L-0038). | `core.md` on fresh onboard. Type files when adding/reviewing learnings or building graph ingest. |
 | **Agents.md** | Agent work log (Rounds 1-30), architecture reference, signal protocol, verification checklist, known gaps, process lessons | Before making ANY changes — this is the source of truth for what happened and what works |
@@ -256,7 +224,7 @@ Full details in `Agents.md`. Here's the arc:
 
 ## Process Lessons (Hard-Won)
 
-See `.specs/learnings/agent-operations.md` for the full consolidated catalog. All process lessons, failure modes, and session discipline rules are maintained there as the single source of truth.
+See `learnings/core.md` for the curated essentials and `learnings/` type-specific files for the full catalog (38 entries). All process lessons, failure modes, and session discipline rules are maintained there as the single source of truth.
 
 ---
 
@@ -337,6 +305,9 @@ auto-sdd/
 ├── WIP/                             # Work-in-progress specs and designs
 │   └── post-campaign-validation.md  # Post-campaign validation pipeline spec (v0.3)
 ├── ONBOARDING.md                  # ← YOU ARE HERE
+├── ACTIVE-CONSIDERATIONS.md       # Priority stack + in-flight work (split from ONBOARDING.md)
+├── INDEX.md                       # One-line lookup table for the repo
+├── DECISIONS.md                   # Append-only decision log
 ├── DESIGN-PRINCIPLES.md           # Project-wide design constraints (grepability, graph-readiness, schema)
 ├── CLAUDE.md                      # Agent instructions (read by Claude Code automatically)
 ├── Agents.md                      # Agent work log + architecture + verification checklist
@@ -378,22 +349,23 @@ A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
 **At interval (prompt_count >= 4)**:
 1. Hash ONBOARDING.md, compare to `last_check_hash`
 2. If hash matches AND `pending_captures` is empty → reset counter, done
-3. If hash differs → another agent or Brian edited the file. Read only the **Active Considerations** section (grep for section boundaries, ~15 lines). Note what changed.
-4. If `pending_captures` is non-empty → read only **Active Considerations**, reconcile the buffer into it, flush `pending_captures`, update hash
+3. If hash differs → another agent or Brian edited the file. Read only **ACTIVE-CONSIDERATIONS.md** (~15 lines). Note what changed.
+4. If `pending_captures` is non-empty → read only **ACTIVE-CONSIDERATIONS.md**, reconcile the buffer into it, flush `pending_captures`, update hash
 5. Reset counter
 
 **Privacy check on every read**: When reading any portion of ONBOARDING.md (interval or fresh onboard), if anything private, non-project-related, or sensitive (personal details, credentials, API keys, account info) is detected, immediately report all findings to Brian concisely. Do not silently correct — surface it.
 
 **Fresh onboard (state file missing or `last_check_ts` > 24h stale)**:
 - Full read of ONBOARDING.md. This is the only case where the whole file gets read.
+- Read `ACTIVE-CONSIDERATIONS.md` — priority stack and in-flight work.
 - Read `learnings/core.md` — the curated constitutional learnings. These hard-won failure modes repeat if not internalized at session start. (When core.md is empty, read `.specs/learnings/agent-operations.md` as fallback.)
-- **Flush stale captures**: If `pending_captures` is non-empty, reconcile them into the **Active Considerations** section immediately. This is the only write permitted during fresh onboard.
+- **Flush stale captures**: If `pending_captures` is non-empty, reconcile them into **ACTIVE-CONSIDERATIONS.md** immediately. This is the only write permitted during fresh onboard.
 - Report status. No other file writes, no commits, no edits. First response is read-only.
 
 **Continuing session (state file < 24h, recognizably the same work context)**:
 - Read/write `.onboarding-state` per the per-response protocol. That's it.
 - Do NOT re-read the full ONBOARDING.md. The session already has context.
-- If the interval check fires and `pending_captures` is non-empty, read only the **Active Considerations** section header boundaries (~15 lines) to reconcile. Don't read the whole file.
+- If the interval check fires and `pending_captures` is non-empty, read only **ACTIVE-CONSIDERATIONS.md** to reconcile. Don't read the whole ONBOARDING.md.
 
 **Cost profile**: 95% of responses = read/write a 5-line file (negligible). Every ~4th response = one md5 + maybe 15 lines (minimal). New chat after a break = full read (appropriate).
 
@@ -411,19 +383,19 @@ This includes:
 
 ### What to capture
 
-Not just outcomes. The **Active Considerations** section exists specifically for in-progress thinking. A fresh chat that knows what was being discussed is 10x more useful than one that only knows what was decided.
+Not just outcomes. **ACTIVE-CONSIDERATIONS.md** exists specifically for in-progress thinking. A fresh chat that knows what was being discussed is 10x more useful than one that only knows what was decided.
 
 ### Maintenance rules (preventing staleness)
 
 These are as important as the capture rules. Capturing without pruning is how the file got bloated in the first place.
 
-**1. Completion pruning (same-session):** When a session marks something ✅ done, it removes the full item from Active Considerations in that same session. Replace it with a one-liner summary that stays for exactly one cycle (so the next fresh chat sees what just finished), then the next fresh onboard's staleness sweep removes the one-liner.
+**1. Completion pruning (same-session):** When a session marks something ✅ done, it removes the full item from ACTIVE-CONSIDERATIONS.md in that same session. Replace it with a one-liner summary that stays for exactly one cycle (so the next fresh chat sees what just finished), then the next fresh onboard's staleness sweep removes the one-liner.
 
 **2. No duplication across sections:** If something is in the priority stack, it does not also get a bullet in "Other active items." One canonical location per item. The priority stack is for sequenced execution items. "Other active items" is for things that don't have a clear sequence position (ongoing processes, design explorations, unresolved questions).
 
-**3. Remediation section is frozen:** The remediation checklist is historical and compressed. New work goes into Active Considerations while active, gets pruned per rule 1 when done. Nothing gets appended to the remediation section.
+**3. Remediation section is frozen:** The remediation checklist is historical and compressed. New work goes into ACTIVE-CONSIDERATIONS.md while active, gets pruned per rule 1 when done. Nothing gets appended to the remediation section.
 
-**4. Pre-write staleness check:** Before adding a new item to Active Considerations, scan existing items. If any are clearly done (✅, "merged," "complete," "done," or describes work already captured in the priority stack), move them to the learnings system (when available) or note for Brian. This keeps the section clean without requiring a special onboard ceremony.
+**4. Pre-write staleness check:** Before adding a new item to ACTIVE-CONSIDERATIONS.md, scan existing items. If any are clearly done (✅, "merged," "complete," "done," or describes work already captured in the priority stack), move them to the learnings system (when available) or note for Brian. This keeps the file clean without requiring a special onboard ceremony.
 
 **5. Priority stack hygiene:** When a priority stack item is fully complete (not just "in progress"), move it out of the numbered list. Add a one-line "Recently completed" entry below the stack if the next session needs to know. The stack should only contain actionable next steps.
 
@@ -460,4 +432,4 @@ This file is the **orientation layer**. It tells you what exists and where to fi
 
 ---
 
-_To pick up work: read this file, then read `Agents.md` for current state and verification checklist. Everything else is reachable from those two files._
+_To pick up work: read this file, then `ACTIVE-CONSIDERATIONS.md` for what's in-flight, then `Agents.md` for current state and verification checklist. Everything else is reachable from those files._
