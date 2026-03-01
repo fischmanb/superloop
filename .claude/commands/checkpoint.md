@@ -38,7 +38,7 @@ Single command to ensure all context management files are current. Prevents cont
 - For each candidate: propose entry to Brian (type, tags, body)
 - Do NOT auto-write to learnings files — Brian approves entries
 - **Self-test**: If this session wrote a new process rule, re-run the step it modifies to verify it works. Protocol adoption has a one-response latency (L-0117).
-- **Propagation check**: If any learning is written, check: does it belong in core.md? Did any counts or references change in ONBOARDING.md or ACTIVE-CONSIDERATIONS.md? (L-0114)
+- **Propagation check**: If any learning is written, run `/verify-learnings-counts` to catch count drift mechanically. Also check: does it belong in core.md? Did any references change in ONBOARDING.md or ACTIVE-CONSIDERATIONS.md? (L-0114, L-0115)
 
 ### 5. Methodology Signals
 - Scan session for operator-level insights: preferences, principles, reasoning patterns, workflow decisions, distinctions Brian drew, corrections that reveal generalizable observations

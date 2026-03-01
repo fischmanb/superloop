@@ -193,7 +193,7 @@ Status: active
 Date: 2026-03-02T03:00:00-05:00
 Related: L-0114 (related_to)
 
-Numeric references in documentation rot silently. ONBOARDING.md said "38 entries" when actual was 57. ACTIVE-CONSIDERATIONS said "63 graph-compliant" and "~47 old-format" — both wrong. Nobody noticed because prose ages gracefully but numbers go stale on every commit. No mechanical check exists for count drift. Mitigation: checkpoint staleness scan should include numeric claims about learnings counts, or replace absolute counts with "see learnings/ for current catalog" to avoid the problem entirely.
+Numeric references in documentation rot silently. ONBOARDING.md said "38 entries" when actual was 57. ACTIVE-CONSIDERATIONS said "63 graph-compliant" and "~47 old-format" — both wrong. Nobody noticed because prose ages gracefully but numbers go stale on every commit. Mitigation: `/verify-learnings-counts` slash command performs mechanical count and compares against documentation claims. Wired into checkpoint step 4 propagation check.
 
 ---
 
