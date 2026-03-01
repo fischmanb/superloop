@@ -278,3 +278,75 @@ Date: 2026-03-02T05:00:00-05:00
 Related: L-0124 (extends), L-0128 (related_to)
 
 Corpus-level review is a distinct operation from keyword-based signal scanning. `/review-signals` greps HOW-I-WORK for keywords matching existing learnings. Reading the full corpus end-to-end revealed structure that keyword matching cannot: emergent clusters (prompt engineering, agent autonomy, session types, capture philosophy), a philosophical foundation ("we want to be 1"), and accumulation-without-curation debt. Periodic full-read review — not just keyword scan — surfaces patterns that exist between entries, not within them.
+
+---
+
+## L-0135
+Type: process_rule
+Tags: prompts, agents, compression
+Confidence: high
+Status: active
+Date: 2026-03-02T05:30:00-05:00
+Related: L-0016 (extends), L-0020 (related_to)
+
+"Half the length and do not solve the thing the agent will be able to solve. Show them where to look if you must for success." Calibrate spec prescriptiveness by agent capability — only lock down decisions an agent would high-percentage get wrong. Token cost and agent behavior efficiency are the quality metrics, not just output correctness. Distinguish boilerplate (load-bearing rules proven by failure) from verbosity (excess words expressing those rules). Cut verbosity, keep the rules.
+
+---
+
+## L-0136
+Type: process_rule
+Tags: capture, sessions, meta-work
+Confidence: high
+Status: active
+Date: 2026-03-02T05:30:00-05:00
+Related: L-0116 (extends), L-0113 (related_to)
+
+High-lucidity sessions — systematic, meta-level, philosophical about the system — are rare and perishable. "I may not be this lucid tomorrow, so do what you can when you can." The AI should recognize these windows and maximize capture density because the next session may be purely task-focused. The learnings system exists to encode lucid-state decisions so they persist into less-lucid states. Corollary: zero features built with 24 learnings produced is a productive session when the lucidity is there.
+
+---
+
+## L-0137
+Type: process_rule
+Tags: prompts, agents, quality
+Confidence: high
+Status: active
+Date: 2026-03-02T05:30:00-05:00
+Related: L-0016 (depends_on), L-0001 (related_to)
+
+Prompt review catches errors dramatically cheaper than output rework. Brian reviewed 5 agent prompts line-by-line before execution, catching 5 violations that would have caused full re-runs. Quality-gating at the prompt layer (input) is the highest-leverage checkpoint in agent-based workflows. Post-execution QA is necessary but is the expensive fallback, not the primary defense.
+
+---
+
+## L-0138
+Type: process_rule
+Tags: rules, design, precision
+Confidence: high
+Status: active
+Date: 2026-03-02T05:30:00-05:00
+Related: L-0128 (related_to)
+
+When a rule feels wrong, replace it with the actual constraint it was proxying for — don't tweak the number. Flat 10-call limit → "be purposeful, stop at natural decision boundaries." Arbitrary recursion depth → diagnose spiraling by purposelessness, not depth. The diagnostic for constraint quality: does the rule penalize correct behavior? If yes, it's a proxy — find the real constraint. Brian demands logical precision: "IFF" means the biconditional. "Generally fine" is not a rule.
+
+---
+
+## L-0140
+Type: process_rule
+Tags: review, methodology, corpus-analysis
+Confidence: high
+Status: active
+Date: 2026-03-02T05:30:00-05:00
+Related: L-0133 (extends), L-0124 (related_to)
+
+"Read each line closely, tell me your impressions" is not a summary request — it's a structural audit. Identify emergent clusters across entries, find the philosophical foundation, surface gaps between what the document promises (curated sections) and what exists (raw accumulation only), assess maturity signals, and report inter-entry relationships no single entry reveals. Close read differs from keyword scan (L-0133's /review-signals) by operating on structure and meaning, not pattern matching. The output is cluster identification + gap analysis + maturity assessment, not a précis.
+
+---
+
+## L-0141
+Type: process_rule
+Tags: methodology, capture, curation
+Confidence: high
+Status: active
+Date: 2026-03-02T05:30:00-05:00
+Related: L-0140 (depends_on), L-0133 (related_to)
+
+In HOW-I-WORK corpus, Brian's direct quotes ("we want to be 1", "half the length", "I may not be this lucid tomorrow") carry more signal per token than the third-person observations wrapping them. When curating accumulation entries into sections, quotes should survive verbatim — the surrounding gloss can be compressed or restructured. Curation heuristic inferred from the close-read process itself: the entries that anchored cluster identification were quotes, not observations.

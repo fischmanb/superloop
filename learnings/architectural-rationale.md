@@ -121,3 +121,14 @@ Mechanical self-test (run mentally before ending any response that changes proje
 4. Multi-response plans — is the plan in a file, or only in the context that's about to die?
 
 The onboarding protocol exists so post-compaction recovery costs 2-3 tool calls, not 20 messages of "what were we doing?" This learning is the *why* behind file-first architecture. The self-test is the *enforcement*.
+---
+
+## L-0139
+Type: architectural_rationale
+Tags: design, self-diagnosis, reliability
+Confidence: high
+Status: active
+Date: 2026-03-02T05:30:00-05:00
+Related: L-0128 (validates), L-0125 (related_to)
+
+"Structure catches its own gaps." The learnings graph referenced L-0048 but L-0048 didn't exist — the audit surfaced this mechanically, not through memory or vigilance. Design principle: failures should be visible to the structure itself, not dependent on an operator noticing. This is why /verify-learnings-counts works and prose rules don't (L-0128). A system that requires attention to detect failures will accumulate undetected failures proportional to the operator's distraction.
