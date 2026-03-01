@@ -50,3 +50,19 @@
 **Decision:** Add deprecation pointer, preserve file, all new work goes to `learnings/`.
 **Why:** 38 entries fully migrated. Single source of truth is now `learnings/`.
 **Rejected:** Deletion — old prompts may still reference the path.
+
+---
+
+## 2026-03-01 — `checkpoint` as single context management command
+
+**Decision:** One word ("checkpoint" in chat, `/checkpoint` in Claude Code) triggers a deterministic checklist that flushes captures, reconciles state, flags stale items, appends decisions, flags learnings, and commits.
+**Why:** Context management files grew from 1 (ONBOARDING.md) to 5+ (state, active-considerations, decisions, learnings, index). Manual reconciliation is error-prone and inconsistent.
+**Rejected:** Automated background sync (adds complexity, hides failures). Separate commands per file (cognitive overhead, easy to forget one).
+
+---
+
+## 2026-03-01 — Keep ONBOARDING.md as single file (don't split protocol or work log)
+
+**Decision:** ACTIVE-CONSIDERATIONS.md split was worth it (frequent writes to small file). Further splits (protocol → CONTEXT-PROTOCOL.md, work log trim) are not — they add file proliferation without meaningful token or parseability gains for Claude.
+**Why:** Fresh onboard reads everything anyway. Splits only help if the interval check path touches less data (ACTIVE-CONSIDERATIONS) or if Brian needs to scan less (already addressed by INDEX.md).
+**Rejected:** CONTEXT-PROTOCOL.md (cosmetic), work log extraction (Agents.md already has it).

@@ -26,7 +26,7 @@
 | tests/ | Test suites (154 assertions) + dry-run + fixtures |
 | learnings/ | Typed learning catalog: core, failure-patterns, process-rules, empirical-findings, architectural-rationale, domain-knowledge |
 | .specs/ | Spec-driven development templates + deprecated agent-operations.md |
-| .claude/commands/ | Claude Code slash commands |
+| .claude/commands/ | Claude Code slash commands (includes `/checkpoint` for context management) |
 | Brians-Notes/ | PROMPT-ENGINEERING-GUIDE.md |
 | WIP/ | In-progress specs (post-campaign-validation.md) |
 | archive/local-llm-pipeline/ | Archived local LLM system (system 2) |
