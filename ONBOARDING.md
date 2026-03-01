@@ -116,7 +116,7 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 
 ### Other active items
 
-- **Learnings system design — Option C (2026-03-01)**: Constitutional "core learnings" file (curated, commonly read on fresh onboard, mix of types) + separate typed catalog files (comprehensive). Core entries duplicated in their proper type files — core is a self-contained read, not a pointer file. Five learning types: failure_pattern, process_rule, empirical_finding, architectural_rationale, domain_knowledge. Separate file per type in `learnings/` at repo root (`learnings/core.md`, `learnings/failure-patterns.md`, `learnings/process-rules.md`, `learnings/empirical-findings.md`, `learnings/architectural-rationale.md`, `learnings/domain-knowledge.md`). Entry format defined (graph-ready markdown with ID, type, tags, confidence, related field with edge types). Design principles and relationship schema extracted to `DESIGN-PRINCIPLES.md`. All pruned knowledge from ONBOARDING.md active items must be preserved in the learnings system, not just git history. *Types pressure-tested 2026-02-28. Schema finalized 2026-02-28: flat K:V metadata, one `Related:` line per relationship, ISO 8601 datetime with timezone offset, global sequential IDs (`L-XXXX`). Confidence/Status enums in DESIGN-PRINCIPLES.md §4. Core.md curation: chat-proposed, Brian-approved — no algorithmic criteria. Schema design complete. Implementation not started.*
+- **Learnings system design — Option C (2026-03-01)**: Constitutional "core learnings" file (curated, commonly read on fresh onboard, mix of types) + separate typed catalog files (comprehensive). Core entries duplicated in their proper type files — core is a self-contained read, not a pointer file. Five learning types: failure_pattern, process_rule, empirical_finding, architectural_rationale, domain_knowledge. Separate file per type in `learnings/` at repo root (`learnings/core.md`, `learnings/failure-patterns.md`, `learnings/process-rules.md`, `learnings/empirical-findings.md`, `learnings/architectural-rationale.md`, `learnings/domain-knowledge.md`). Entry format defined (graph-ready markdown with ID, type, tags, confidence, related field with edge types). Design principles and relationship schema extracted to `DESIGN-PRINCIPLES.md`. All pruned knowledge from ONBOARDING.md active items must be preserved in the learnings system, not just git history. *Types pressure-tested 2026-02-28. Schema finalized 2026-02-28: flat K:V metadata, one `Related:` line per relationship, ISO 8601 datetime with timezone offset, global sequential IDs (`L-XXXX`). Confidence/Status enums in DESIGN-PRINCIPLES.md §4. Core.md curation: chat-proposed, Brian-approved — no algorithmic criteria. Schema design complete. Implementation complete 2026-02-28: 38 entries migrated from `.specs/learnings/agent-operations.md` across 5 type files. Core.md empty pending curation. Back-references are a maintenance task, not yet fully bidirectional.*
 - **Knowledge graph for workflow continuity (2026-02-28)**: Proposed as solution to cross-session context loss exposed by transcript isolation. Scope: personal workflow tool first (track entities/relationships across sessions), productize later. Real constraint is scope discipline. *Design phase — no implementation started.*
 
 ---
@@ -126,7 +126,8 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 | File | What it contains | When to read |
 |------|-----------------|--------------|
 | **ONBOARDING.md** (this file) | Full project context for a fresh chat | Always read first |
-| **DESIGN-PRINCIPLES.md** | Project-wide constraints: grepability, graph-readiness, relationship type schema, when to apply | Before writing prompts that produce structured output. Before designing new knowledge capture formats. |
+| **DESIGN-PRINCIPLES.md** | Project-wide constraints: grepability, graph-readiness, relationship type schema, confidence/status enums, when to apply | Before writing prompts that produce structured output. Before designing new knowledge capture formats. |
+| **learnings/** | Learnings catalog: `core.md` (curated onboard read), `failure-patterns.md`, `process-rules.md`, `empirical-findings.md`, `architectural-rationale.md`, `domain-knowledge.md`. 38 entries (L-0001–L-0038). | `core.md` on fresh onboard. Type files when adding/reviewing learnings or building graph ingest. |
 | **Agents.md** | Agent work log (Rounds 1-30), architecture reference, signal protocol, verification checklist, known gaps, process lessons | Before making ANY changes — this is the source of truth for what happened and what works |
 | **README.md** | Public-facing docs: quick start, config, file structure, what works and what breaks | For understanding the user-facing narrative |
 | **CLAUDE.md** | Instructions that Claude Code agents read automatically when invoked by the build loop | When modifying agent behavior or build prompts |
@@ -321,6 +322,13 @@ auto-sdd/
 │   ├── test-eval.sh              # 53 unit assertions
 │   ├── dry-run.sh                 # Structural integration test
 │   └── fixtures/dry-run/          # Test fixtures
+├── learnings/
+│   ├── core.md                    # Curated constitutional learnings (fresh onboard read)
+│   ├── failure-patterns.md        # failure_pattern entries
+│   ├── process-rules.md           # process_rule entries
+│   ├── empirical-findings.md      # empirical_finding entries
+│   ├── architectural-rationale.md # architectural_rationale entries
+│   └── domain-knowledge.md        # domain_knowledge entries
 ├── .specs/                        # Spec-driven development specs (templates)
 ├── .claude/commands/              # Claude Code slash commands
 ├── archive/local-llm-pipeline/    # Archived local LLM system
@@ -378,7 +386,7 @@ A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
 
 **Fresh onboard (state file missing or `last_check_ts` > 24h stale)**:
 - Full read of ONBOARDING.md. This is the only case where the whole file gets read.
-- Read `.specs/learnings/agent-operations.md` — the consolidated failure catalog and process lessons. These hard-won failure modes repeat if not internalized at session start.
+- Read `learnings/core.md` — the curated constitutional learnings. These hard-won failure modes repeat if not internalized at session start. (When core.md is empty, read `.specs/learnings/agent-operations.md` as fallback.)
 - **Flush stale captures**: If `pending_captures` is non-empty, reconcile them into the **Active Considerations** section immediately. This is the only write permitted during fresh onboard.
 - Report status. No other file writes, no commits, no edits. First response is read-only.
 
