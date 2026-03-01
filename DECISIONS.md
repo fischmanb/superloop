@@ -66,3 +66,17 @@
 **Decision:** ACTIVE-CONSIDERATIONS.md split was worth it (frequent writes to small file). Further splits (protocol → CONTEXT-PROTOCOL.md, work log trim) are not — they add file proliferation without meaningful token or parseability gains for Claude.
 **Why:** Fresh onboard reads everything anyway. Splits only help if the interval check path touches less data (ACTIVE-CONSIDERATIONS) or if Brian needs to scan less (already addressed by INDEX.md).
 **Rejected:** CONTEXT-PROTOCOL.md (cosmetic), work log extraction (Agents.md already has it).
+
+---
+
+## 2026-03-01 — Rename post-campaign validation pipeline → "auto-QA"
+
+**Decision:** Short name "auto-QA" for the post-campaign validation pipeline.
+**Why:** The old name is unwieldy. The concept is autonomous post-build runtime repair.
+
+---
+
+## 2026-03-01 — Keep auto-QA and knowledge graph out of README
+
+**Decision:** Don't publicize either in README until they have working implementations.
+**Why:** Unproven concepts. README should reflect what works, not what's planned.

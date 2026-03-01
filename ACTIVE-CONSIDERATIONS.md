@@ -17,7 +17,7 @@ Ordered by efficiency gain per complexity added:
    - **Build logs**: `stakd-v2/logs/build-*.log` and `stakd-v3/logs/build-*.log`.
    - Round 35 merged to main and pushed to origin.
    - **Data snapshot**: `~/auto-sdd/campaign-results/` — raw/ and reports/ per campaign variant.
-2. **Post-campaign validation pipeline** — Multi-agent pipeline: boot app, Playwright browse, generate ACs from specs, test, catalog failures, RCA, fix through build gates. Seven phases (0-5, Phase 4 split into 4a+4b). Spec: `WIP/post-campaign-validation.md` (v0.3). *Spec complete, implementation not started.*
+2. **auto-QA (post-campaign validation pipeline)** — Multi-agent pipeline: boot app, Playwright browse, generate ACs from specs, test, catalog failures, RCA, fix through build gates. Seven phases (0-5, Phase 4 split into 4a+4b). Spec: `WIP/post-campaign-validation.md` (v0.3). *Spec complete, implementation not started.*
 3. **Local model integration** — Replace cloud API with local LM Studio on Mac Studio. Reference: `archive/local-llm-pipeline/`. *Not started.*
 4. **Adaptive routing / parallelism** — Only if data from 1–3 justifies complexity. *Deprioritized.*
 
@@ -27,5 +27,7 @@ Correlates t-shirt sizes with actual metrics from `logs/build-summary-*.json`. W
 
 ### Other active items
 
-- **Learnings system — IMPLEMENTED (2026-03-01)**: 38 entries across 5 type files in `learnings/`. Core.md curated with 8 entries. Schema: flat K:V, global L-XXXX IDs, ISO 8601 datetime. Design principles in DESIGN-PRINCIPLES.md. `.specs/learnings/agent-operations.md` deprecated. Remaining work: back-references not yet fully bidirectional.
+- **Learnings system — IMPLEMENTED (2026-03-01)**: Complete. 38 entries, 8 in core.md. Remaining: back-references not fully bidirectional.
 - **Knowledge graph for workflow continuity (2026-02-28)**: Personal workflow tool for cross-session context. *Design phase — no implementation started.*
+- **README update needed (2026-03-01)**: File map, schema/grep protocols, learnings system, checkpoint command. Do NOT include auto-QA or knowledge graph — unproven.
+- **"How Brian works with Chatbots" meta-document (2026-03-01)**: Proposed. Scope TBD.
