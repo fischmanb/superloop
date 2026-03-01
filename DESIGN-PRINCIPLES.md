@@ -75,6 +75,33 @@ These principles apply unevenly across contexts. The goal is precision, not blan
 
 ---
 
+## 4. Learnings entry enums
+
+Defined here, enforced in all `learnings/` files. Same philosophy as the edge type schema — small fixed sets, specificity belongs in tags and body text.
+
+### Confidence
+
+| Value | Meaning |
+|-------|---------|
+| `high` | Observed repeatedly or verified mechanically (tests, grep, build data). |
+| `medium` | Observed once or inferred from data. Plausible but not yet confirmed by repetition. |
+| `low` | Hypothesis or single anecdote. May not generalize. |
+
+### Status
+
+| Value | Meaning |
+|-------|---------|
+| `active` | Current and applicable. Surfaced in core.md and fresh onboard reads. |
+| `superseded` | Replaced by a newer entry. Must have a `supersedes` edge from the replacement. Retained for graph history, not surfaced in core.md. |
+| `deprecated` | No longer relevant — conditions changed, tool changed, approach abandoned. Not replaced by a specific entry. Retained for graph history, not surfaced in core.md. |
+
+**Rules:**
+- No new values without Brian's approval.
+- `superseded` entries must be reachable via `supersedes` edge from the entry that replaced them. If there's no replacement, use `deprecated`.
+- Status changes are edits to existing entries, not new entries. Update the status field in place.
+
+---
+
 ## Maintaining this file
 
 This file is a constitution, not a changelog. It should be short, stable, and authoritative. Changes require Brian's explicit approval.
