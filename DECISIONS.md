@@ -144,3 +144,59 @@
 
 **Decision:** Write a Python conventions document before launching any conversion agents. Specifies error handling, logging, config passing, state file format, import structure, naming. Every agent gets the same doc.
 **Why:** Parallel lib conversion (4 agents) risks convention divergence — different exception patterns, logging approaches, config styles — that breaks integration in build-loop-local. Cheap to write, eliminates the sync problem.
+
+---
+
+## 2026-02-28 — claude-wrapper.sh moved to Phase 1 (from Phase 6)
+
+**Decision:** Move claude-wrapper.sh conversion from Phase 6 (utilities bundle) to Phase 1 (parallel lib conversion) as a 5th independent agent.
+**Why:** build-loop-local.sh sources claude-wrapper.sh directly — every agent invocation runs through it. Phase 4 agents would need to code against a wrapper interface that doesn't exist yet if it stays in Phase 6. It's ~100 lines, self-contained, no lib dependencies — a leaf node that fits Phase 1 criteria perfectly.
+**Rejected:** Keeping in Phase 6 (forces Phase 4 to stub the interface or cross-reference bash).
+
+---
+
+## 2026-02-28 — Launchd scripts stay bash (supersedes part of 2026-03-01 small-utils decision)
+
+**Decision:** setup-overnight.sh and uninstall-overnight.sh remain bash. Removed from conversion targets. Partially supersedes the 2026-03-01 decision "Convert small bash utilities to Python too" — that decision still holds for claude-wrapper, generate-mapping, and nightly-review, but NOT for launchd scripts.
+**Why:** These are system bootstrap wrappers — they write plist XML and call launchctl. Converting to Python adds a Python dependency to a bootstrap path and buys zero functionality. They're short, stable, and don't interact with the Python package.
+**Rejected:** Converting everything uniformly (adds complexity to bootstrap for no benefit).
+
+---
+
+## 2026-02-28 — Bash originals preserved indefinitely in separate tree
+
+**Decision:** Original bash files in scripts/, lib/, and tests/ are untouched during and after Python conversion. Python code lives entirely in a new py/ directory tree. No moves, renames, or deletions of bash originals. Deletion is a separate future decision.
+**Why:** Coexistence over replacement. Bash originals serve as reference, fallback, and operational baseline. During conversion, both versions can be compared side-by-side. No risk of losing working code during a rewrite. Brian's explicit directive: "keep the original bash files intact and organized as at present now."
+**Rejected:** In-place replacement (risky, no fallback). Phased deletion plan (premature — conversion not yet validated).
+
+---
+
+## 2026-02-28 — Conventions doc scope: comprehensive Phase 0 deliverable
+
+**Decision:** The Python conventions document must cover: error handling (typed exception hierarchy), subprocess patterns (run_claude wrapper with configurable timeout), logging (stdlib, mapped from bash levels), signal protocol preservation (flat strings at boundary, signals.py module), file-based state I/O (atomic writes, flock locking), type hints (full typing, mypy --strict), test patterns (pytest, shared conftest.py, assertion style, naming), interface stubs (function signatures build-loop-local calls from each lib), dependencies (stdlib + pytest only), package management (pyproject.toml + pip).
+**Why:** Four (now five) agents running in parallel will each invent their own patterns if the conventions doc is vague. Every decision not made in the conventions doc becomes an integration problem in Phase 4. The doc is cheap to write and eliminates the most likely failure mode of parallel conversion.
+**Rejected:** Minimal conventions doc (invites convention drift). Per-agent guidance (redundant, inconsistent).
+
+---
+
+## 2026-02-28 — Python 3.12+ minimum version
+
+**Decision:** Minimum Python version for the py/ package is 3.12.
+**Why:** Better typing support, improved error messages, f-string improvements. No Ventura support needed per Brian. 3.12 is current stable release line with full security support.
+**Rejected:** 3.11 (would work but misses typing improvements that help agent-generated code quality).
+
+---
+
+## 2026-02-28 — py/ directory name (not src/)
+
+**Decision:** Python code lives in `py/` at repo root, not `src/`.
+**Why:** Explicit about content type. `src/` is ambiguous in a repo that already has scripts/ and lib/. `py/` is greppable, obvious, and won't be confused with any other directory.
+**Rejected:** `src/` (ambiguous), `python/` (verbose), in-place alongside bash (violates coexistence rule).
+
+---
+
+## 2026-02-28 — Phase 3 stays sequential after Phase 1
+
+**Decision:** build-loop-local decomposition analysis (Phase 3) runs after Phase 1 completes, not in parallel with it.
+**Why:** Phase separations serve double duty: dependency ordering AND context window discipline. Running Phase 3 alongside Phase 1 would mean Brian is managing 5-6 concurrent agent contexts. The calendar time savings are minimal (Phase 3 is one chat session, maybe 30 minutes). The cognitive overhead and parallelization complexity are not worth it.
+**Rejected:** Running Phase 3 in parallel with Phase 1 (no data dependency, but overextends context management and risks bloat).

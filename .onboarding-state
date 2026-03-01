@@ -1,6 +1,12 @@
 {
-  "last_check_ts": "2026-03-01T06:00:00Z",
+  "last_check_ts": "2026-02-28T20:00:00Z",
   "last_check_hash": "49ec799007e9d5a59c41ce42fdf6f26b",
-  "prompt_count": 8,
-  "pending_captures": []
+  "prompt_count": 2,
+  "pending_captures": [
+    "claude-wrapper.sh moved to Phase 1 (5th parallel agent)",
+    "launchd scripts stay bash — removed from conversion table",
+    "bash originals preserved intact — Python goes in separate directory tree",
+    "conventions doc scope expanded: error handling, subprocess, logging, state I/O, signal protocol, pytest patterns, interface stubs",
+    "Phase 3 stays sequential after Phase 1 (context window discipline)"
+  ]
 }
