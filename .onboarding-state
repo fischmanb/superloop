@@ -1,6 +1,6 @@
 {
-  "last_check_ts": "2026-03-01T17:00:00Z",
+  "last_check_ts": "2026-03-02T01:30:00Z",
   "last_check_hash": "d858a25c7aa0f838e685c3746949ab1a",
-  "prompt_count": 4,
-  "pending_captures": ["Mac Studio deferred — Phase 1 runs on MacBook Air M3/16GB with 2-3 parallel agents instead of 5", "Claude Desktop app parallel sessions problematic on MacBook Air — Phase 1 executing sequentially. Doesn't affect prompts, just execution plan."]
+  "prompt_count": 0,
+  "pending_captures": []
 }

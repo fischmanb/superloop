@@ -17,11 +17,12 @@ Ordered by efficiency gain per complexity added:
    - **Build logs**: `stakd-v2/logs/build-*.log` and `stakd-v3/logs/build-*.log`.
    - Round 35 merged to main and pushed to origin.
    - **Data snapshot**: `~/auto-sdd/campaign-results/` — raw/ and reports/ per campaign variant.
-2. **Bash→Python conversion — Phase 0 COMPLETE, Phase 1 COMPLETE (2026-03-01).**
+2. **Bash→Python conversion — Phases 0–2 COMPLETE (2026-03-01).**
    - Plan: `WIP/bash-to-python-conversion.md` (authoritative).
    - Phase 0: `py/auto_sdd/conventions.md` (481 lines), `py/pyproject.toml`, `py/tests/conftest.py`, dependency map + interface stubs.
-   - **Phase 1 DONE**: 5 lib modules converted (reliability, eval, codebase-summary, validation, claude-wrapper). 210 pytest assertions, mypy --strict clean. Merged to main at `bed34a4`. Executed sequentially on MacBook Air (not Mac Studio). See L-0105–L-0110.
-   - **Phase 2 next**: Build loop (`run.sh` 1,100L) — the orchestrator. Depends on all 5 libs. Single agent, single branch. Not yet planned in detail.
+   - **Phase 1 DONE**: 5 lib modules converted (reliability, eval, codebase-summary, validation, claude-wrapper). 210 pytest assertions, mypy --strict clean. Merged to main at `bed34a4`. See L-0105–L-0110.
+   - **Phase 2 DONE**: eval-sidecar.sh (393L) → `py/auto_sdd/scripts/eval_sidecar.py`. 31 tests, 77 assertions, mypy --strict clean. Branch `claude/implement-hard-constraints-8IMAC` at `e532a54`, not yet merged to main.
+   - **Phase 3 next**: Build-loop-local decomposition analysis (chat session). Identify sub-units for Phase 4 conversion.
 3. **Build loop design improvements for Phase 4 (2026-03-01).**
    - L-0111: 6 meta-process patterns from the bash→Python conversion that the build loop should implement. Highest leverage: context budget estimation before dispatch, conventions doc injection, mechanical prompt quality gate.
    - These are design inputs for Phase 4 (build-loop-local conversion), not separate tasks. When Phase 3 decomposes build-loop-local into sub-units, these patterns inform the new architecture.
