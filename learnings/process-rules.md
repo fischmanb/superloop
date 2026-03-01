@@ -254,3 +254,27 @@ Date: 2026-03-02T03:45:00-05:00
 Related: L-0113 (depends_on), L-0115 (validates), L-0116 (validates)
 
 Learnings that remain prose get ignored; learnings that become mechanical checks get followed. L-0113 (active scan) was prose — the very next checkpoint under-captured. `/verify-learnings-counts` (L-0115) is mechanical — it runs grep, compares numbers, reports discrepancies. The pattern: when a learning identifies a recurring failure mode, the fix is not a better-worded rule but a tool or command that enforces the rule without requiring the AI to remember it. Prose rules require behavioral compliance. Mechanical checks require only invocation.
+
+---
+
+## L-0131
+Type: process_rule
+Tags: checkpoint, context-loss, multi-response
+Confidence: high
+Status: active
+Date: 2026-03-02T05:00:00-05:00
+Related: L-0130 (depends_on), L-0127 (related_to)
+
+Multi-response checkpoints must stash progress incrementally. Checkpoints spanning multiple responses are vulnerable to the same context loss L-0130 addresses. Each completed step must be written to files before proceeding to the next. Pattern: write learnings to stash file → commit or update .onboarding-state → proceed to methodology signals → stash again. If context dies mid-checkpoint, the completed steps survive. Instruction origin: Brian's "stash as you go to prevent lost progress."
+
+---
+
+## L-0133
+Type: process_rule
+Tags: methodology, review, corpus-analysis
+Confidence: high
+Status: active
+Date: 2026-03-02T05:00:00-05:00
+Related: L-0124 (extends), L-0128 (related_to)
+
+Corpus-level review is a distinct operation from keyword-based signal scanning. `/review-signals` greps HOW-I-WORK for keywords matching existing learnings. Reading the full corpus end-to-end revealed structure that keyword matching cannot: emergent clusters (prompt engineering, agent autonomy, session types, capture philosophy), a philosophical foundation ("we want to be 1"), and accumulation-without-curation debt. Periodic full-read review — not just keyword scan — surfaces patterns that exist between entries, not within them.
