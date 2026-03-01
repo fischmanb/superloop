@@ -74,7 +74,7 @@ Status: active
 Date: 2026-03-02T03:00:00-05:00
 Related: L-0113 (related_to), L-0119 (related_to)
 
-HOW-I-WORK-WITH-GENERATIVE-AI.md methodology signals are leading indicators of protocol gaps. The evidence that checkpoint step 4 was broken sat in methodology signals for an indeterminate number of responses: "under-capture is a failure mode," "checkpoint should be thorough not mechanical," "Brian expects capture density to match session density." These were captured as raw observations (step 5) but never fed back into protocol review (step 4) or learnings. The methodology signals file is a pre-learnings staging area — observations accumulate there before they're synthesized into actionable rules. A periodic review of methodology signals for patterns that should become learnings or protocol changes would close this feedback loop.
+HOW-I-WORK-WITH-GENERATIVE-AI.md methodology signals are leading indicators of protocol gaps. The evidence that checkpoint step 4 was broken sat in methodology signals for an indeterminate number of responses: "under-capture is a failure mode," "checkpoint should be thorough not mechanical," "Brian expects capture density to match session density." These were captured as raw observations (step 5) but never fed back into protocol review (step 4) or learnings. The methodology signals file is a pre-learnings staging area — observations accumulate there before they're synthesized into actionable rules. Mechanical enforcement: `/review-signals` scans Accumulation for clusters, checks against existing learnings, and flags candidates for graduation. Wired into checkpoint step 4.
 
 ---
 

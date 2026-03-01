@@ -217,7 +217,7 @@ Status: active
 Date: 2026-03-02T03:00:00-05:00
 Related: L-0113 (depends_on), L-0116 (related_to)
 
-New protocol rules have a one-response adoption latency. L-0113 codified active scan. The very next checkpoint executed step 4 with the new categories but still under-captured — the behavioral pattern hadn't changed despite the written rule changing. A fresh session reading L-0113 cold would likely apply it more faithfully than the session that just wrote it, because the session that wrote it still carries the old behavioral inertia. Implication: after writing a new process rule, explicitly test it in the same session by re-running the step it modifies.
+New protocol rules have a one-response adoption latency. L-0113 codified active scan. The very next checkpoint executed step 4 with the new categories but still under-captured — the behavioral pattern hadn't changed despite the written rule changing. A fresh session reading L-0113 cold would likely apply it more faithfully than the session that just wrote it, because the session that wrote it still carries the old behavioral inertia. Implication: after writing a new process rule, explicitly test it in the same session by re-running the step it modifies. Mechanical enforcement: `/verify-propagation` step 5 flags self-test requirement when process-rules.md has new entries.
 
 ---
 

@@ -34,7 +34,7 @@ Single command to ensure all context management files are current. Prevents cont
   - **New rules or patterns**: Were any stated or discovered?
   - **Empirical findings**: Any measurements, outcomes, or data points?
   - **Failures or near-misses**: Anything that went wrong or almost did?
-  - **Methodology signals review**: Scan HOW-I-WORK accumulation section for patterns that should become learnings or protocol changes. (L-0124)
+  - **Methodology signals review**: Run `/review-signals quick` to scan HOW-I-WORK accumulation for patterns that should become learnings or protocol changes. Full `/review-signals` writes new learnings. (L-0124)
 - For each candidate: propose entry to Brian (type, tags, body)
 - Do NOT auto-write to learnings files — Brian approves entries
 - **Self-test**: If this session wrote a new process rule, re-run the step it modifies to verify it works. Protocol adoption has a one-response latency (L-0117).

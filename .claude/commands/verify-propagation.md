@@ -39,7 +39,15 @@ Check for stale references in files agents read:
 - `CLAUDE.md` — conventions file for Claude Code agents
 - `.claude/commands/*.md` — slash commands that reference changed items
 
-### 5. Report
+### 5. Adoption Latency Self-Test (L-0117)
+
+If `learnings/process-rules.md` has new entries (detected in step 1):
+- Identify which checkpoint step or protocol each new rule modifies
+- Flag: "⚠️ SELF-TEST REQUIRED: Re-run [step X] now to verify the rule works in the session that wrote it."
+- The session that writes a rule carries old behavioral inertia. If the self-test passes, the rule is validated. If it fails, the rule needs revision before commit.
+- This flag is NOT mechanical-fix — it requires the operator to actually re-run the step.
+
+### 6. Report
 
 ```
 ## Propagation Check
@@ -57,7 +65,7 @@ Propagation status:
 Result: ALL CLEAR
 ```
 
-### 6. Fix
+### 7. Fix
 Apply fixes for any flagged items. Count corrections are mechanical —
 no Brian approval needed. Core.md additions need Brian's approval.
 

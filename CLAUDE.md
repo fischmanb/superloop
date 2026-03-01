@@ -227,6 +227,8 @@ When new components are created:
 | `/catch-drift` | Detect spec ↔ code drift |
 | `/verify-test-counts` | Reconcile test counts |
 | `/verify-learnings-counts` | Reconcile learnings counts vs documentation |
+| `/verify-propagation` | Check all consumption points after writing learnings/protocol changes |
+| `/review-signals` | Scan HOW-I-WORK signals for patterns → learnings graduation |
 | `/checkpoint` | Update all context management files (session boundary) |
 
 ### Git Workflow
