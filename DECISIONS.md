@@ -233,3 +233,12 @@
 **Decision:** Agents run through the Code section of the Claude for Mac desktop app on Brian's MacBook Air (Mac Studio later). Execution is local (filesystem, git commands), but agents push feature branches to origin by default.
 **Why:** Affects merge workflow — use `git merge origin/<branch>` or GitHub PR, not local branch names. Precondition design: no cd needed (agent is already in repo cwd). Agents have full local filesystem access and GitHub auth.
 **Rejected:** N/A — factual capture of environment. Corrected from initial "branches are local only" assumption (L-0046).
+
+
+---
+
+## 2026-03-01 — Always reprint full artifacts
+
+**Decision:** When updating prompts, code, or any artifact that will be used in a separate context, always reprint the full updated version. Never say "just swap X" or "same as before but change Y."
+**Why:** Brian runs agent prompts in Claude Desktop Code tab — a separate context that never sees the chat conversation. "Same but change the hash" is useless to the agent. Every artifact must be self-contained when delivered. Same principle applies to code snippets, config blocks, etc.
+**Rejected:** Incremental diff-style updates (require reader to mentally merge, error-prone across contexts).
