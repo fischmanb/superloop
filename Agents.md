@@ -1149,6 +1149,65 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 ---
 
+### Round 41E — Convert claude-wrapper.sh to Python (branch: claude/bash-to-python-wrapper-KHlhP)
+
+**Date**: Mar 1, 2026
+**Medium**: Claude Code agent (Phase 1 bash-to-Python conversion)
+
+**What was asked**: Convert `lib/claude-wrapper.sh` to `py/auto_sdd/lib/claude_wrapper.py` with a comprehensive pytest test suite. Phase 1 of the bash-to-Python conversion — single library file, Python coexists in the `py/` tree.
+
+**What actually happened**:
+- Created `py/auto_sdd/lib/claude_wrapper.py` (~195 lines) implementing the `ClaudeResult` dataclass and `run_claude()` function per the interface contract in `conventions.md`.
+- Created `py/tests/test_claude_wrapper.py` (~380 lines) with 35 tests covering: `_dominant_model` helper (6 tests), `_build_cost_record` (4 tests), `ClaudeResult` dataclass (2 tests), `run_claude` success path (5 tests), cost logging (5 tests), error paths (7 tests), edge cases (6 tests).
+- Design decisions:
+  - Added `ClaudeOutputError` exception (not in bash) for when claude exits 0 but returns invalid JSON or JSON without `.result`. Bash just wrote to stderr and exited with the original code; Python raises explicitly so callers can catch it.
+  - Cost log write failures are caught and logged as warnings rather than crashing — the function still returns successfully. This matches bash behavior where `>> "$COST_LOG" 2>/dev/null` silently drops write failures.
+  - `_dominant_model()` and `_build_cost_record()` are module-private helpers (prefixed with `_`) but tested directly for coverage.
+  - Inline exception classes (`AutoSddError`, `AgentTimeoutError`, `ClaudeOutputError`) since `errors.py` doesn't exist yet.
+  - Used `isinstance` type narrowing throughout instead of `type: ignore` to satisfy mypy --strict with `dict[str, object]` values.
+  - JSONL cost log format exactly matches bash output: all 12 fields preserved (timestamp, cost_usd, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, duration_ms, duration_api_ms, num_turns, model, session_id, stop_reason).
+
+**What was NOT changed**: Bash originals (`lib/claude-wrapper.sh`), all files outside the allowed list. No shared module files (`errors.py`, `signals.py`, `state.py`) were created.
+
+**Verification**:
+- `mypy --strict py/auto_sdd/lib/claude_wrapper.py` → Success: no issues found in 1 source file
+- `pytest py/tests/test_claude_wrapper.py -v` → 35 passed in 0.20s
+- `git diff --stat` → Only `Agents.md`, `py/auto_sdd/lib/claude_wrapper.py`, `py/tests/test_claude_wrapper.py`
+
+**Notable observations**:
+- The bash script is 62 lines but packs dense jq logic for model extraction (`modelUsage | to_entries[] | max_by(.total)`). The Python equivalent is clearer but longer.
+- Bash uses `set -uo pipefail` but intentionally omits `-e` — this is documented in the script itself. The Python conversion eliminates this concern entirely since subprocess failures are handled explicitly.
+- The bash `COST_LOG` defaults to `./cost-log.jsonl` via env var; the Python version makes it an explicit parameter (no env var fallback), which is cleaner for library code.
+- Python 3.11 was available on the system (not 3.12+), but all code is compatible. The `from __future__ import annotations` import handles `X | Y` union syntax.
+
+---
+
+### Round 41F — Merge all 5 Phase 1 conversion branches into integration branch
+
+**Date**: Mar 1, 2026
+**Branch**: `convert/libs-integrated-7b8eb2`
+
+**What was asked**: Merge all 5 Phase 1 bash-to-Python conversion branches (41A–41E) into a single integration branch and verify the combined test suite passes.
+
+**What actually happened**:
+- Created integration branch `convert/libs-integrated-7b8eb2` from main (178ea1f).
+- Merged 5 branches in order using `--no-ff`:
+  1. `origin/claude/setup-constraints-pigkT` (41A — reliability.py) — clean merge
+  2. `origin/claude/convert-eval-bash-to-python-fjrN3` (41B — eval_lib.py) — clean merge (Agents.md auto-resolved)
+  3. `origin/claude/bash-to-python-codebase-summary-czLhq` (41C — codebase_summary.py) — clean merge (Agents.md auto-resolved)
+  4. `origin/claude/bash-to-python-validation-SBSMK` (41D — validation.py) — Agents.md conflict resolved (kept all entries 41A–41D)
+  5. `origin/claude/bash-to-python-wrapper-KHlhP` (41E — claude_wrapper.py) — Agents.md conflict resolved (kept all entries 41A–41E)
+- No Python source or test file conflicts across any merge. All conflicts were trivially in Agents.md (concurrent appends to same section).
+
+**What was NOT changed**: main branch, bash originals (lib/*.sh), all non-py files except Agents.md.
+
+**Verification**:
+- `mypy --strict py/auto_sdd/lib/` → Success: no issues found in 6 source files (5 modules + __init__.py)
+- `pytest py/tests/ -v` → 210 passed in 13.84s (35 wrapper + 30 codebase_summary + 68 eval_lib + 65 reliability + 12 validation)
+- `git diff --stat main` → 11 files changed, 4490 insertions: 5 Python modules in py/auto_sdd/lib/, 5 test files in py/tests/, Agents.md
+
+---
+
 ## Known Gaps
 
 - No live integration testing — all validation is `bash -n` + unit tests + structural dry-run
