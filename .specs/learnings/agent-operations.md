@@ -466,3 +466,26 @@ Interval check passed cleanly because pending_captures was empty — but it was 
 - **Related:** L-0067 (related_to), L-0068 (related_to)
 
 Rules that govern session behavior AND agent behavior belong in both memory and repo learnings. Memory ensures cross-session persistence without repo access. Repo ensures agents and fresh onboards inherit the rule. Neither alone is sufficient. When Brian says "remember that" about a process rule, check whether it also belongs in /learnings.
+
+
+---
+
+### L-0070
+- **Type:** process_rule
+- **Status:** active
+- **Confidence:** high
+- **Tags:** state-protocol, interval-check, checkpoint-protocol, counter-semantics
+- **Related:** L-0068 (refines), L-0066 (related_to)
+
+Checkpoints reset the interval counter because the counter measures distance-from-last-reconciliation, and a checkpoint IS a full reconciliation. After the 8-step protocol, accumulated unreconciled state is zero — the counter reflects that. This is semantic, not procedural. Corollary: only the real 8-step protocol resets the counter, because only that guarantees full reconciliation. Partial flushes or checkpoint-labeled commits (L-0066) must not reset it — they leave reconciliation incomplete, so the distance isn't actually zero.
+
+---
+
+### L-0071
+- **Type:** empirical_finding
+- **Status:** active
+- **Confidence:** medium
+- **Tags:** tokenization, input-efficiency, communication-style
+- **Related:** L-0059 (related_to)
+
+Dropping vowels in Brian's messages likely costs slightly more tokens on input (BPE tokenizers split unfamiliar character sequences into more subword tokens than common English words). But Brian's input is tiny relative to model output, so the token cost is negligible. The real test is whether abbreviations cause wasted output tokens via misinterpretation or clarification. They haven't. Brian saves typing time, Claude parses correctly, net positive. Not worth changing.
