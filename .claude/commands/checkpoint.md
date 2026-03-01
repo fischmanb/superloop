@@ -27,8 +27,15 @@ Single command to ensure all context management files are current. Prevents cont
 - If none → skip
 
 ### 4. Learnings
-- If any failure patterns, process rules, empirical findings, architectural rationale, or domain knowledge surfaced: flag for Brian with proposed entry (type, tags, body)
+- Active scan — review the session for learnable moments. Do not rely on recall; check each category:
+  - **Agent completions**: Did an agent finish this session? What worked, failed, or surprised? Does the outcome validate or contradict existing learnings?
+  - **Corrections**: Did Brian correct something? Each correction is a candidate learning.
+  - **New rules or patterns**: Were any stated or discovered?
+  - **Empirical findings**: Any measurements, outcomes, or data points?
+  - **Failures or near-misses**: Anything that went wrong or almost did?
+- For each candidate: propose entry to Brian (type, tags, body)
 - Do NOT auto-write to learnings files — Brian approves entries
+- Under-capture is a failure mode. Match capture density to session density. (L-0113)
 
 ### 5. Methodology Signals
 - Scan session for operator-level insights: preferences, principles, reasoning patterns, workflow decisions, distinctions Brian drew, corrections that reveal generalizable observations

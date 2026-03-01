@@ -69,3 +69,11 @@ Token speed does NOT translate to build speed. Haiku 2x faster tokens but only m
 **Why core:** Architectural cornerstone. A session that doesn't know this might propose JSON signals and break the protocol.
 
 Agents communicate via flat strings (`FEATURE_BUILT: {name}`, `BUILD_FAILED: {reason}`). No JSON parsing, no eval on agent output. Grep is reliable, available everywhere, and fails visibly. JSON parsing introduces fragility — malformed output from an agent silently breaks downstream logic instead of failing at the grep step.
+
+---
+
+## L-0113 — Checkpoint learnings capture requires active scan
+**Source:** `process-rules.md`
+**Why core:** Without this, every fresh session runs checkpoint step 4 passively ("anything come to mind?") and under-captures. The gap between step 4 (passive) and step 5 (active scan) caused a session to declare "none new" while skipping agent outcome validation, correction analysis, and near-miss review.
+
+Checkpoint step 4 must actively scan: agent completions (validate/contradict existing learnings?), Brian's corrections (each is a candidate), new rules or patterns, empirical findings, failures or near-misses. Under-capture is a failure mode equal to over-capture. Match capture density to session density.

@@ -158,3 +158,15 @@ Date: 2026-03-01T20:00:00-05:00
 Related: L-0109 (related_to)
 
 Verification scope must match change scope. Python-only changes need only mypy --strict + pytest. Bash test suites (5 suites) only needed when bash files are modified. Running irrelevant test suites wastes time and creates false confidence signals ("all bash tests pass" is meaningless when no bash changed). Added to PROMPT-ENGINEERING-GUIDE.md as explicit rule.
+
+---
+
+## L-0113
+Type: process_rule
+Tags: checkpoint, learnings, capture, meta
+Confidence: high
+Status: active
+Date: 2026-03-02T02:30:00-05:00
+Related: L-0109 (related_to), L-0016 (related_to)
+
+Checkpoint step 4 (learnings) must use active scan, not passive recall. The original wording "if any surfaced: flag" produced under-capture — a short session was declared "none new" without reviewing agent outcomes, corrections, or near-misses. Step 5 (methodology signals) already had active scan language ("scan session for...") and produced rich output. Step 4 needed the same structure. Active scan categories: agent completions (validate/contradict existing learnings?), Brian's corrections (each is a candidate), new rules or patterns, empirical findings, failures or near-misses. Under-capture is a failure mode equal to over-capture. Match capture density to session density.
