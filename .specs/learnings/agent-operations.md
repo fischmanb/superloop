@@ -272,3 +272,15 @@ Always reprint full artifacts (prompts, code, config) when updating. Separate co
 - **Related:** L-0044 (related_to)
 
 Claimed "no new decisions/learnings" when Brian had explicitly stated a new rule in that turn. Conflated "I noted it in memory" with "nothing to capture to the repo." Memory is volatile; repo is system of record. If Brian corrected or stated a rule, there IS something to capture.
+
+
+---
+
+### L-0053
+- **Type:** empirical_finding
+- **Status:** active
+- **Confidence:** high
+- **Tags:** system-design, self-correction, learnings-system, validation
+- **Related:** L-0048 (depends_on), L-0049 (depends_on)
+
+Graph schema's Related field created a structural integrity check: L-0050 referenced L-0048, but L-0048 didn't exist in the file. A simple grep for referenced-but-missing IDs surfaced two lost entries mechanically. The system caught its own gap without relying on operator memory. Design principle validated: make failures structurally visible through cross-references, not dependent on anyone noticing.
