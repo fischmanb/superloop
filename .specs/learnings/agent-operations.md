@@ -341,3 +341,82 @@ Safety gates (safe to paste / wait) must appear BEFORE the artifact they gate, n
 - **Related:** L-0042 (depends_on), L-0043 (related_to)
 
 Agents should surface observations and judgment calls in their summaries but never write to /learnings directly. The chat session triages agent-reported observations into L-IDs and flags for Brian at checkpoint. This preserves the approval gate (checkpoint step 4) while ensuring agent discoveries aren't lost. Agent prompts should include a summary footer that asks for notable observations alongside the standard verification output.
+
+
+---
+
+### L-0059
+- **Type:** process_rule
+- **Status:** active
+- **Confidence:** high
+- **Tags:** efficiency, lightweight-indexing, context-budget
+- **Related:** L-0056 (related_to), L-0042 (related_to)
+
+Use lightweight indexes (grep titles, type fields, headers) before full file reads. Brian: "do your best from the titles if you can get those without reading all." Titles and type fields are a queryable surface — the graph schema's structured fields exist partly for this purpose. Full reads are the fallback, not the default.
+
+---
+
+### L-0060
+- **Type:** empirical_finding
+- **Status:** active
+- **Confidence:** medium
+- **Tags:** graph-schema, learnings-system, design-rationale
+- **Related:** L-0053 (related_to)
+
+Brian couldn't answer his own question ("should agents report learnings — to summaries or /learnings or elsewhere?") without the graph working: "I cannot say which until we have the graph working." This is a concrete use case for the graph — making cross-cutting queries (which learnings govern agent behavior?) answerable mechanically from titles and tags rather than requiring full reads of all files. The graph isn't an organizational nicety; it's an operational dependency.
+
+---
+
+### L-0061
+- **Type:** failure_pattern
+- **Status:** active
+- **Confidence:** high
+- **Tags:** capture-completeness, density-matching, session-discipline
+- **Related:** L-0049 (related_to), L-0054 (related_to)
+
+Brian's message contained 5 learnable moments (IFF framing, graph use case, lightweight indexing, meta-instruction, attached image). Response captured 2 learnings and 1 methodology signal. Under-capture relative to density — same class as L-0049 (failing to capture what's there). Root cause: rushing to merge/checkpoint mechanics instead of fully processing the input message first. Process input before producing output.
+
+---
+
+### L-0062
+- **Type:** failure_pattern
+- **Status:** active
+- **Confidence:** high
+- **Tags:** evidence-processing, images, verification
+- **Related:** L-0046 (repeats)
+
+Brian attached an image showing agent output. Response never examined or referenced it. L-0046 repeating — failing to process provided evidence. Images are input, not decoration. Even when the image appears routine, acknowledge what it shows; Brian attached it for a reason.
+
+
+---
+
+### L-0063
+- **Type:** process_rule
+- **Status:** active
+- **Confidence:** high
+- **Tags:** capture-completeness, session-discipline, self-monitoring
+- **Related:** L-0061 (refines), L-0049 (related_to)
+
+Before acting on any message, enumerate all learnable moments first. Count them. Capture all. Then proceed to mechanics. Brian should never have to ask "where are all my learnings from that?" — the capture-completeness check happens before response, not after correction. If Brian has to prompt for captures, the process already failed.
+
+---
+
+### L-0064
+- **Type:** process_rule
+- **Status:** active
+- **Confidence:** high
+- **Tags:** corrections-as-input, meta-learning, session-discipline
+- **Related:** L-0063 (related_to), L-0061 (related_to)
+
+Corrections are learnable input, not just error signals. When Brian says "where are all my learnings from that?" the correction itself contains the next learnable moment. Process corrections the same way as original messages: enumerate, count, capture. Failing to learn from the correction that you failed to learn is the recursion case of L-0061.
+
+---
+
+### L-0065
+- **Type:** failure_pattern
+- **Status:** active
+- **Confidence:** high
+- **Tags:** evidence-processing, honesty, fabrication
+- **Related:** L-0046 (repeats), L-0062 (refines)
+
+Claimed to examine an image and produced a vague description ("agent output with expandable sections") that may have been fabricated — the image was in a compacted message and may not have been available. When evidence is unavailable, say so. Producing plausible-sounding descriptions of unexamined evidence is worse than admitting the gap. Honesty about what you can and cannot see is non-negotiable.

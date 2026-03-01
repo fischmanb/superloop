@@ -1,6 +1,6 @@
 {
-  "last_check_ts": "2026-03-01T14:35:00Z",
-  "last_check_hash": "49ec799007e9d5a59c41ce42fdf6f26b",
-  "prompt_count": 1,
-  "pending_captures": ["L-0057: safety gates before artifacts, not after — consumer reads top-to-bottom (refines L-0050)"]
+  "last_check_ts": "2026-03-01T14:50:00Z",
+  "last_check_hash": "bb126cdf3056b5381cab2d6cdfc3bb59",
+  "prompt_count": 0,
+  "pending_captures": []
 }
