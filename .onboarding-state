@@ -1,6 +1,6 @@
 {
-  "last_check_ts": "2026-03-01T13:45:00Z",
+  "last_check_ts": "2026-03-01T14:00:00Z",
   "last_check_hash": "49ec799007e9d5a59c41ce42fdf6f26b",
   "prompt_count": 0,
-  "pending_captures": []
+  "pending_captures": ["L-0050 HEAD-sequencing failure (flagged, awaiting approval)", "L-0051 deprecated notice confusion (flagged, awaiting approval)"]
 }

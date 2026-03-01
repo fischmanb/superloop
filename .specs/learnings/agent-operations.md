@@ -215,3 +215,37 @@ Conversion agents maintain changelogs documenting intentional deviations. Both c
 - **Related:** L-0040 (related_to)
 
 "Checkpoint" treated as "commit and push" for multiple turns before reading the 8-step protocol in .claude/commands/checkpoint.md. ONBOARDING.md reference was insufficient — fresh sessions don't read that file. Fix: expand checkpoint section inline (done in Round 38).
+
+
+---
+
+### L-0050
+- **Type:** failure_pattern
+- **Status:** active
+- **Confidence:** high
+- **Tags:** agent-prompting, sequencing, session-discipline
+- **Related:** L-0048 (related_to)
+
+Outputted agent prompt with HEAD `c7ffb4f`, then made 3 more commits moving HEAD to `dd5cdb4` in same response. Agent precondition would have failed on stale hash. Root cause: prompt rendered before actions that change what it references. Fix: output prompt AFTER all HEAD-moving actions, or explicitly warn to wait.
+
+---
+
+### L-0051
+- **Type:** failure_pattern
+- **Status:** active
+- **Confidence:** medium
+- **Tags:** documentation-clarity, agent-confusion, learnings-system
+- **Related:** L-0044 (related_to)
+
+Misleading "DEPRECATED" notice on agent-operations.md caused agent to hesitate — file said "migrated to learnings/" but the file IS in learnings/. Agent briefly thought file was deprecated when it's actively used. Small wording differences have outsized impact on agent behavior. Fix: reworded to "OLD FORMAT DEPRECATED."
+
+---
+
+### L-0052
+- **Type:** failure_pattern
+- **Status:** active
+- **Confidence:** high
+- **Tags:** verification, weak-assumptions, session-discipline
+- **Related:** L-0046 (related_to)
+
+Checked 8 context files (largest 439 lines), claimed "repo's biggest file is 439 lines" in a decision entry. Actual largest: build-loop-local.sh at 2,299 lines. Generalized from a subset without verifying the claim logically or empirically. Same class as L-0046 (asserting facts without checking provided/available evidence). The fix was a single `find | wc -l | sort` command — trivial to verify, chose not to.
