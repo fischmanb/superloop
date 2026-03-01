@@ -1044,6 +1044,40 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 - index.md stale
 - CLAUDE.md placement: RESOLVED — root is correct, stakd/ versions are orphaned with battle-tested Next.js patterns (L-0094)
 
+### Round 41C — Convert codebase-summary.sh → codebase_summary.py with pytest suite (Phase 1)
+
+**Date**: Mar 1, 2026
+**Branch**: `claude/bash-to-python-codebase-summary-czLhq`
+
+**What was asked**: Convert `lib/codebase-summary.sh` to `py/auto_sdd/lib/codebase_summary.py` with a comprehensive pytest test suite. Phase 1 of the bash-to-Python conversion — one library file, Python coexists in `py/` tree, bash original untouched.
+
+**What actually happened**:
+- Created `py/auto_sdd/lib/codebase_summary.py` (236 lines) implementing `generate_codebase_summary(project_dir: Path, max_lines: int = 200) -> str` matching the interface contract in `conventions.md`.
+- Used a `_SummaryBuilder` class to replace the bash `_gcs_append()` closure pattern — encapsulates output accumulation, line counting, and truncation.
+- All four sections faithfully converted: Component Registry, Type Exports, Import Graph, Recent Learnings. Same caps (50 components, 50 types, 80 imports, 40 learnings lines), same fallback messages, same output format.
+- Replaced bash `find`/`grep`/`awk`/`sed` with `pathlib.rglob()` and `re` module. All type-annotated, `mypy --strict` clean.
+- Raises `ValueError` instead of bash exit code 1 + stderr for missing/non-directory project_dir (documented in conversion changelog).
+- Created `py/tests/test_codebase_summary.py` (30 tests) covering all bash scenarios plus additional Python-specific edge cases: error handling (nonexistent dir, file-not-dir), component cap truncation (55 files → 50 cap message), no-local-imports message, empty learnings files skipped, no-type-exports message.
+- Inline exception pattern: no shared `errors.py`/`signals.py`/`state.py` created (as instructed — those are Phase 2+).
+
+**Design decisions**:
+1. `_SummaryBuilder` vs inline accumulation: Class gives cleaner separation of truncation logic from section builders, and `_total` / `_truncated` state stays encapsulated.
+2. Learnings section uses `content.split("\n")` instead of splitlines — preserves trailing-empty-line behavior matching bash `while IFS= read -r`.
+3. Component file sort by `str(p.relative_to(project_dir))` — matches bash `find ... | sort` behavior (lexicographic on relative path).
+4. Type export regex `export\s+(?:type|interface)\s+([A-Za-z_]\w*)` — captures identifier directly, replacing bash grep+awk pipeline.
+
+**What was NOT changed**: `lib/codebase-summary.sh`, `tests/test-codebase-summary.sh`, all bash scripts, all files outside the allowed list.
+
+**Verification**:
+- `mypy --strict py/auto_sdd/lib/codebase_summary.py` → Success: no issues found in 1 source file
+- `pytest py/tests/test_codebase_summary.py -v` → 30 passed in 0.41s
+- `git status --short` → Only `py/auto_sdd/lib/codebase_summary.py` and `py/tests/test_codebase_summary.py` as new files (plus pycache, not staged)
+
+**Notable observations**:
+- The bash source uses `grep -oE` + `sed` two-step extraction for imports; Python regex captures the path group directly.
+- Bash `wc -l` on empty string reads as "1 line"; Python `len(list)` avoids this edge case naturally.
+- 30 pytest assertions exceed the 23 bash assertion target by 7, covering Python-specific error cases and additional edge cases.
+
 ---
 
 ### Round 41B — Convert eval.sh → eval_lib.py with pytest suite (Phase 1) (branch: claude/convert-eval-bash-to-python-fjrN3)
