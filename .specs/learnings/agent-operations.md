@@ -170,7 +170,7 @@ First-draft agent prompt was 150+ lines; accepted past prompts were ~40 lines. O
 - **Tags:** agent-operations, execution-environment, branch-workflow, bash-to-python-conversion-2026-03-01
 - **Related:** L-0011 (related_to)
 
-Assumed agent branches were local-only based on "Do NOT push" instruction. Agents running in Claude Desktop Code tab execute locally (filesystem, git) but push branches to origin by default. Merge instructions given to Brian failed because they referenced local branch names without `origin/` prefix. Correct workflow: agents push feature branches to remote; merge via `git merge origin/<branch>` or GitHub PR.
+Chat session failed to process user-provided evidence (screenshot showing "Pushed documentation updates to remote feature branch") and captured "branches are local only." The evidence was in the image; the error was not reading it. Agents running in Claude Desktop Code tab execute locally (filesystem, git) and push branches to origin by default. Correct merge workflow: `git merge origin/<branch>` or GitHub PR. Root cause: asserting environmental facts without verifying against provided context.
 
 ---
 
