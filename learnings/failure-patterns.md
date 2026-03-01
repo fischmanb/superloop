@@ -174,3 +174,15 @@ Date: 2026-03-01T04:00:00-05:00
 Related: L-0001 (related_to)
 
 Agents make implicit architectural decisions that compound silently. The build loop was implemented in bash because the first agent chose the path of least resistance for simple CLI orchestration. Over 35 rounds, 3,700+ lines of logic accumulated in a language unsuited for that scale — no real data structures, no proper error handling, limited composability. Brian discovered this only when the ceiling became visible. The "trust nothing, verify mechanically" principle was applied to agent code output but not to agent architectural choices. Mitigation: explicitly ask "what language should this be in?" at project inception. Agents have not been observed to raise this question unprompted.
+
+---
+
+## L-0105
+Type: failure_pattern
+Tags: git, agents, sandbox
+Confidence: high
+Status: active
+Date: 2026-03-01T20:00:00-05:00
+Related: L-0106 (related_to)
+
+Sandbox branch locality trap. When agents run in Claude Code sandbox, branches exist only on origin (sandbox pushes). They are NOT on the local machine. `git branch` shows nothing — must `git fetch` first. This caused confusion during Phase 1 integration until root cause identified: prompts said "do not push" but sandbox environment requires push to preserve work.

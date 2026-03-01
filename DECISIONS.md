@@ -359,3 +359,35 @@
 ## 2026-03-01 — Approval gate violation L-0104
 
 **Decision:** Logged L-0104. "Do what you need to do" ≠ "yes to push." Broad directives are not explicit push approval. Memory #8 rule stands as written.
+
+---
+
+## 2026-03-01 — Verification scope: Python-only changes skip bash suites
+
+**Decision:** When agent work modifies only Python files (no bash changes), verification is mypy --strict + pytest only. Bash test suites run only when bash files are modified. Added to PROMPT-ENGINEERING-GUIDE.md.
+**Why:** L-0110 — running 5 bash suites on Python-only changes wastes time and creates false confidence signals.
+**Rejected:** Always running all suites (unnecessary overhead, misleading green signals).
+
+---
+
+## 2026-03-01 — Sequential agent execution on MacBook Air for Phase 1
+
+**Decision:** Execute 5 conversion agents sequentially on MacBook Air M3/16GB rather than parallel on Mac Studio.
+**Why:** Mac Studio not available at home. Sequential execution completed all 5 in one session (~5-10 min each). Bottleneck was prompt engineering, not compute. L-0108.
+**Rejected:** Waiting for Mac Studio (blocked progress for no practical benefit at this scale).
+
+---
+
+## 2026-03-01 — Pip install exception in agent Hard Constraints
+
+**Decision:** Agent prompts may include `pip install mypy pytest --break-system-packages` when tools not found. Added as explicit exception in Hard Constraints template.
+**Why:** Claude Code sandbox is ephemeral — no persistent package installs. Every agent session starts fresh.
+**Rejected:** Pre-installing in sandbox setup (not possible with current Claude Code architecture).
+
+---
+
+## 2026-03-01 — Agent prompts for Claude Code must push
+
+**Decision:** Agent prompts targeting Claude Code sandbox MUST include `git push origin <branch>` as final step. "Do not push" pattern only applies to local-machine execution.
+**Why:** L-0105, L-0106 — sandbox is ephemeral, work is lost if not pushed. All 5 Phase 1 branches were only preserved because CLAUDE.md default overrode the "do not push" instruction.
+**Rejected:** Keeping "do not push" for all contexts (would lose all sandbox work on session close).

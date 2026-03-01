@@ -76,10 +76,14 @@ Agents have landed on wrong branches and wrong commits multiple times. Precondit
 - Agents.md round entry with: what was asked, what was changed, what was NOT changed, verification results
 
 ### 4. Verification
+- `git diff --stat` to confirm no scope creep — always run this regardless of what was changed.
+- **CRITICAL**: If ANY verification step or test fails, STOP IMMEDIATELY. Do not continue. Do not commit. Do not attempt to fix. Report the failure and take no further action.
+
+**When the prompt modifies bash files** (scripts/, lib/, tests/):
 - `bash -n` syntax checks on modified scripts
 - grep to confirm expected changes exist
 - `cat` to verify file contents
-- Run **ALL** test suites — every prompt must include all five:
+- Run **ALL** bash test suites — every prompt must include all five:
   ```bash
   ./tests/test-reliability.sh
   ./tests/test-eval.sh
@@ -87,9 +91,12 @@ Agents have landed on wrong branches and wrong commits multiple times. Precondit
   ./tests/test-codebase-summary.sh
   DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
   ```
-  Do not cherry-pick which suites to run. A change to any file can break any suite. Run all five, every time.
-- `git diff --stat` to confirm no scope creep
-- **CRITICAL**: If ANY verification step or test fails, STOP IMMEDIATELY. Do not continue. Do not commit. Do not attempt to fix. Report the failure and take no further action.
+  Do not cherry-pick which suites to run. A change to any bash file can break any suite. Run all five, every time.
+
+**When the prompt only creates/modifies Python files** (py/):
+- `mypy --strict` on all new/modified Python modules
+- `pytest -v` on all new/modified Python test files
+- Do NOT run the bash test suites — no bash files were touched, so they cannot break. Running them wastes agent context budget.
 
 ### 5. Commit (no merge)
 - `git add` only the explicitly allowed files (never `git add -A` or `git add .`)

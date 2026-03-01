@@ -134,3 +134,27 @@ Learnings/patterns belong in the main `learnings/` catalog (previously `.specs/l
 - **Body:** The 10 tool call limit per response protects against context loss if a response exceeds context window limits. Each tool call must be one logical operation. Batching multiple operations into a single shell command (e.g., `mkdir && touch && git add && commit && push`) games the limit and defeats the purpose. The constraint is on logical operations performed, not literal tool invocations counted.
 
 
+
+---
+
+## L-0109
+Type: process_rule
+Tags: prompts, agents, review
+Confidence: high
+Status: active
+Date: 2026-03-01T20:00:00-05:00
+Related: L-0104 (related_to)
+
+Prompt engineering review before execution prevents rework. Brian caught 5 violations in draft prompts before any agent ran: wrong branch naming convention, abbreviated hard constraints missing full template clauses, over-prescribed interfaces (violating L-0045/L-0042), nested markdown inside code blocks, wrong verification scope (bash suites for Python-only changes). Fixing prompts costs minutes; fixing agent output costs full re-runs. Always review prompts against the guide before handing to agents.
+
+---
+
+## L-0110
+Type: process_rule
+Tags: testing, verification
+Confidence: high
+Status: active
+Date: 2026-03-01T20:00:00-05:00
+Related: L-0109 (related_to)
+
+Verification scope must match change scope. Python-only changes need only mypy --strict + pytest. Bash test suites (5 suites) only needed when bash files are modified. Running irrelevant test suites wastes time and creates false confidence signals ("all bash tests pass" is meaningless when no bash changed). Added to PROMPT-ENGINEERING-GUIDE.md as explicit rule.
