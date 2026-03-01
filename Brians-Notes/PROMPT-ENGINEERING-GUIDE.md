@@ -186,6 +186,12 @@ Superseded branches (whose work is fully merged) are noted as such in the log wi
 
 Consolidated into `.specs/learnings/agent-operations.md` — the single source of truth for all agent failure modes, process lessons, and session discipline rules. Read the "Failure Catalog" and "Operational Process Lessons" sections there.
 
+## Design Principles
+
+See `DESIGN-PRINCIPLES.md` in the repo root. Project-wide constraints on grepability, graph-readiness, and relationship type schema.
+
+**When this matters for prompts**: If a prompt instructs an agent to produce structured output — failure catalogs, eval results, learnings, state files, spec metadata — the prompt should encode the format expectations from the design principles. Specifically: flat greppable metadata, unique IDs on knowledge entries, explicit relationships using the defined edge types. If the agent is just building features, the principles don't apply to its prompt.
+
 ---
 
 ## Pending Fixes to Propagate

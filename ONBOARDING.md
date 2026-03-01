@@ -33,41 +33,7 @@ Chat sessions (claude.ai with Desktop Commander or any equivalent tool or capabi
 
 ## Design Principles
 
-These apply across the entire project — code, documentation, knowledge capture, agent prompts, and any future tooling. They are standing constraints, not suggestions.
-
-### 1. Grepability
-
-Every structured artifact (learnings, state files, specs, metadata) must be greppable by its key fields without parsing logic. No nested structures that require jq, regex groups, or multi-line matching to extract meaning. If `grep -i "tag:prompt-engineering"` can't find relevant entries, the format is wrong.
-
-This means: flat key-value metadata, one logical entry per block, consistent delimiters, IDs and tags on their own lines. Content can be prose; metadata cannot be.
-
-Why: The primary consumer of these files today is Claude grepping markdown in a chat session. The secondary consumer is a future script building a graph. Both need the same thing — fast, reliable extraction without brittle parsing.
-
-### 2. Graph-readiness
-
-All knowledge capture should be structured so that the transition to a graph store is a format conversion, not a knowledge extraction project. This means:
-
-- **Unique IDs** on every discrete knowledge entry (learning, decision, finding)
-- **Explicit relationships** between entries, using a small fixed set of edge types
-- **Consistent metadata** (type, tags, date, confidence, status) that maps directly to node properties
-- **No implicit knowledge** — if two things are related, there's a `Related:` field saying so. Don't rely on proximity in the file or shared section headings to imply connection.
-
-### 3. Relationship type schema (graph edge types)
-
-Defined here, enforced everywhere. Keep the set small — every new edge type increases graph density and query complexity. Specificity belongs in tags and body text, not edge types.
-
-| Edge type | Meaning | Example |
-|-----------|---------|---------|
-| `related_to` | General topical connection. Default when the relationship exists but doesn't fit a stronger type. | L-0042 (push discipline) ↔ L-0015 (agent behavior) |
-| `supersedes` | This entry replaces or updates an earlier one. The earlier entry's status should be `superseded`. | L-0051 (revised retry logic) supersedes L-0030 (original retry logic) |
-| `depends_on` | This entry's validity or applicability requires the referenced entry to hold. Directional. | L-0060 (sidecar feedback) depends_on L-0045 (eval system) |
-| `contradicts` | These entries are in tension. Both may be valid in different contexts, or one may be wrong. Requires human judgment to resolve. | L-0070 (agents are faster with concise prompts) contradicts L-0071 (agents miss requirements with terse prompts) |
-
-**Rules:**
-- Every `Related:` field must specify the edge type: `Related: L-0015 (related_to), L-0030 (supersedes)`
-- No new edge types without Brian's approval. If none of these four fit, use `related_to` and add context in the body.
-- `supersedes` and `depends_on` are directional. `related_to` and `contradicts` are bidirectional.
-- When an entry is created with a relationship, the referenced entry should be updated to include the back-reference. This is a maintenance task, not a blocker — missing back-references get caught during periodic sweeps.
+See **`DESIGN-PRINCIPLES.md`** — project-wide constraints on grepability, graph-readiness, and relationship type schema. Read before writing prompts that produce structured output. Advisory, never build-blocking.
 
 ---
 
@@ -161,6 +127,7 @@ After at least one full campaign, a function will correlate t-shirt sizes from r
 | File | What it contains | When to read |
 |------|-----------------|--------------|
 | **ONBOARDING.md** (this file) | Full project context for a fresh chat | Always read first |
+| **DESIGN-PRINCIPLES.md** | Project-wide constraints: grepability, graph-readiness, relationship type schema, when to apply | Before writing prompts that produce structured output. Before designing new knowledge capture formats. |
 | **Agents.md** | Agent work log (Rounds 1-30), architecture reference, signal protocol, verification checklist, known gaps, process lessons | Before making ANY changes — this is the source of truth for what happened and what works |
 | **README.md** | Public-facing docs: quick start, config, file structure, what works and what breaks | For understanding the user-facing narrative |
 | **CLAUDE.md** | Instructions that Claude Code agents read automatically when invoked by the build loop | When modifying agent behavior or build prompts |
@@ -363,6 +330,7 @@ auto-sdd/
 ├── WIP/                             # Work-in-progress specs and designs
 │   └── post-campaign-validation.md  # Post-campaign validation pipeline spec (v0.3)
 ├── ONBOARDING.md                  # ← YOU ARE HERE
+├── DESIGN-PRINCIPLES.md           # Project-wide design constraints (grepability, graph-readiness, schema)
 ├── CLAUDE.md                      # Agent instructions (read by Claude Code automatically)
 ├── Agents.md                      # Agent work log + architecture + verification checklist
 ├── README.md                      # Public-facing documentation
