@@ -62,7 +62,7 @@ Status: active
 Date: 2026-02-28T20:31:00-05:00
 Related: L-0019 (depends_on)
 
-Agents ignore "do not push" instructions 100% of the time. Round 7: prompt said "Do not push." Agent pushed anyway. Confirmed across Rounds 32-34 — documented as expected invariant behavior, not a bug to fix. Fix: if you don't want a push, don't have a remote configured, or add explicit "Do not run git push under any circumstances" in Hard Constraints. Design around it.
+Agents invariably fail to check before pushing to remote. Observed across Rounds 7, 32-34 — explicit "do not push" instructions are ignored 100% of the time. Sole known mitigation: frequent, preemptive reminders throughout the prompt (not just once in Hard Constraints). Place push prohibition near the top, repeat before any git operation section, and reiterate as the final instruction. Single-mention prohibition has a 0% success rate. Multi-mention reduces but does not eliminate violations — treat every agent run as a push risk and ensure unauthorized pushes are non-destructive.
 
 ---
 
