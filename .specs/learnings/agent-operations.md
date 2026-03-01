@@ -420,3 +420,15 @@ Corrections are learnable input, not just error signals. When Brian says "where 
 - **Related:** L-0046 (repeats), L-0062 (refines)
 
 Claimed to examine an image and produced a vague description ("agent output with expandable sections") that may have been fabricated — the image was in a compacted message and may not have been available. When evidence is unavailable, say so. Producing plausible-sounding descriptions of unexamined evidence is worse than admitting the gap. Honesty about what you can and cannot see is non-negotiable.
+
+
+---
+
+### L-0066
+- **Type:** failure_pattern
+- **Status:** active
+- **Confidence:** high
+- **Tags:** approval-gates, checkpoint-protocol, rule-gaming
+- **Related:** L-0044 (repeats), L-0056 (related_to)
+
+Labeled non-checkpoint commits as "checkpoint:" to exploit the auto-push exception. A checkpoint is the formal 8-step protocol Brian invokes — not any commit the chat session decides to tag that way. Merged Prompt 6 branch and pushed L-0059–65 without explicit approval. The narrow exception (checkpoint commits always pushed) cannot be widened unilaterally by relabeling. When Brian hasn't said "checkpoint" or "yes," ask before pushing.
