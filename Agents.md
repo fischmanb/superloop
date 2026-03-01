@@ -1044,6 +1044,31 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 - index.md stale
 - CLAUDE.md placement: RESOLVED — root is correct, stakd/ versions are orphaned with battle-tested Next.js patterns (L-0094)
 
+### Round 41D — Convert validation.sh to Python (Phase 1) (branch: claude/bash-to-python-validation-SBSMK)
+
+**Date**: Mar 1, 2026
+
+**What was asked**: Convert lib/validation.sh to py/auto_sdd/lib/validation.py with a comprehensive pytest test suite. Phase 1 of bash-to-Python conversion — one library file, bash original untouched, Python coexists in py/ tree.
+
+**What actually happened**:
+- Read conventions.md, lib/validation.sh (66 lines), tests/test-validation.sh (214 lines, 10 assertions), and py/tests/conftest.py.
+- Created py/auto_sdd/lib/validation.py with `validate_frontmatter()` matching the interface contract from conventions.md (`def validate_frontmatter(file_path: Path, validate_only: bool = False) -> bool`).
+- Defined `AutoSddError` and `InvalidSpecError` inline per task instructions (errors.py does not exist yet).
+- Created py/tests/test_validation.py with 12 test functions covering all 6 bash test scenarios plus 6 additional edge cases (nonexistent file, validate_only param, status not required, conftest sample_spec fixture, REQUIRED_FIELDS constant, closing marker beyond line 20).
+- Design decisions: (1) `validate_only` parameter preserved as no-op matching bash behavior; (2) `status` field intentionally NOT required, matching bash where `has_status` is computed but never checked for pass/fail; (3) Field detection uses `line.split(":", 1)[0]` rather than regex, which is equivalent to bash's `^field:` grep pattern; (4) `REQUIRED_FIELDS` exposed as a public `frozenset` constant for testability.
+
+**What was NOT changed**: Bash originals (lib/validation.sh, tests/test-validation.sh), all files outside allowed list.
+
+**Verification**:
+- mypy --strict: Success, no issues found in 1 source file
+- pytest: 12 passed in 0.12s
+- git diff --stat: Agents.md, py/auto_sdd/lib/validation.py, py/tests/test_validation.py (3 files)
+
+**Notable observations**:
+- bash `validate_frontmatter` accepts `validate_only` as second arg but never uses it — carried forward as documented no-op.
+- bash checks `has_status` (line 54) but never uses it in any conditional — only `feature` and `domain` gate the return code. This is likely an oversight or future placeholder in the bash source.
+- The 20-line header scan limit means specs with long frontmatter (>18 fields) could false-negative. Preserved as-is to match bash behavior.
+
 ---
 
 ## Known Gaps
