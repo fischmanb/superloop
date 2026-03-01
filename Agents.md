@@ -1097,6 +1097,16 @@ grep -c "source.*reliability.sh" scripts/*.sh  # Should be 2
 grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh)
 ```
 
+### Round 41A: Bash→Python — reliability.sh (branch: claude/setup-constraints-pigkT)
+
+**What was asked**: Convert lib/reliability.sh to py/auto_sdd/lib/reliability.py with pytest suite
+
+**What actually happened**: Full 1:1 behavioral conversion of all 594 lines of lib/reliability.sh to idiomatic Python (reliability.py: ~350 lines). Followed conventions.md as authoritative guide — used its interface contract (Feature with id/name/complexity, DriftPair with spec_file/source_files, write_state accepting list[str] directly, completed_features_json removed as bash-ism). Defined exception hierarchy (AutoSddError, LockContentionError, AgentTimeoutError, CircularDependencyError) inline since errors.py doesn't exist yet. All functions fully typed, passing mypy --strict. Test suite (test_reliability.py) has 65 tests covering all scenarios from the 68-assertion bash suite (3 bash-specific meta-tests replaced with Python equivalents: exception hierarchy checks, dataclass structure checks, bash state compatibility checks).
+
+**What was NOT changed**: bash originals (lib/reliability.sh, tests/test-reliability.sh), any file outside py/ tree (except Agents.md), no files in scripts/ or tests/ (bash originals)
+
+**Verification**: mypy --strict: Success (0 issues). pytest: 65 passed. bash tests: 154/154 (reliability 68 + eval 53 + validation 10 + codebase-summary 23). dry-run: all passed. git diff --stat: clean (only py/auto_sdd/lib/reliability.py, py/tests/test_reliability.py, Agents.md).
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
