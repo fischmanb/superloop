@@ -94,3 +94,11 @@
 
 **Decision:** Title the methodology document `HOW-I-WORK-WITH-GENERATIVE-AI.md`. Repo-agnostic content, lives at auto-sdd root.
 **Why:** "Generative AI" scopes correctly without being too casual ("chatbots") or too narrow ("agents"). First-person framing is a feature given repo credibility. Considered `METHODOLOGY.md` (too generic) and `HOW-I-WORK-WITH-AI.md` (slightly less precise).
+
+---
+
+## 2026-03-01 — Bash→Python conversion identified as prerequisite for auto-QA
+
+**Decision:** RICE analysis places bash→Python conversion (4.3) and auto-QA (3.2) as sequentially linked. Converting first makes auto-QA dramatically easier. Proposed sequence: fix stakd-v2 → convert to Python → implement auto-QA in Python.
+**Why:** ~3,700 lines of bash orchestration hit a ceiling for implementing seven-phase runtime validation. Python offers real data structures, proper error handling, composability. Current bash works but blocks extensibility.
+**Alternatives considered:** Implement auto-QA in bash first (proves concept before rewrite, avoids rewrite-before-shipping trap, but painful implementation). Deferred — decision not final, pending Brian's priority call.

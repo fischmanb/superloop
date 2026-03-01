@@ -17,7 +17,8 @@ Ordered by efficiency gain per complexity added:
    - **Build logs**: `stakd-v2/logs/build-*.log` and `stakd-v3/logs/build-*.log`.
    - Round 35 merged to main and pushed to origin.
    - **Data snapshot**: `~/auto-sdd/campaign-results/` — raw/ and reports/ per campaign variant.
-2. **auto-QA (post-campaign validation pipeline)** — Multi-agent pipeline: boot app, Playwright browse, generate ACs from specs, test, catalog failures, RCA, fix through build gates. Seven phases (0-5, Phase 4 split into 4a+4b). Spec: `WIP/post-campaign-validation.md` (v0.3). *Spec complete, implementation not started.*
+2. **Bash→Python conversion (2026-03-01)** — ~3,700 lines of bash orchestration across 6 files hit a ceiling for extensibility. RICE score 4.3, sequentially linked to auto-QA (implementing 7-phase validation in bash would be painful). Proposed sequence: stakd-v2 fix → convert → auto-QA in Python. Decision not final. SWOT/RICE analysis in DECISIONS.md.
+3. **auto-QA (post-campaign validation pipeline)** — Multi-agent pipeline: boot app, Playwright browse, generate ACs from specs, test, catalog failures, RCA, fix through build gates. Seven phases (0-5, Phase 4 split into 4a+4b). Spec: `WIP/post-campaign-validation.md` (v0.3). *Spec complete, implementation not started. Blocked on language decision.*
 3. **Local model integration** — Replace cloud API with local LM Studio on Mac Studio. Reference: `archive/local-llm-pipeline/`. *Not started.*
 4. **Adaptive routing / parallelism** — Only if data from 1–3 justifies complexity. *Deprioritized.*
 
