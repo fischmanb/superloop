@@ -95,7 +95,7 @@ See **`ACTIVE-CONSIDERATIONS.md`** — priority stack, in-flight work, and open 
 | **INDEX.md** | One-line lookup table for the whole repo | When you need to find something |
 | **DECISIONS.md** | Append-only decision log with rationale | Before re-opening a settled question |
 | **DESIGN-PRINCIPLES.md** | Project-wide constraints: grepability, graph-readiness, relationship type schema, confidence/status enums, when to apply | Before writing prompts that produce structured output. Before designing new knowledge capture formats. |
-| **learnings/** | Learnings catalog: `core.md` (**read first — 11 curated constitutional learnings**), `failure-patterns.md`, `process-rules.md`, `empirical-findings.md`, `architectural-rationale.md`, `domain-knowledge.md`. 63 graph-format entries (L-0001–L-0129, non-contiguous). | `core.md` on every fresh onboard — no exceptions. Type files when adding/reviewing learnings or during checkpoint step 4 active scan. |
+| **learnings/** | Learnings catalog: `core.md` (**read first — 12 curated constitutional learnings**), `failure-patterns.md`, `process-rules.md`, `empirical-findings.md`, `architectural-rationale.md`, `domain-knowledge.md`. 64 graph-format entries (L-0001–L-0130, non-contiguous). | `core.md` on every fresh onboard — no exceptions. Type files when adding/reviewing learnings or during checkpoint step 4 active scan. |
 | **Agents.md** | Agent work log (Rounds 1-30), architecture reference, signal protocol, verification checklist, known gaps, process lessons | Before making ANY changes — this is the source of truth for what happened and what works |
 | **README.md** | Public-facing docs: quick start, config, file structure, what works and what breaks | For understanding the user-facing narrative |
 | **CLAUDE.md** | Instructions that Claude Code agents read automatically when invoked by the build loop | When modifying agent behavior or build prompts |
@@ -224,7 +224,7 @@ Full details in `Agents.md`. Here's the arc:
 
 ## Process Lessons (Hard-Won)
 
-See `learnings/core.md` for the curated essentials (read on every fresh onboard) and `learnings/` type-specific files for the full catalog (63 graph-format entries, L-0001–L-0129). All process lessons, failure modes, and session discipline rules are maintained there as the single source of truth.
+See `learnings/core.md` for the curated essentials (read on every fresh onboard) and `learnings/` type-specific files for the full catalog (64 graph-format entries, L-0001–L-0130). All process lessons, failure modes, and session discipline rules are maintained there as the single source of truth.
 
 ---
 

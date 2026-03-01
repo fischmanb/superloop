@@ -91,3 +91,10 @@ Checkpoint step 4 must actively scan: agent completions (validate/contradict exi
 ## L-0125 — Scan existing project assets before building new process infrastructure
 **Source:** `architectural-rationale.md`
 **Why core:** The checkpoint/learnings system was built without checking what slash commands and conventions files already existed. Four commands already had reusable patterns (`/catch-drift`, `/check-coverage`, `/update-test-docs`, `/verify-test-counts`). CLAUDE.md — the file every Claude Code agent reads — pointed to the old learnings location (`.specs/learnings/`) while the new system lived in `learnings/`. `/compound` wrote to the wrong place. Any process change must audit: (1) existing commands for reusable patterns, (2) CLAUDE.md and other conventions files for references the change invalidates, (3) existing tooling that can be wired in mechanically instead of rebuilt.
+
+
+---
+
+## L-0130 — Design for context loss as the default
+**Source:** `architectural-rationale.md`
+**Why core:** Context windows compact, sessions end, responses fail mid-stream. The only state that survives is file state. A fresh session that doesn't know this will keep plans, progress, and work-in-progress in context only — then lose it. Self-test (checkpoint step 9): "If context dies now, can the next session resume from files alone?" Check: `.onboarding-state` current? `ACTIVE-CONSIDERATIONS.md` accurate? Work committed? Multi-response plans externalized? If no — fix before responding.

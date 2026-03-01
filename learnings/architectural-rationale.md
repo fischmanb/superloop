@@ -99,3 +99,25 @@ Date: 2026-03-02T03:45:00-05:00
 Related: L-0125 (related_to)
 
 Auto-sdd's build system must remain repo-agnostic. Checkpoint tooling, learnings management, and meta-process commands (like `/verify-learnings-counts`) are auto-sdd's own development infrastructure — they exist to help develop auto-sdd itself. The build loop that auto-sdd runs to build other projects must not depend on or assume these files exist in the target repo. Mechanical integrations into the checkpoint protocol are safe (they run in auto-sdd's context). Mechanical integrations into the build loop are not (they would impose auto-sdd's structure on target repos).
+
+
+---
+
+## L-0130
+Type: architectural_rationale
+Tags: context-loss, compaction, file-first, resilience, mechanical-check
+Confidence: high
+Status: active
+Date: 2026-03-02T04:15:00-05:00
+Related: L-0118 (depends_on), L-0114 (related_to), L-0127 (related_to)
+
+Design for context loss as the default, not the exception. Context windows compact, sessions end, responses fail mid-stream. The only state that survives is file state. Every response that advances work must leave enough in files that a replacement session can resume without asking "where were we?"
+
+Mechanical self-test (run mentally before ending any response that changes project state): "If the context window were wiped after this response, could the next session pick up from file state alone?" If no — something wasn't externalized. Specifically check:
+
+1. `.onboarding-state` — does it reflect current HEAD and work-in-progress?
+2. `ACTIVE-CONSIDERATIONS.md` — does it list what's in flight and what's next?
+3. Uncommitted work — is it committed, or at minimum described in a file the next session will read?
+4. Multi-response plans — is the plan in a file, or only in the context that's about to die?
+
+The onboarding protocol exists so post-compaction recovery costs 2-3 tool calls, not 20 messages of "what were we doing?" This learning is the *why* behind file-first architecture. The self-test is the *enforcement*.

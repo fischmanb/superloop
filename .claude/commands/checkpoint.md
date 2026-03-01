@@ -70,6 +70,14 @@ Write `.onboarding-state`:
 }
 ```
 
+### 9. Context-Loss Self-Test (L-0130)
+Before ending: "If the context window were wiped after this response, could the next session pick up from file state alone?" Check:
+- `.onboarding-state` reflects current HEAD?
+- `ACTIVE-CONSIDERATIONS.md` lists what's in flight and what's next?
+- All work committed (or described in a file if mid-stream)?
+- Multi-response plans externalized, not only in context?
+If any answer is no — fix it before responding.
+
 ## Options
 
 - `/checkpoint` — full checklist
