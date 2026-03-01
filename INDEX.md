@@ -15,6 +15,7 @@
 | README.md | Public-facing docs, quick start, config |
 | ARCHITECTURE.md | Local LLM pipeline design (archived system 2) |
 | DECISIONS.md | Append-only decision log with rationale |
+| HOW-I-WORK-WITH-GENERATIVE-AI.md | Methodology observations — repo-agnostic, third person, accumulation-based |
 | VERSION | Semantic version (2.0.0) |
 
 ## Directories
