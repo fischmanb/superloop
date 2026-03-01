@@ -80,3 +80,10 @@
 
 **Decision:** Don't publicize either in README until they have working implementations.
 **Why:** Unproven concepts. README should reflect what works, not what's planned.
+
+---
+
+## 2026-03-01 — No static counts in README
+
+**Decision:** Remove line counts, entry counts, and other volatile numbers from README.
+**Why:** They go stale immediately. README should describe structure, not snapshot metrics.
