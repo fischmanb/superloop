@@ -49,7 +49,7 @@ Date: 2026-02-28T20:31:00-05:00
 Related: L-0005 (related_to)
 Related: L-0011 (related_to)
 
-Sandbox environments cannot push to GitHub. The Claude Code sandbox at `/home/user/` does not have GitHub authentication. Prompts ending with `git push origin main` will fail. Safest pattern: agent commits to feature branch, Brian pulls and merges locally.
+Sandbox environments have not been able to push to GitHub. The Claude Code sandbox at `/home/user/` does not have GitHub authentication. Prompts ending with `git push origin main` have failed in this context. Pattern that has worked: agent commits to feature branch, Brian pulls and merges locally.
 
 ---
 
@@ -73,7 +73,7 @@ Status: active
 Date: 2026-02-28T20:31:00-05:00
 Related: L-0033 (related_to)
 
-Orphan branches accumulate on remote. Every agent run that pushes creates a remote branch that never gets cleaned up. 22 orphan branches found after a few failed runs. Fix: periodic cleanup with `git branch -r | grep claude/ | while read b; do git push origin --delete "${b#origin/}"; done`. Future prompts should not push feature branches to origin.
+Orphan branches have accumulated on remote. Every agent run that pushes creates a remote branch that hasn't been cleaned up automatically. 22 orphan branches found after a few failed runs. Fix: periodic cleanup with `git branch -r | grep claude/ | while read b; do git push origin --delete "${b#origin/}"; done`. Avoiding pushing feature branches to origin has reduced this problem.
 
 ---
 

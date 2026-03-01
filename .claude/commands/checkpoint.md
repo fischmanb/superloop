@@ -35,7 +35,7 @@ Single command to ensure all context management files are current. Prevents cont
 - Bias toward capture — a false positive costs 5 seconds to delete, a false negative is gone
 - If any found: append raw notes to the accumulation section at the bottom of `HOW-I-WORK-WITH-GENERATIVE-AI.md` (create file with preamble + accumulation section if it doesn't exist)
 - Format: `- (YYYY-MM-DD) <raw observation>`
-- Voice: Third person ("Brian prefers...", "Brian has found..."), descriptive not prescriptive. These are observed patterns, not rules. Include context for *why* when available.
+- Voice: Third person ("Brian prefers...", "Brian has found..."), empirical not prescriptive. Describe what was observed/tried/preferred, not universal laws. "Brian has found X effective" over "one must always X." This does not apply to operational gates elsewhere in the repo.
 - NEVER use first person. The document is written *about* Brian by AI; first-person would misrepresent authorship.
 
 ### 6. ONBOARDING.md Drift Check

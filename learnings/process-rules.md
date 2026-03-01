@@ -14,7 +14,7 @@ Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
 
-Keep agent prompts concise — describe intent, not implementation code. Prescriptive prompts (pasting exact code to insert) cause agents to copy without understanding, miss edge cases, and fail when context differs slightly. Intent-based prompts ("add a guard that exits if CLAUDECODE is set") produce better results because the agent must reason about placement and integration.
+Keeping agent prompts concise — describing intent, not implementation code — has produced better results. Prescriptive prompts (pasting exact code to insert) have caused agents to copy without understanding, miss edge cases, and fail when context differs slightly. Intent-based prompts ("add a guard that exits if CLAUDECODE is set") have produced better results because the agent reasons about placement and integration.
 
 ---
 
@@ -37,7 +37,7 @@ Status: active
 Date: 2026-02-28T20:31:00-05:00
 Related: L-0001 (depends_on)
 
-Every prompt must end with verification gates — `bash -n`, grep, test suite, `git diff --stat`. Agent self-assessment is unreliable; machine-checkable gates are the only trustworthy signal.
+Every prompt must end with verification gates — `bash -n`, grep, test suite, `git diff --stat`. Agent self-assessment has proven unreliable; machine-checkable gates are the only trustworthy signal.
 
 ---
 

@@ -16,7 +16,7 @@ Date: 2026-02-28T20:31:00-05:00
 Related: L-0025 (related_to)
 Related: L-0027 (related_to)
 
-Agent self-assessments are unreliable. Round 1 described bugs in code that didn't exist. Agents report "all verifications passed" while having made changes far beyond scope. The verification block in the prompt must enforce correctness — never trust the agent's narrative summary. Always include machine-checkable gates (`git diff --stat`, `bash -n`, grep).
+Agent self-assessments have proven unreliable. Round 1 described bugs in code that didn't exist. Agents report "all verifications passed" while having made changes far beyond scope. The verification block in the prompt should enforce correctness — the agent's narrative summary has not been a reliable signal. Machine-checkable gates (`git diff --stat`, `bash -n`, grep) have been the effective substitute.
 
 ---
 
@@ -27,7 +27,7 @@ Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
 
-"Defined but never called" is the most common agent failure mode. All 3 early rounds had at least one instance. After adding any function, grep for call sites.
+"Defined but never called" has been the most common agent failure mode observed. All 3 early rounds had at least one instance. Grepping for call sites after adding any function has caught these.
 
 ---
 
@@ -50,7 +50,7 @@ Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
 
-Agents will run in the wrong directory. Round 7: prompt didn't specify working directory. Agent ran in parent `auto-sdd/` repo instead of `stakd/` subdirectory. Fix: always include a `pwd` check in Preconditions, and if the target is a subdirectory, add `cd <path> && pwd` as the first precondition step.
+Agents have been observed to run in the wrong directory. Round 7: prompt didn't specify working directory. Agent ran in parent `auto-sdd/` repo instead of `stakd/` subdirectory. Fix: always include a `pwd` check in Preconditions, and if the target is a subdirectory, add `cd <path> && pwd` as the first precondition step.
 
 ---
 
@@ -62,7 +62,7 @@ Status: active
 Date: 2026-02-28T20:31:00-05:00
 Related: L-0019 (depends_on)
 
-Agents invariably fail to check before pushing to remote. Observed across Rounds 7, 32-34 — explicit "do not push" instructions are ignored 100% of the time. Sole known mitigation: frequent, preemptive reminders throughout the prompt (not just once in Hard Constraints). Place push prohibition near the top, repeat before any git operation section, and reiterate as the final instruction. Single-mention prohibition has a 0% success rate. Multi-mention reduces but does not eliminate violations — treat every agent run as a push risk and ensure unauthorized pushes are non-destructive.
+Agents have consistently failed to check before pushing to remote. Observed across Rounds 7, 32-34 — explicit "do not push" instructions were ignored 100% of the time in these rounds. Most effective mitigation found: frequent, preemptive reminders throughout the prompt (not just once in Hard Constraints). Placing push prohibition near the top, repeating before any git operation section, and reiterating as the final instruction has reduced but not eliminated violations. Single-mention prohibition had a 0% success rate in observed rounds. Treating every agent run as a push risk and ensuring unauthorized pushes are non-destructive has been the practical approach.
 
 ---
 
@@ -74,7 +74,7 @@ Status: active
 Date: 2026-02-28T20:31:00-05:00
 Related: L-0003 (related_to)
 
-node_modules must be in .gitignore before running any agent. If the repo has a package.json, ensure `node_modules/` is in `.gitignore`. Agents may run `npm install` despite instructions not to.
+node_modules must be in .gitignore before running any agent. If the repo has a package.json, ensure `node_modules/` is in `.gitignore`. Agents have been observed to run `npm install` despite instructions not to.
 
 ---
 
@@ -108,7 +108,7 @@ Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
 
-Agents don't report unprompted. Round 9: agent completed all steps but did not report results until asked. Fix: every prompt must end with "Report your findings immediately upon completion. Do not wait for a follow-up question."
+Agents have not reported unprompted in observed rounds. Round 9: agent completed all steps but did not report results until asked. Fix: every prompt must end with "Report your findings immediately upon completion. Do not wait for a follow-up question."
 
 ---
 
@@ -132,7 +132,7 @@ Status: active
 Date: 2026-02-28T20:31:00-05:00
 Related: L-0010 (related_to)
 
-Agents work around failures instead of stopping. Round 9: agent couldn't push from sandbox (no GitHub auth). Instead of stopping, it abandoned the clone, went to a stale local repo, and applied changes there — 5 autonomous decisions diverging from intended path. Fix: Hard Constraints must include explicit STOP instructions for ANY unexpected situation.
+Agents have been observed to work around failures instead of stopping. Round 9: agent couldn't push from sandbox (no GitHub auth). Instead of stopping, it abandoned the clone, went to a stale local repo, and applied changes there — 5 autonomous decisions diverging from intended path. Fix: Hard Constraints must include explicit STOP instructions for ANY unexpected situation.
 
 ---
 
@@ -161,7 +161,7 @@ Date: 2026-02-28T20:31:00-05:00
 Related: L-0036 (related_to)
 Related: L-0038 (related_to)
 
-Build logs inside PROJECT_DIR will be destroyed. `$PROJECT_DIR/logs/` sits inside the git working tree. Any operation that manipulates the working tree — `git clean`, `git checkout --force`, branch switches, project re-scaffolding — can delete the logs directory. Fixed in Round 37: all logs now write to `$SCRIPT_DIR/../logs/<project-name>/`, outside the project's git working tree. Rule: never store campaign artifacts inside a directory that agents or git operations can modify.
+Build logs inside PROJECT_DIR are at risk of destruction. `$PROJECT_DIR/logs/` sits inside the git working tree. Any operation that manipulates the working tree — `git clean`, `git checkout --force`, branch switches, project re-scaffolding — can delete the logs directory. Fixed in Round 37: all logs now write to `$SCRIPT_DIR/../logs/<project-name>/`, outside the project's git working tree. Rule: never store campaign artifacts inside a directory that agents or git operations can modify.
 
 ---
 
@@ -173,4 +173,4 @@ Status: active
 Date: 2026-03-01T04:00:00-05:00
 Related: L-0001 (related_to)
 
-Agents make implicit architectural decisions that compound silently. The build loop was implemented in bash because the first agent chose the path of least resistance for simple CLI orchestration. Over 35 rounds, 3,700+ lines of logic accumulated in a language unsuited for that scale — no real data structures, no proper error handling, limited composability. Brian discovered this only when the ceiling became visible. The "trust nothing, verify mechanically" principle was applied to agent code output but not to agent architectural choices. Mitigation: explicitly ask "what language should this be in?" at project inception. Agents will not raise this question themselves.
+Agents make implicit architectural decisions that compound silently. The build loop was implemented in bash because the first agent chose the path of least resistance for simple CLI orchestration. Over 35 rounds, 3,700+ lines of logic accumulated in a language unsuited for that scale — no real data structures, no proper error handling, limited composability. Brian discovered this only when the ceiling became visible. The "trust nothing, verify mechanically" principle was applied to agent code output but not to agent architectural choices. Mitigation: explicitly ask "what language should this be in?" at project inception. Agents have not been observed to raise this question unprompted.

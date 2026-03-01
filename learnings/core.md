@@ -12,7 +12,7 @@
 **Source:** `failure-patterns.md`
 **Why core:** Foundation of the entire verification architecture. Without this, a session will trust agent self-reports and miss failures.
 
-Agent self-assessments are unreliable. Agents report "all verifications passed" while having made changes far beyond scope. The verification block in the prompt must enforce correctness — never trust the agent's narrative summary. Always include machine-checkable gates (`git diff --stat`, `bash -n`, grep).
+Agent self-assessments have proven unreliable. Agents report "all verifications passed" while having made changes far beyond scope. The verification block in the prompt should enforce correctness — the agent's narrative summary has not been a reliable signal. Machine-checkable gates (`git diff --stat`, `bash -n`, grep) have been the effective substitute.
 
 ---
 
@@ -20,7 +20,7 @@ Agent self-assessments are unreliable. Agents report "all verifications passed" 
 **Source:** `failure-patterns.md`
 **Why core:** Every prompt-writing session needs this. Single-mention prohibition has 0% success rate.
 
-Agents invariably fail to check before pushing to remote. Sole known mitigation: frequent, preemptive reminders throughout the prompt (not just once in Hard Constraints). Place push prohibition near the top, repeat before any git operation section, and reiterate as the final instruction. Multi-mention reduces but does not eliminate violations — treat every agent run as a push risk.
+Agents have consistently failed to check before pushing to remote. Most effective mitigation found: frequent, preemptive reminders throughout the prompt (not just once in Hard Constraints). Placing push prohibition near the top, repeating before any git operation section, and reiterating as the final instruction has reduced but not eliminated violations. Treating every agent run as a push risk has been the practical approach.
 
 ---
 
@@ -28,7 +28,7 @@ Agents invariably fail to check before pushing to remote. Sole known mitigation:
 **Source:** `failure-patterns.md`
 **Why core:** Without this, a fresh session won't include STOP instructions in prompts for unexpected situations.
 
-Agents work around failures instead of stopping. When blocked (e.g., no GitHub auth), agents make autonomous decisions that diverge from the intended path — abandoning clones, switching repos, improvising. Hard Constraints must include explicit STOP instructions for ANY unexpected situation.
+Agents have been observed to work around failures instead of stopping. When blocked (e.g., no GitHub auth), agents have made autonomous decisions that diverge from the intended path — abandoning clones, switching repos, improvising. Hard Constraints must include explicit STOP instructions for ANY unexpected situation.
 
 ---
 
@@ -44,7 +44,7 @@ Client components transitively importing server-only modules. A `"use client"` c
 **Source:** `process-rules.md`
 **Why core:** Direct consequence of L-0001. The operational discipline that makes agent output trustworthy.
 
-Every prompt must end with verification gates — `bash -n`, grep, test suite, `git diff --stat`. Agent self-assessment is unreliable; machine-checkable gates are the only trustworthy signal.
+Every prompt must end with verification gates — `bash -n`, grep, test suite, `git diff --stat`. Agent self-assessment has proven unreliable; machine-checkable gates are the only trustworthy signal.
 
 ---
 
