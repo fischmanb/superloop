@@ -47,3 +47,5 @@ Raw captures from checkpoint scans. Brian prunes and curates into sections above
 
 - (2026-03-01) Brian reinforces by explicit repetition when a fact was stated but not internalized. "I know it pushes to remote... now you do too... again." Pattern: if Brian re-states something, the prior capture was wrong or incomplete. Don't defend — fix.
 - (2026-03-01) Session eval request: Brian values honest self-assessment of efficiency. Token cost relative to durable output is the metric. This session: high cost, moderate output (4 decisions, 3 learnings, 1 merge, 1 prompt, 5 signals). The compression teaching was the highest-value artifact — skill transfer, not just task completion.
+
+- (2026-03-01) "If you want updates to prompts or code or anything similar, reprint the full prompt." Brian runs prompts in separate contexts (Code tab). Saying "same but swap the hash" is useless — the agent never sees the prior conversation. Every artifact must be self-contained when delivered.
