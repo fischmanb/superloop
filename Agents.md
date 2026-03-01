@@ -1044,6 +1044,168 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 - index.md stale
 - CLAUDE.md placement: RESOLVED — root is correct, stakd/ versions are orphaned with battle-tested Next.js patterns (L-0094)
 
+### Round 41C — Convert codebase-summary.sh → codebase_summary.py with pytest suite (Phase 1)
+
+**Date**: Mar 1, 2026
+**Branch**: `claude/bash-to-python-codebase-summary-czLhq`
+
+**What was asked**: Convert `lib/codebase-summary.sh` to `py/auto_sdd/lib/codebase_summary.py` with a comprehensive pytest test suite. Phase 1 of the bash-to-Python conversion — one library file, Python coexists in `py/` tree, bash original untouched.
+
+**What actually happened**:
+- Created `py/auto_sdd/lib/codebase_summary.py` (236 lines) implementing `generate_codebase_summary(project_dir: Path, max_lines: int = 200) -> str` matching the interface contract in `conventions.md`.
+- Used a `_SummaryBuilder` class to replace the bash `_gcs_append()` closure pattern — encapsulates output accumulation, line counting, and truncation.
+- All four sections faithfully converted: Component Registry, Type Exports, Import Graph, Recent Learnings. Same caps (50 components, 50 types, 80 imports, 40 learnings lines), same fallback messages, same output format.
+- Replaced bash `find`/`grep`/`awk`/`sed` with `pathlib.rglob()` and `re` module. All type-annotated, `mypy --strict` clean.
+- Raises `ValueError` instead of bash exit code 1 + stderr for missing/non-directory project_dir (documented in conversion changelog).
+- Created `py/tests/test_codebase_summary.py` (30 tests) covering all bash scenarios plus additional Python-specific edge cases: error handling (nonexistent dir, file-not-dir), component cap truncation (55 files → 50 cap message), no-local-imports message, empty learnings files skipped, no-type-exports message.
+- Inline exception pattern: no shared `errors.py`/`signals.py`/`state.py` created (as instructed — those are Phase 2+).
+
+**Design decisions**:
+1. `_SummaryBuilder` vs inline accumulation: Class gives cleaner separation of truncation logic from section builders, and `_total` / `_truncated` state stays encapsulated.
+2. Learnings section uses `content.split("\n")` instead of splitlines — preserves trailing-empty-line behavior matching bash `while IFS= read -r`.
+3. Component file sort by `str(p.relative_to(project_dir))` — matches bash `find ... | sort` behavior (lexicographic on relative path).
+4. Type export regex `export\s+(?:type|interface)\s+([A-Za-z_]\w*)` — captures identifier directly, replacing bash grep+awk pipeline.
+
+**What was NOT changed**: `lib/codebase-summary.sh`, `tests/test-codebase-summary.sh`, all bash scripts, all files outside the allowed list.
+
+**Verification**:
+- `mypy --strict py/auto_sdd/lib/codebase_summary.py` → Success: no issues found in 1 source file
+- `pytest py/tests/test_codebase_summary.py -v` → 30 passed in 0.41s
+- `git status --short` → Only `py/auto_sdd/lib/codebase_summary.py` and `py/tests/test_codebase_summary.py` as new files (plus pycache, not staged)
+
+**Notable observations**:
+- The bash source uses `grep -oE` + `sed` two-step extraction for imports; Python regex captures the path group directly.
+- Bash `wc -l` on empty string reads as "1 line"; Python `len(list)` avoids this edge case naturally.
+- 30 pytest assertions exceed the 23 bash assertion target by 7, covering Python-specific error cases and additional edge cases.
+
+---
+
+### Round 41B — Convert eval.sh → eval_lib.py with pytest suite (Phase 1) (branch: claude/convert-eval-bash-to-python-fjrN3)
+
+**Date**: Mar 1, 2026
+
+**What was asked**: Convert lib/eval.sh to py/auto_sdd/lib/eval_lib.py with a comprehensive pytest test suite. Phase 1 of bash-to-Python conversion — one library file. Bash original stays untouched.
+
+**What actually happened**:
+- Created `py/auto_sdd/lib/eval_lib.py` (280 lines) converting all 4 public functions from `lib/eval.sh`:
+  - `run_mechanical_eval()` — deterministic commit analysis via git subprocess calls
+  - `generate_eval_prompt()` — eval agent prompt generation with CLAUDE.md/learnings injection
+  - `parse_eval_signal()` — signal extraction from multiline agent output
+  - `write_eval_result()` — atomic JSON write merging mechanical + agent eval data
+- Defined inline exception classes (`AutoSddError`, `EvalError`) since `errors.py` doesn't exist yet
+- Used `MechanicalEvalResult` dataclass matching conventions.md interface contract exactly
+- Atomic file writes via temp-then-rename for `write_eval_result`
+- Full type annotations, `mypy --strict` clean
+- Created `py/tests/test_eval_lib.py` (68 tests, all passing) — exceeds the 53 bash assertion target
+- Tests use real git repos in tmp_path (no mocks), mirroring the bash fixture approach
+
+**Design decisions**:
+- Python raises `EvalError` instead of returning exit code 1 with error JSON (more Pythonic)
+- Merge commits return `MechanicalEvalResult` with `skipped=True` in diff_stats (preserves bash JSON shape)
+- `diff_stats` dict uses `dict[str, int | str | bool | list[str]]` union type to match bash JSON fields
+- Feature name sanitization uses regex instead of bash tr/sed chain (same output)
+- Signal parsing uses simple string prefix matching (no awk needed)
+- Note: Python is 3.11.14 on this system (not 3.12+), but `from __future__ import annotations` handles all typing needs
+
+**What was NOT changed**: Bash originals (lib/eval.sh, tests/test-eval.sh), all files outside the allowed list (py/auto_sdd/lib/eval_lib.py, py/tests/test_eval_lib.py, Agents.md).
+
+**Verification**:
+- `mypy --strict py/auto_sdd/lib/eval_lib.py` → Success: no issues found in 1 source file
+- `pytest py/tests/test_eval_lib.py -v` → 68 passed in 9.50s
+- `git diff --stat` → Only eval_lib.py, test_eval_lib.py, and Agents.md
+
+**Notable observations**:
+- Bash `run_mechanical_eval` uses `python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'` for JSON-safe feature name encoding — not needed in Python
+- Empty tree hash (`4b825dc...`) is obtained via `git hash-object -t tree /dev/null` in both bash and Python
+- The bash test for `type_redeclarations` uses `git grep` against the parent commit, searching `.ts/.tsx` files — faithfully replicated
+- `parse_eval_signal` returns the *last* matching signal value (awk `END { print last }` pattern), which the Python version preserves
+
+---
+
+### Round 41D — Convert validation.sh to Python (Phase 1) (branch: claude/bash-to-python-validation-SBSMK)
+
+**Date**: Mar 1, 2026
+
+**What was asked**: Convert lib/validation.sh to py/auto_sdd/lib/validation.py with a comprehensive pytest test suite. Phase 1 of bash-to-Python conversion — one library file, bash original untouched, Python coexists in py/ tree.
+
+**What actually happened**:
+- Read conventions.md, lib/validation.sh (66 lines), tests/test-validation.sh (214 lines, 10 assertions), and py/tests/conftest.py.
+- Created py/auto_sdd/lib/validation.py with `validate_frontmatter()` matching the interface contract from conventions.md (`def validate_frontmatter(file_path: Path, validate_only: bool = False) -> bool`).
+- Defined `AutoSddError` and `InvalidSpecError` inline per task instructions (errors.py does not exist yet).
+- Created py/tests/test_validation.py with 12 test functions covering all 6 bash test scenarios plus 6 additional edge cases (nonexistent file, validate_only param, status not required, conftest sample_spec fixture, REQUIRED_FIELDS constant, closing marker beyond line 20).
+- Design decisions: (1) `validate_only` parameter preserved as no-op matching bash behavior; (2) `status` field intentionally NOT required, matching bash where `has_status` is computed but never checked for pass/fail; (3) Field detection uses `line.split(":", 1)[0]` rather than regex, which is equivalent to bash's `^field:` grep pattern; (4) `REQUIRED_FIELDS` exposed as a public `frozenset` constant for testability.
+
+**What was NOT changed**: Bash originals (lib/validation.sh, tests/test-validation.sh), all files outside allowed list.
+
+**Verification**:
+- mypy --strict: Success, no issues found in 1 source file
+- pytest: 12 passed in 0.12s
+- git diff --stat: Agents.md, py/auto_sdd/lib/validation.py, py/tests/test_validation.py (3 files)
+
+**Notable observations**:
+- bash `validate_frontmatter` accepts `validate_only` as second arg but never uses it — carried forward as documented no-op.
+- bash checks `has_status` (line 54) but never uses it in any conditional — only `feature` and `domain` gate the return code. This is likely an oversight or future placeholder in the bash source.
+- The 20-line header scan limit means specs with long frontmatter (>18 fields) could false-negative. Preserved as-is to match bash behavior.
+
+---
+
+### Round 41E — Convert claude-wrapper.sh to Python (branch: claude/bash-to-python-wrapper-KHlhP)
+
+**Date**: Mar 1, 2026
+**Medium**: Claude Code agent (Phase 1 bash-to-Python conversion)
+
+**What was asked**: Convert `lib/claude-wrapper.sh` to `py/auto_sdd/lib/claude_wrapper.py` with a comprehensive pytest test suite. Phase 1 of the bash-to-Python conversion — single library file, Python coexists in the `py/` tree.
+
+**What actually happened**:
+- Created `py/auto_sdd/lib/claude_wrapper.py` (~195 lines) implementing the `ClaudeResult` dataclass and `run_claude()` function per the interface contract in `conventions.md`.
+- Created `py/tests/test_claude_wrapper.py` (~380 lines) with 35 tests covering: `_dominant_model` helper (6 tests), `_build_cost_record` (4 tests), `ClaudeResult` dataclass (2 tests), `run_claude` success path (5 tests), cost logging (5 tests), error paths (7 tests), edge cases (6 tests).
+- Design decisions:
+  - Added `ClaudeOutputError` exception (not in bash) for when claude exits 0 but returns invalid JSON or JSON without `.result`. Bash just wrote to stderr and exited with the original code; Python raises explicitly so callers can catch it.
+  - Cost log write failures are caught and logged as warnings rather than crashing — the function still returns successfully. This matches bash behavior where `>> "$COST_LOG" 2>/dev/null` silently drops write failures.
+  - `_dominant_model()` and `_build_cost_record()` are module-private helpers (prefixed with `_`) but tested directly for coverage.
+  - Inline exception classes (`AutoSddError`, `AgentTimeoutError`, `ClaudeOutputError`) since `errors.py` doesn't exist yet.
+  - Used `isinstance` type narrowing throughout instead of `type: ignore` to satisfy mypy --strict with `dict[str, object]` values.
+  - JSONL cost log format exactly matches bash output: all 12 fields preserved (timestamp, cost_usd, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, duration_ms, duration_api_ms, num_turns, model, session_id, stop_reason).
+
+**What was NOT changed**: Bash originals (`lib/claude-wrapper.sh`), all files outside the allowed list. No shared module files (`errors.py`, `signals.py`, `state.py`) were created.
+
+**Verification**:
+- `mypy --strict py/auto_sdd/lib/claude_wrapper.py` → Success: no issues found in 1 source file
+- `pytest py/tests/test_claude_wrapper.py -v` → 35 passed in 0.20s
+- `git diff --stat` → Only `Agents.md`, `py/auto_sdd/lib/claude_wrapper.py`, `py/tests/test_claude_wrapper.py`
+
+**Notable observations**:
+- The bash script is 62 lines but packs dense jq logic for model extraction (`modelUsage | to_entries[] | max_by(.total)`). The Python equivalent is clearer but longer.
+- Bash uses `set -uo pipefail` but intentionally omits `-e` — this is documented in the script itself. The Python conversion eliminates this concern entirely since subprocess failures are handled explicitly.
+- The bash `COST_LOG` defaults to `./cost-log.jsonl` via env var; the Python version makes it an explicit parameter (no env var fallback), which is cleaner for library code.
+- Python 3.11 was available on the system (not 3.12+), but all code is compatible. The `from __future__ import annotations` import handles `X | Y` union syntax.
+
+---
+
+### Round 41F — Merge all 5 Phase 1 conversion branches into integration branch
+
+**Date**: Mar 1, 2026
+**Branch**: `convert/libs-integrated-7b8eb2`
+
+**What was asked**: Merge all 5 Phase 1 bash-to-Python conversion branches (41A–41E) into a single integration branch and verify the combined test suite passes.
+
+**What actually happened**:
+- Created integration branch `convert/libs-integrated-7b8eb2` from main (178ea1f).
+- Merged 5 branches in order using `--no-ff`:
+  1. `origin/claude/setup-constraints-pigkT` (41A — reliability.py) — clean merge
+  2. `origin/claude/convert-eval-bash-to-python-fjrN3` (41B — eval_lib.py) — clean merge (Agents.md auto-resolved)
+  3. `origin/claude/bash-to-python-codebase-summary-czLhq` (41C — codebase_summary.py) — clean merge (Agents.md auto-resolved)
+  4. `origin/claude/bash-to-python-validation-SBSMK` (41D — validation.py) — Agents.md conflict resolved (kept all entries 41A–41D)
+  5. `origin/claude/bash-to-python-wrapper-KHlhP` (41E — claude_wrapper.py) — Agents.md conflict resolved (kept all entries 41A–41E)
+- No Python source or test file conflicts across any merge. All conflicts were trivially in Agents.md (concurrent appends to same section).
+
+**What was NOT changed**: main branch, bash originals (lib/*.sh), all non-py files except Agents.md.
+
+**Verification**:
+- `mypy --strict py/auto_sdd/lib/` → Success: no issues found in 6 source files (5 modules + __init__.py)
+- `pytest py/tests/ -v` → 210 passed in 13.84s (35 wrapper + 30 codebase_summary + 68 eval_lib + 65 reliability + 12 validation)
+- `git diff --stat main` → 11 files changed, 4490 insertions: 5 Python modules in py/auto_sdd/lib/, 5 test files in py/tests/, Agents.md
+
 ---
 
 ## Known Gaps
@@ -1096,6 +1258,16 @@ ls lib/  # Should show only reliability.sh and validation.sh
 grep -c "source.*reliability.sh" scripts/*.sh  # Should be 2
 grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh)
 ```
+
+### Round 41A: Bash→Python — reliability.sh (branch: claude/setup-constraints-pigkT)
+
+**What was asked**: Convert lib/reliability.sh to py/auto_sdd/lib/reliability.py with pytest suite
+
+**What actually happened**: Full 1:1 behavioral conversion of all 594 lines of lib/reliability.sh to idiomatic Python (reliability.py: ~350 lines). Followed conventions.md as authoritative guide — used its interface contract (Feature with id/name/complexity, DriftPair with spec_file/source_files, write_state accepting list[str] directly, completed_features_json removed as bash-ism). Defined exception hierarchy (AutoSddError, LockContentionError, AgentTimeoutError, CircularDependencyError) inline since errors.py doesn't exist yet. All functions fully typed, passing mypy --strict. Test suite (test_reliability.py) has 65 tests covering all scenarios from the 68-assertion bash suite (3 bash-specific meta-tests replaced with Python equivalents: exception hierarchy checks, dataclass structure checks, bash state compatibility checks).
+
+**What was NOT changed**: bash originals (lib/reliability.sh, tests/test-reliability.sh), any file outside py/ tree (except Agents.md), no files in scripts/ or tests/ (bash originals)
+
+**Verification**: mypy --strict: Success (0 issues). pytest: 65 passed. bash tests: 154/154 (reliability 68 + eval 53 + validation 10 + codebase-summary 23). dry-run: all passed. git diff --stat: clean (only py/auto_sdd/lib/reliability.py, py/tests/test_reliability.py, Agents.md).
 
 ## Questions?
 
