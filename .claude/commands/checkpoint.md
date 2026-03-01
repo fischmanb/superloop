@@ -44,11 +44,11 @@ Single command to ensure all context management files are current. Prevents cont
 - If changed: note what changed (another session or Brian edited it)
 - Update hash
 
-### 7. Commit
+### 7. Commit and Push
 - `git add .onboarding-state ACTIVE-CONSIDERATIONS.md DECISIONS.md`
 - Only add other files if they were modified (ONBOARDING.md, INDEX.md, HOW-I-WORK-WITH-GENERATIVE-AI.md)
 - `git commit -m "checkpoint: <brief summary of what was flushed>"`
-- Ask Brian before pushing
+- `git push origin` — checkpoint commits are always pushed. No approval needed.
 
 ### 8. Update State
 Write `.onboarding-state`:
