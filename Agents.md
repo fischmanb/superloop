@@ -1269,6 +1269,18 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 
 **Verification**: mypy --strict: Success (0 issues). pytest: 65 passed. bash tests: 154/154 (reliability 68 + eval 53 + validation 10 + codebase-summary 23). dry-run: all passed. git diff --stat: clean (only py/auto_sdd/lib/reliability.py, py/tests/test_reliability.py, Agents.md).
 
+---
+
+### Round 42: Phase 2 — eval-sidecar bash→Python (branch: claude/implement-hard-constraints-8IMAC)
+
+**What was asked**: Convert scripts/eval-sidecar.sh to py/auto_sdd/scripts/eval_sidecar.py with tests
+
+**What actually happened**: Full behavioral conversion of 393-line eval-sidecar.sh to idiomatic Python (eval_sidecar.py: ~410 lines). Replaced env-var config with EvalSidecarConfig dataclass, echo-based logging with stdlib logging, bash trap with signal module handlers (SIGINT/SIGTERM), heredoc JSON campaign summary with json.dumps + atomic write (temp-then-rename), and git subprocess calls with subprocess.run(). Preserved all bash behaviors: polling loop with sleep interval, drain sentinel cooperative shutdown, credit exhaustion detection (disables agent evals while mechanical continues), merge commit skipping, campaign summary aggregation of signal distributions. Imports Phase 1 libs directly (run_mechanical_eval, generate_eval_prompt, parse_eval_signal, write_eval_result from eval_lib; run_agent_with_backoff from reliability; run_claude from claude_wrapper). Extracted testable functions: generate_campaign_summary, _evaluate_commit, _get_head, _get_new_commits. Provided main() entry point reading config from env vars for CLI compatibility. Test suite (test_eval_sidecar.py: 31 tests, 77 assertions) covers config validation, campaign summary (empty/mixed/signal distributions), commit discovery (none/single/multiple/merge skip), drain sentinel, credit exhaustion, individual eval error handling, agent command builder, polling loop (no HEAD, shutdown, stale sentinel cleanup). Uses real git repos for commit discovery tests, mocks run_claude/run_agent_with_backoff for agent eval tests.
+
+**What was NOT changed**: All bash originals, all Phase 1 Python libs, all other files except Agents.md
+
+**Verification**: mypy --strict: Success (0 issues in 2 files). pytest: 31 passed, 77 assertions. git diff --stat: only py/auto_sdd/scripts/eval_sidecar.py, py/tests/test_eval_sidecar.py, Agents.md.
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
