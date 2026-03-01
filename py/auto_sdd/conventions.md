@@ -16,6 +16,7 @@ py/
 │   ├── __init__.py          # Version string only
 │   ├── lib/
 │   │   ├── __init__.py      # Empty
+│   │   ├── errors.py
 │   │   ├── reliability.py
 │   │   ├── eval_lib.py
 │   │   ├── codebase_summary.py
@@ -234,6 +235,8 @@ def append_jsonl(path: Path, record: dict) -> None:
 class FileLock:
     """Process-level file lock using fcntl.flock().
 
+    Platform: macOS/Linux only (fcntl is Unix). No Windows support needed.
+
     Usage:
         lock = FileLock(Path("build.lock"))
         lock.acquire()  # raises LockContentionError if held by live process
@@ -400,11 +403,14 @@ class DriftPair:
     spec_file: Path
     source_files: str
 
+# NOTE: write_state accepts list[str] directly — no separate serialization step.
+# In bash, completed_features_json() serialized the list to a JSON string before passing
+# to write_state. In Python, write_state handles serialization internally.
+# completed_features_json() is intentionally removed — it was a bash-ism.
 def acquire_lock(lock_file: Path) -> None: ...
 def release_lock(lock_file: Path) -> None: ...
-def write_state(state_file: Path, feature_index: int, strategy: str, completed_json: str, current_branch: str) -> None: ...
+def write_state(state_file: Path, feature_index: int, strategy: str, completed_features: list[str], current_branch: str) -> None: ...
 def read_state(state_file: Path) -> ResumeState | None: ...
-def completed_features_json(built_names: list[str]) -> str: ...
 def clean_state(state_file: Path) -> None: ...
 def run_agent_with_backoff(output_file: Path, cmd: list[str], *, max_retries: int = 5, backoff_max: int = 60) -> int: ...
 def truncate_for_context(file_path: Path, max_tokens: int = 100_000) -> str: ...
@@ -446,11 +452,20 @@ def run_claude(args: list[str], *, cost_log_path: Path | None = None, timeout: i
 
 ```python
 from pathlib import Path
+from dataclasses import dataclass
 
-def run_mechanical_eval(project_dir: Path, commit_hash: str) -> dict: ...
+@dataclass
+class MechanicalEvalResult:
+    diff_stats: dict[str, int]
+    type_exports_changed: list[str]
+    redeclarations: list[str]
+    test_files_touched: list[str]
+    passed: bool
+
+def run_mechanical_eval(project_dir: Path, commit_hash: str) -> MechanicalEvalResult: ...
 def generate_eval_prompt(project_dir: Path, commit_hash: str) -> str: ...
 def parse_eval_signal(signal_name: str, output: str) -> str: ...
-def write_eval_result(output_dir: Path, feature_name: str, mechanical_json: dict, agent_output: str) -> Path: ...
+def write_eval_result(output_dir: Path, feature_name: str, mechanical: MechanicalEvalResult, agent_output: str) -> Path: ...
 ```
 
 ### validation.py
@@ -470,9 +485,23 @@ def validate_frontmatter(file_path: Path, validate_only: bool = False) -> bool: 
 - Test files: `test_{module}.py` (e.g., `test_reliability.py`)
 - Test functions: `test_{function}_{scenario}` (e.g., `test_acquire_lock_stale_pid_removed`)
 
+## Conversion Changelog
+
+Each agent MUST maintain a changelog in a comment block at the top of its output file documenting deviations from the bash original. Both the converting agent and the reviewing agent verify this log.
+
+```python
+# CONVERSION CHANGELOG (from lib/reliability.sh)
+# - completed_features_json() removed: bash-ism. write_state() now accepts
+#   list[str] directly and serializes internally.
+# - DriftPair.source_files: was colon-delimited string in bash, now [describe decision].
+# - [any other intentional deviations from bash shape]
+```
+
+This is not boilerplate — it captures WHY the Python version differs from bash. If there's nothing to log, the agent writes `# No deviations from bash interface.`
+
 ## What NOT to Do
 
-- Don't use `os.path`. Use `pathlib.Path` everywhere.
+- Don't use `os.path`. Use `pathlib.Path` everywhere. (`os` module itself is fine for `os.fdopen`, `os.rename`, etc. — the ban is specifically `os.path` string manipulation.)
 - Don't use `print()` for logging. Use `logger`. (Signal emission via `signals.emit()` is the sole exception.)
 - Don't catch `Exception` in lib code. Let errors propagate.
 - Don't add dependencies without approval.
