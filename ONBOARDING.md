@@ -326,7 +326,18 @@ This file is useless if it's stale. Context loss — compaction, crashes, new ch
 
 ### `checkpoint` command
 
-Saying **"checkpoint"** (in chat or as `/checkpoint` in Claude Code) triggers a full context management update. See `.claude/commands/checkpoint.md` for the checklist. Run before ending a session, before risky operations, or on demand. This replaces manual reconciliation — one word, deterministic checklist.
+Saying **"checkpoint"** (in chat or as `/checkpoint` in Claude Code) triggers a full context management update. Run before ending a session, before risky operations, or on demand. This replaces manual reconciliation — one word, deterministic checklist. Full details in `.claude/commands/checkpoint.md`.
+
+**The 8-step protocol** (execute in order):
+
+1. **State file read** — Read `.onboarding-state`. If `pending_captures` non-empty → proceed to 2, else skip to 3.
+2. **Flush pending_captures** → `ACTIVE-CONSIDERATIONS.md`. Staleness scan first: flag items marked ✅/complete/merged/done to Brian, don't auto-remove.
+3. **Decisions** → `DECISIONS.md`. Append any settled questions (date, what, why, rejected alternatives). Skip if none.
+4. **Learnings** → Flag for Brian with proposed entry (type, tags, body). Do NOT auto-write to learnings files — Brian approves.
+5. **Methodology signals** → `HOW-I-WORK-WITH-GENERATIVE-AI.md` accumulation section. Scan for operator-level insights, preferences, corrections. Format: `- (YYYY-MM-DD) <raw observation>`. Third person, empirical voice.
+6. **ONBOARDING.md drift check** — `md5sum ONBOARDING.md`, compare to `last_check_hash` in `.onboarding-state`. Note changes if hash differs. Update hash.
+7. **Commit and push** — `git add` state/context files, commit. Checkpoint commits are always pushed, no approval needed.
+8. **Update .onboarding-state** — Write fresh state: reset `prompt_count` to 0, clear `pending_captures`, update `last_check_hash` and `last_check_ts`.
 
 ### Reconciliation after agent rounds
 

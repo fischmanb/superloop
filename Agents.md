@@ -988,6 +988,21 @@ DRY_RUN_SKIP_AGENT=true ./tests/dry-run.sh
 
 **Verification**: `grep "Agent Autonomy Loop"` confirms section exists. `grep -c "independently testable"` returns 0 (removed). `git diff --stat` shows only 2 files.
 
+### Round 39 — ONBOARDING.md checkpoint expansion, learnings graph-schema work, L-0042–L-0056 (branch: claude/update-onboarding-docs-9TSoo)
+
+**Date**: Mar 1, 2026
+
+**What was asked**: Expand the checkpoint section in ONBOARDING.md so the 8-step protocol is visible inline. A fresh session should understand what a checkpoint does and touches without opening `.claude/commands/checkpoint.md`.
+
+**What actually happened**:
+- Expanded the `### checkpoint command` section in ONBOARDING.md from a 1-line reference to a full inline summary of all 8 steps: state file read, flush pending_captures, decisions, learnings, methodology signals, drift check, commit and push, update .onboarding-state.
+- Kept it concise — step names and key details, not a full copy of checkpoint.md.
+- This Agents.md entry.
+
+**What was NOT changed**: No scripts, no lib/, no tests, no .specs/, no CLAUDE.md, no checkpoint.md. Only `ONBOARDING.md` and `Agents.md`.
+
+**Verification**: `grep "State file\|Flush pending\|Decisions\|Learnings\|Methodology\|drift check\|Commit and push\|Update .onboarding" ONBOARDING.md` returns 8 hits. `git diff --stat` shows only 2 files.
+
 ---
 
 ## Known Gaps
