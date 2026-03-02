@@ -329,7 +329,7 @@ class TestBuildLoopRun:
     @patch("auto_sdd.scripts.build_loop.check_build")
     @patch("auto_sdd.scripts.build_loop.check_drift")
     @patch("auto_sdd.scripts.build_loop.extract_drift_targets")
-    @patch("auto_sdd.scripts.build_loop._get_head", return_value="abc123")
+    @patch("auto_sdd.scripts.build_loop._get_head", side_effect=["abc123", "def456"])
     def test_single_feature_success(
         self,
         mock_head: MagicMock,
@@ -386,7 +386,7 @@ class TestBuildLoopRun:
     @patch("auto_sdd.scripts.build_loop.check_build")
     @patch("auto_sdd.scripts.build_loop.check_drift")
     @patch("auto_sdd.scripts.build_loop.extract_drift_targets")
-    @patch("auto_sdd.scripts.build_loop._get_head", return_value="abc123")
+    @patch("auto_sdd.scripts.build_loop._get_head", side_effect=["abc123", "def456"])
     @patch("auto_sdd.scripts.build_loop.time")
     def test_retry_succeeds_on_second_attempt(
         self,
@@ -502,7 +502,7 @@ class TestResumeFromState:
                                     ):
                                         with patch(
                                             "auto_sdd.scripts.build_loop._get_head",
-                                            return_value="abc123",
+                                            side_effect=["abc123", "def456"],
                                         ):
                                             loop._run_build_loop(
                                                 "chained", features
@@ -648,6 +648,64 @@ class TestPostBuildGates:
         mock_tests.assert_called_once()
         mock_dead.assert_called_once()
         mock_lint.assert_called_once()
+
+    def test_fails_when_head_has_not_advanced(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+
+        with patch(
+            "auto_sdd.scripts.build_loop._get_head",
+            return_value="same_commit_hash",
+        ):
+            result = loop._run_post_build_gates(
+                "FEATURE_BUILT: auth\n",
+                "auth",
+                branch_start_commit="same_commit_hash",
+            )
+
+        assert result is False
+
+    def test_passes_when_head_has_advanced(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        loop.post_build_steps = ""
+
+        with patch(
+            "auto_sdd.scripts.build_loop._get_head",
+            return_value="new_commit_hash",
+        ):
+            with patch(
+                "auto_sdd.scripts.build_loop.check_working_tree_clean",
+                return_value=True,
+            ):
+                with patch(
+                    "auto_sdd.scripts.build_loop.check_build",
+                    return_value=BuildCheckResult(success=True, output=""),
+                ):
+                    result = loop._run_post_build_gates(
+                        "FEATURE_BUILT: auth\n",
+                        "auth",
+                        branch_start_commit="old_commit_hash",
+                    )
+
+        assert result is True
+
+    def test_skips_head_check_when_no_start_commit(self, tmp_path: Path) -> None:
+        """When branch_start_commit is empty, HEAD check is skipped."""
+        loop = _make_loop(tmp_path)
+        loop.post_build_steps = ""
+
+        with patch(
+            "auto_sdd.scripts.build_loop.check_working_tree_clean",
+            return_value=True,
+        ):
+            with patch(
+                "auto_sdd.scripts.build_loop.check_build",
+                return_value=BuildCheckResult(success=True, output=""),
+            ):
+                result = loop._run_post_build_gates(
+                    "FEATURE_BUILT: auth\n", "auth"
+                )
+
+        assert result is True
 
 
 # ── Sidecar lifecycle tests ──────────────────────────────────────────────────

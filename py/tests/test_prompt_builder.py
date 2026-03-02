@@ -170,6 +170,58 @@ class TestBuildFeaturePrompt:
         assert "NO placeholder UI" in prompt
         assert "end-to-end" in prompt
 
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_no_spec_first_or_generate_mapping(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        config = BuildConfig(project_dir=tmp_path)
+        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+
+        assert "/spec-first" not in prompt
+        assert "generate-mapping.sh" not in prompt
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_direct_implementation_instructions_with_spec(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        (features_dir / "auth.feature.md").write_text("Feature: Auth")
+        config = BuildConfig(project_dir=tmp_path)
+        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+
+        assert ".specs/features/auth.feature.md" in prompt
+        assert "Read the feature spec at" in prompt
+        assert "CLAUDE.md" in prompt
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_direct_implementation_instructions_without_spec(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        config = BuildConfig(project_dir=tmp_path)
+        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+
+        assert "Read the feature spec in .specs/features/" in prompt
+        assert "CLAUDE.md" in prompt
+
 
 # ── build_retry_prompt ───────────────────────────────────────────────────────
 

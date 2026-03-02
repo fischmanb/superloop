@@ -802,9 +802,10 @@ class BuildLoop:
                         feature_done = True
                         break
 
-                    # Verify: clean tree, build passes, tests pass
+                    # Verify: HEAD moved, clean tree, build passes, tests pass
                     if self._run_post_build_gates(
                         build_result, feature_name or feature.name,
+                        branch_start_commit=branch_start_commit,
                     ):
                         duration = int(time.time()) - feature_start
                         drift_targets = extract_drift_targets(
@@ -984,16 +985,27 @@ class BuildLoop:
         self,
         build_result: str,
         feature_name: str,
+        branch_start_commit: str = "",
     ) -> bool:
         """Run all post-build verification gates. Return True if all pass."""
-        # Gate 0: Clean working tree
+        # Gate 0: HEAD must have advanced (agent must have committed)
+        if branch_start_commit:
+            head_now = _get_head(self.project_dir)
+            if head_now == branch_start_commit:
+                logger.warning(
+                    "Agent said FEATURE_BUILT but HEAD has not advanced "
+                    "(no commits made)"
+                )
+                return False
+
+        # Gate 1: Clean working tree
         if not check_working_tree_clean(self.project_dir):
             logger.warning(
                 "Agent said FEATURE_BUILT but left uncommitted changes"
             )
             return False
 
-        # Gate 1: Build check
+        # Gate 2: Build check
         build_ok = check_build(self.build_cmd, self.project_dir)
         if not build_ok.success:
             logger.warning(
@@ -1001,7 +1013,7 @@ class BuildLoop:
             )
             return False
 
-        # Gate 2: Test check
+        # Gate 3: Test check
         if should_run_step("test", self.post_build_steps):
             test_result = check_tests(self.test_cmd, self.project_dir)
             if not test_result.success:
@@ -1010,7 +1022,7 @@ class BuildLoop:
                 )
                 return False
 
-        # Gate 3: Drift check
+        # Gate 4: Drift check
         drift_ok = True
         if _validate_required_signals(build_result):
             drift_targets = extract_drift_targets(
@@ -1052,7 +1064,7 @@ class BuildLoop:
         if not drift_ok:
             return False
 
-        # Gate 4: Code review (optional, non-blocking for gate result)
+        # Gate 5: Code review (optional, non-blocking for gate result)
         if should_run_step("code-review", self.post_build_steps):
             run_code_review(
                 self.project_dir,
@@ -1071,11 +1083,11 @@ class BuildLoop:
                 if not test_recheck.success:
                     logger.warning("Code review broke tests!")
 
-        # Gate 5: Dead exports (non-blocking)
+        # Gate 6: Dead exports (non-blocking)
         if should_run_step("dead-code", self.post_build_steps):
             check_dead_exports(self.project_dir)
 
-        # Gate 6: Lint (non-blocking)
+        # Gate 7: Lint (non-blocking)
         if should_run_step("lint", self.post_build_steps):
             check_lint(self.project_dir)
 

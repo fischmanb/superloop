@@ -182,16 +182,34 @@ def build_feature_prompt(
     if mistake_tracker is not None:
         cumulative_mistakes = get_cumulative_mistakes(mistake_tracker)
 
+    # Resolve spec file path so the agent knows where to read
+    resolved_spec = _resolve_spec_file(project_dir, feature_name)
+
     parts: list[str] = [
         f"Build feature #{feature_id}: {feature_name}\n",
         "Instructions:",
         f'1. Read .specs/roadmap.md and locate feature #{feature_id} ("{feature_name}")',
         "2. Update roadmap to mark it \U0001f504 in progress",
-        f"3. Run /spec-first {feature_name} --full to build it (includes /compound)",
+    ]
+
+    # Step 3: direct implementation instructions (spec-aware)
+    if resolved_spec is not None:
+        parts.append(
+            f"3. Read the feature spec at {resolved_spec} and implement "
+            "the feature end-to-end based on its Gherkin scenarios"
+        )
+    else:
+        parts.append(
+            "3. Read the feature spec in .specs/features/ (if it exists) and "
+            "implement the feature end-to-end"
+        )
+    parts.append("   - Read CLAUDE.md for project-specific constraints")
+    parts.append("   - Run any build or test commands if they exist")
+
+    parts.extend([
         "4. Update roadmap to mark it \u2705 completed",
-        "5. Regenerate mapping: run ./scripts/generate-mapping.sh",
-        "6. Commit all changes with a descriptive message",
-        "7. If build fails, output: BUILD_FAILED: {reason}\n",
+        "5. Commit all changes with a descriptive message",
+        "6. If build fails, output: BUILD_FAILED: {reason}\n",
         "CRITICAL IMPLEMENTATION RULES:",
         "- Seed data is fine; stub functions are not. Use seed data, fixtures, or "
         "realistic sample data to make features work.",
@@ -200,7 +218,7 @@ def build_feature_prompt(
         "- NO placeholder UI. Components must be wired to real data sources.",
         "- Features must work end-to-end or they are not done.",
         "- Real validation, real error handling, real flows.\n",
-    ]
+    ])
 
     if codebase_summary:
         parts.append("## Codebase Summary (auto-generated)")
@@ -214,8 +232,7 @@ def build_feature_prompt(
         parts.append("## Known Mistakes (accumulated across this campaign)")
         parts.append(cumulative_mistakes)
 
-    # Resolve spec file path so the agent reports the real path
-    resolved_spec = _resolve_spec_file(project_dir, feature_name)
+    # Build spec signal for output signals section
     if resolved_spec is not None:
         spec_signal = f"SPEC_FILE: {resolved_spec}"
     else:
