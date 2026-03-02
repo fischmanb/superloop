@@ -196,3 +196,92 @@ def write_eval_result(output_dir: Path, feature_name: str, mechanical_json: dict
 ```python
 def validate_frontmatter(file_path: Path, validate_only: bool = False) -> bool: ...
 ```
+
+
+---
+
+## Phase 3 — build-loop-local Decomposition Analysis (2026-03-01)
+
+> Chat-session analysis of `scripts/build-loop-local.sh` (2299 lines). Identifies sub-units for Phase 4 conversion.
+
+### 10 Logical Sections
+
+| Section | Lines | Size | Description |
+|---------|-------|------|-------------|
+| Preamble + Config | 1–199 | 199 | Env loading, CLAUDECODE guard, locking, resume, config vars, model selection |
+| Utilities | 201–316 | 115 | parse_signal, validate_required_signals, format_duration, parse_token_usage, format_tokens, cleanup_build_loop |
+| Detection + Gates | 361–670 | 310 | detect_build_check, detect_test_check, agent_cmd, check_build, check_tests, check_dead_exports, detect_lint_check, check_lint, should_run_step, clean_working_tree |
+| Eval Feedback | 671–767 | 97 | read_latest_eval_feedback, update_repeated_mistakes, get_cumulative_mistakes |
+| Drift + Review | 768–971 | 204 | extract_drift_targets, check_drift (118L), run_code_review |
+| Branch Mgmt | 972–1073 | 102 | setup/cleanup per strategy (chained, independent, sequential), check_disk_space |
+| Prompt Builders | 1074–1236 | 163 | show_preflight_summary, build_feature_prompt, build_retry_prompt |
+| Core Build Loop | 1237–1671 | 435 | run_build_loop() — retry logic, signal checking, 3 duplicate success paths, post-build gates |
+| Post-Loop | 1672–1965 | 294 | cleanup_all_worktrees, write_build_summary (172L), cleanup_merged_branches (83L), start/stop_eval_sidecar |
+| Main Body | 1966–2299 | 333 | "both" mode orchestration (independent pass inlined), single mode, final summary |
+
+### Key Findings
+
+**Massive duplication — 3+1 identical success-recording blocks.**
+The "record success" block (tracking arrays + resume state + sidecar feedback) appears 3 times in `run_build_loop` (FEATURE_BUILT path, drift-signal fallback, retry-signal fallback) and once more in the "both" mode independent pass. Python collapses this into a single `_record_build_result()` method.
+
+**`write_build_summary` is 172 lines of manual JSON string construction.**
+`json.dumps()` replaces ~150 of those lines.
+
+**"both" mode independent pass duplicates core loop.**
+~150 lines in main body duplicates build flow without retry/drift/post-build gates.
+
+**Shared mutable state (parallelization constraint).**
+Global arrays `BUILT_FEATURE_NAMES`, `FEATURE_TIMINGS`, `FEATURE_STATUSES`, `FEATURE_MODELS`, `LOOP_BUILT`, `LOOP_FAILED`, `DRIFT_PAIRS`, `LAST_FEATURE_BRANCH`, `EVAL_SIDECAR_PID` — all mutated inside `run_build_loop`. In Python these become instance attributes on a `BuildLoop` class.
+
+### Agent Split: 2 Sequential Agents
+
+| Agent | Input sections | Est. bash lines | Est. Python output |
+|-------|---------------|-----------------|-------------------|
+| **4a** — Support modules | Preamble, Utilities, Gates, Eval Feedback, Drift, Branch Mgmt, Prompt Builders | ~1,190 | ~600–700 |
+| **4b** — Core orchestration | Core Build Loop, Post-Loop, Main Body + 4a's actual output | ~1,062 | ~500–600 |
+
+**Why sequential, not parallel:** 4b imports from 4a's modules. 4b needs 4a's actual output to wire imports correctly — convention stubs aren't sufficient for internal modules.
+
+**Why 2, not 1:** 2299 lines of bash + conventions doc + tests would push a single agent past context limits. The deduplication mandate (collapse 3 success paths) requires understanding the whole flow, but utility modules are mechanical conversions that don't need that context.
+
+### Python Module Structure (new files)
+
+```
+py/auto_sdd/
+├── lib/
+│   ├── build_gates.py       # Detection + mechanical validation
+│   ├── drift.py             # Drift checking + retry
+│   ├── branch_manager.py    # Branch strategy pattern
+│   └── prompt_builder.py    # Prompt construction
+├── scripts/
+│   └── build_loop.py        # BuildLoop class + main + summary + sidecar lifecycle
+├── tests/
+│   ├── test_build_gates.py
+│   ├── test_drift.py
+│   ├── test_branch_manager.py
+│   ├── test_prompt_builder.py
+│   └── test_build_loop.py
+```
+
+### Function-to-Module Mapping
+
+**build_gates.py**: detect_build_check, detect_test_check, check_build, check_tests, should_run_step, check_dead_exports, detect_lint_check, check_lint, agent_cmd, check_working_tree_clean, clean_working_tree, run_cmd_safe
+
+**drift.py**: extract_drift_targets, check_drift, run_code_review
+
+**branch_manager.py**: setup/cleanup per strategy (chained, independent, sequential), check_disk_space, cleanup_all_worktrees, cleanup_merged_branches
+
+**prompt_builder.py**: show_preflight_summary, build_feature_prompt, build_retry_prompt
+
+**build_loop.py (BuildLoop class)**: __init__ (config, env, locking, resume), run() (unified deduplicated loop), _record_build_result() (single method replacing 3+1 blocks), _run_independent_pass() ("both" mode), write_build_summary() (json.dumps-based), start/stop_eval_sidecar(), main() entry point
+
+**Utilities — fold into existing modules**: log/success/warn/error → logging; parse_signal/validate_required_signals → signals.py; format_duration/parse_token_usage/format_tokens → build_loop or utils; cleanup_build_loop → atexit handler
+
+**Eval Feedback — fold into eval_lib.py or build_loop.py**: read_latest_eval_feedback, update_repeated_mistakes, get_cumulative_mistakes
+
+### L-00111 Design Improvements for Phase 4 Agent Prompts
+
+These patterns from the bash→Python conversion itself should be wired into the converted build loop:
+- Context budget estimation before agent dispatch (part of prompt_builder)
+- Conventions doc injection (already exists, wire into build_feature_prompt)
+- Mechanical prompt quality gate (static analysis of generated prompts)
