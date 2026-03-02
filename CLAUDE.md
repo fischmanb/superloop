@@ -2,6 +2,44 @@
 
 This project uses a spec-driven development workflow. Follow these rules in all interactions.
 
+## Core Learnings (compressed from learnings/core.md)
+
+> Read on every session. Full entries in learnings/core.md.
+
+**L-00001:** Never trust agent self-assessments. Use machine-checkable gates (`git diff --stat`, `grep`, `bash -n`).
+
+**L-00005:** Push prohibition requires repeated preemptive reminders throughout prompts, not just once. Single-mention has 0% success rate.
+
+**L-00011:** Agents work around failures instead of stopping. Include explicit STOP instructions for any unexpected situation.
+
+**L-00012:** Client→server import chain is the most common build failure. Trace `"use client"` imports transitively for server-only modules.
+
+**L-00016:** Every prompt must end with verification gates — `bash -n`, grep, test suite, `git diff --stat`. Agent narrative is not a reliable signal.
+
+**L-00020:** Implementation work (scripts/lib/tests) → hardened agent prompt. Planning/analysis/docs → chat session. If modifying code, write a prompt.
+
+**L-00026:** Token speed ≠ build speed. Fixed-cost steps (npm, tsc, tests) dominate. Parallelize across features, not faster models.
+
+**L-00028:** Signal protocol uses grep-parseable flat strings (`FEATURE_BUILT: {name}`), not JSON. No eval on agent output.
+
+**L-00113:** Checkpoint step 4 must actively scan: agent outcomes, corrections, new patterns, empirical findings, failures. Passive scan under-captures.
+
+**L-00116:** "Nothing to capture" is never the default. Default is "something to capture" — scan must find reasons to skip, not reasons to include.
+
+**L-00125:** Scan existing project assets before building new process infrastructure. Audit commands, CLAUDE.md references, existing tooling first.
+
+**L-00130:** Design for context loss. Only file state survives. Self-test: "If context dies now, can next session resume from files alone?"
+
+**L-00143:** Scope sizing ritual before every prompt/response/dispatch. Count items, estimate tokens, check verification isolation, split or proceed.
+
+---
+
+## Response & Prompt Scope Discipline (L-00143)
+
+Before every prompt, response, or dispatch: count work items, estimate tokens (show your work), check verification isolation. Different verification methods = different work units. Run `source lib/general-estimates.sh && query_estimate_actuals "[type]"` for calibrated estimates before falling back to heuristics.
+
+---
+
 ## Core Principle
 
 **Spec before code.** Define behavior before implementing it.
