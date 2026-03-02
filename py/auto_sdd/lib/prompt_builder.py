@@ -34,6 +34,42 @@ from auto_sdd.lib.reliability import Feature
 logger = logging.getLogger(__name__)
 
 
+def _normalize_name(name: str) -> str:
+    """Normalize a feature name for comparison: lowercase, spaces→hyphens."""
+    return name.lower().replace(" ", "-").replace("_", "-")
+
+
+def _resolve_spec_file(project_dir: Path, feature_name: str) -> str | None:
+    """Find a spec file in .specs/features/ matching *feature_name*.
+
+    Matching is case-insensitive with spaces/underscores normalised to hyphens.
+    Returns the relative path (e.g. ``.specs/features/foo.feature.md``) when
+    exactly one match is found, or ``None`` on zero / multiple matches.
+    """
+    features_dir = project_dir / ".specs" / "features"
+    if not features_dir.is_dir():
+        return None
+
+    normalized = _normalize_name(feature_name)
+
+    matches: list[Path] = []
+    for path in features_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        stem = path.stem  # e.g. "auth-and-dashboard-shell.feature" → stem with .feature
+        # Also strip compound suffixes like .feature before comparing
+        bare = stem.split(".")[0]
+        if _normalize_name(bare) == normalized:
+            matches.append(path)
+
+    if len(matches) == 1:
+        try:
+            return str(matches[0].relative_to(project_dir))
+        except ValueError:
+            return str(matches[0])
+    return None
+
+
 # ── Config dataclass ─────────────────────────────────────────────────────────
 
 
@@ -178,11 +214,22 @@ def build_feature_prompt(
         parts.append("## Known Mistakes (accumulated across this campaign)")
         parts.append(cumulative_mistakes)
 
+    # Resolve spec file path so the agent reports the real path
+    resolved_spec = _resolve_spec_file(project_dir, feature_name)
+    if resolved_spec is not None:
+        spec_signal = f"SPEC_FILE: {resolved_spec}"
+    else:
+        spec_signal = (
+            "SPEC_FILE: {path to the .feature.md file you created/updated}"
+        )
+
     parts.extend([
         "After completion, output EXACTLY these signals (each on its own line):",
         f"FEATURE_BUILT: {feature_name}",
-        "SPEC_FILE: {path to the .feature.md file you created/updated}",
+        spec_signal,
         "SOURCE_FILES: {comma-separated paths to source files created/modified}\n",
+        "Before outputting the SPEC_FILE signal, verify the path exists with `ls`."
+        " If it doesn't match, report the actual path you find.\n",
         "Or if build fails:",
         "BUILD_FAILED: {reason}\n",
         "The SPEC_FILE and SOURCE_FILES lines are REQUIRED when FEATURE_BUILT is reported.",
@@ -217,6 +264,13 @@ def build_retry_prompt(
     Returns:
         The complete retry prompt string.
     """
+    # Resolve spec file path so the agent reports the real path
+    resolved_spec = _resolve_spec_file(project_dir, feature_name)
+    if resolved_spec is not None:
+        spec_signal = f"SPEC_FILE: {resolved_spec}"
+    else:
+        spec_signal = "SPEC_FILE: {path to the .feature.md file}"
+
     parts: list[str] = [
         "The previous build attempt FAILED. There are uncommitted changes or "
         "build errors from the last attempt.\n",
@@ -234,8 +288,10 @@ def build_retry_prompt(
         "must use real function implementations, not placeholder stubs.\n",
         "After completion, output EXACTLY these signals (each on its own line):",
         f"FEATURE_BUILT: {feature_name}",
-        "SPEC_FILE: {path to the .feature.md file}",
+        spec_signal,
         "SOURCE_FILES: {comma-separated paths to source files created/modified}\n",
+        "Before outputting the SPEC_FILE signal, verify the path exists with `ls`."
+        " If it doesn't match, report the actual path you find.\n",
         "Or if build fails:",
         "BUILD_FAILED: {reason}",
     ]
@@ -255,7 +311,7 @@ def build_retry_prompt(
         "CRITICAL — REQUIRED OUTPUT SIGNAL:",
         "Your FINAL output lines MUST include exactly:",
         f"FEATURE_BUILT: {feature_name}",
-        "SPEC_FILE: {path to the .feature.md file}",
+        spec_signal,
         "SOURCE_FILES: {comma-separated paths to source files}\n",
         "The build loop uses the FEATURE_BUILT signal to detect success.",
         "If you omit it, your successful build will be marked as FAILED.",

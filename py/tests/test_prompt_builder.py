@@ -9,6 +9,7 @@ import pytest
 from auto_sdd.lib.drift import MistakeTracker
 from auto_sdd.lib.prompt_builder import (
     BuildConfig,
+    _resolve_spec_file,
     build_feature_prompt,
     build_retry_prompt,
     show_preflight_summary,
@@ -222,3 +223,101 @@ class TestBuildRetryPrompt:
         config = BuildConfig(project_dir=tmp_path)
         prompt = build_retry_prompt(1, "Auth", tmp_path, config)
         assert "Seed data is fine" in prompt
+
+    def test_uses_resolved_spec_file(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        spec = features_dir / "auth.feature.md"
+        spec.write_text("Feature: Auth")
+        config = BuildConfig(project_dir=tmp_path)
+        prompt = build_retry_prompt(1, "Auth", tmp_path, config)
+        assert "SPEC_FILE: .specs/features/auth.feature.md" in prompt
+        assert "{path to the .feature.md file}" not in prompt
+
+    def test_falls_back_to_placeholder_when_no_match(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        config = BuildConfig(project_dir=tmp_path)
+        prompt = build_retry_prompt(1, "Auth", tmp_path, config)
+        assert "SPEC_FILE: {path to the .feature.md file}" in prompt
+
+
+# ── _resolve_spec_file ──────────────────────────────────────────────────────
+
+
+class TestResolveSpecFile:
+    def test_exact_match(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        spec = features_dir / "auth-login.feature.md"
+        spec.write_text("Feature: Auth Login")
+        result = _resolve_spec_file(tmp_path, "auth-login")
+        assert result == ".specs/features/auth-login.feature.md"
+
+    def test_case_insensitive_match(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        spec = features_dir / "auth-login.feature.md"
+        spec.write_text("Feature: Auth Login")
+        result = _resolve_spec_file(tmp_path, "Auth-Login")
+        assert result == ".specs/features/auth-login.feature.md"
+
+    def test_spaces_to_hyphens(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        spec = features_dir / "auth-login.feature.md"
+        spec.write_text("Feature: Auth Login")
+        result = _resolve_spec_file(tmp_path, "Auth Login")
+        assert result == ".specs/features/auth-login.feature.md"
+
+    def test_no_match_returns_none(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        (features_dir / "dashboard.feature.md").write_text("Feature: Dashboard")
+        result = _resolve_spec_file(tmp_path, "Auth Login")
+        assert result is None
+
+    def test_multiple_matches_returns_none(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        (features_dir / "auth.feature.md").write_text("Feature: Auth")
+        sub = features_dir / "subdir"
+        sub.mkdir()
+        (sub / "auth.feature.md").write_text("Feature: Auth v2")
+        result = _resolve_spec_file(tmp_path, "auth")
+        assert result is None
+
+    def test_no_features_dir_returns_none(self, tmp_path: Path) -> None:
+        result = _resolve_spec_file(tmp_path, "Auth")
+        assert result is None
+
+    def test_match_in_subdirectory(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features" / "auth"
+        features_dir.mkdir(parents=True)
+        spec = features_dir / "login.feature.md"
+        spec.write_text("Feature: Login")
+        result = _resolve_spec_file(tmp_path, "login")
+        assert result == ".specs/features/auth/login.feature.md"
+
+    def test_feature_prompt_uses_resolved_path(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        spec = features_dir / "auth-and-dashboard-shell.feature"
+        spec.write_text("Feature: Auth and Dashboard Shell")
+        config = BuildConfig(project_dir=tmp_path)
+        with patch("auto_sdd.lib.prompt_builder.generate_codebase_summary", return_value=""), \
+             patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback", return_value=""):
+            prompt = build_feature_prompt(
+                1, "auth-and-dashboard-shell", tmp_path, config,
+            )
+        assert "SPEC_FILE: .specs/features/auth-and-dashboard-shell.feature" in prompt
+        assert "{path to the .feature.md file" not in prompt
+
+    def test_feature_prompt_falls_back_to_placeholder(self, tmp_path: Path) -> None:
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        config = BuildConfig(project_dir=tmp_path)
+        with patch("auto_sdd.lib.prompt_builder.generate_codebase_summary", return_value=""), \
+             patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback", return_value=""):
+            prompt = build_feature_prompt(1, "nonexistent", tmp_path, config)
+        assert "SPEC_FILE: {path to the .feature.md file you created/updated}" in prompt
