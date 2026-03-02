@@ -6,7 +6,7 @@
 
 ---
 
-### Priority stack (updated 2026-03-02)
+### Priority stack (updated 2026-03-02, evening)
 
 Ordered by efficiency gain per complexity added:
 
@@ -36,17 +36,18 @@ Correlates t-shirt sizes with actual metrics from `logs/build-summary-*.json`. W
 
 ### Other active items
 
-- **Learnings system — IMPLEMENTED (2026-03-02)**: 80 graph-compliant entries (L-00001–L-00148, non-contiguous), 13 curated in `core.md`. Schema standardization complete (5-digit IDs). Fresh onboard path works. Remaining: old-format conversion (Prompts 4/5), index.md stale.
-- **Replace token estimation proxy — DONE (Dispatch 4, 2026-03-02)**: `get_session_actual_tokens` reads Claude Code JSONL session logs. First real data: 1.9M tokens on a session the proxy claimed was 5,860. Merged to main at `bff81dd`.
-- **Wire L-00143 into active infrastructure** — agent-prompt-engrain-L00143.md ready. Scope sizing ritual needs mechanical enforcement, not just prose rule.
-- **Dispatch 2: core learnings mechanical wiring** — dispatch-2-core-wiring.md ready. Wire core.md entries into agent prompt templates.
-- **Dispatch 3: wire estimate_general_tokens into scope sizing ritual read path** — Connect the estimator to the ritual that needs it.
-- **Merge and review: core learnings inline into CLAUDE.md** — agent-prompt-core-inline.md ready. Evaluate whether core learnings should be injected into CLAUDE.md for every agent session.
+- **Learnings system — IMPLEMENTED (2026-03-02)**: 85+ graph-compliant entries (L-00001–L-00151, non-contiguous), 13 curated in `core.md`, all inlined into CLAUDE.md. Schema standardization complete (5-digit IDs). Token calibration infrastructure: general-estimates.jsonl + 4 functions in lib/general-estimates.sh (write: append_general_estimate + get_session_actual_tokens; read: query_estimate_actuals + estimate_general_tokens). Remaining: old-format conversion (Prompts 4/5), index.md stale.
+- **Replace token estimation proxy — DONE (Dispatch 4, 2026-03-02)**: `get_session_actual_tokens` reads Claude Code JSONL session logs. Token report now distinguishes active_tokens (input+output, for calibration) from cumulative_tokens (incl cache reads). Merged to main. See L-00145, L-00148, L-00149.
+- **Wire L-00143 into active infrastructure** — ✅ DONE (2026-03-02). query_estimate_actuals + estimate_general_tokens added (d1a1a72). Calibration read loop closed.
+- **Dispatch 2: core learnings mechanical wiring** — ✅ DONE (2026-03-02). All 5 items landed across prior agents (L-00143 engrain + checkpoint agents).
+- **Dispatch 3: wire estimate_general_tokens into scope sizing ritual read path** — ✅ DONE (2026-03-02). Functions added directly, no agent needed (d1a1a72).
+- **Core learnings inline into CLAUDE.md** — ✅ DONE (2026-03-02). 13 entries compressed into ~256-word block. Merged at f7be98c.
 - **HOW-I-WORK corpus curation (2026-03-02)**: 74 entries converted to graph schema (M-00001–M-00074). Full corpus read identified 4+ coherent clusters ready for formalization. Action: curate entries into named sections, promote mature patterns to learnings.
 - **Knowledge graph for workflow continuity (2026-02-28)**: Personal workflow tool for cross-session context. *Design phase — no implementation started.*
 - **State format migration (2026-03-01)**: Post-Python-conversion project. Current file-based state preserved during bash→Python conversion. Not started, intentionally deferred — one variable at a time.
 - **Learnings graph-schema conversion (2026-03-02)**: Schema standardization complete. Some old-format entries may remain in `.specs/learnings/` files. Two agent prompts ready (Prompts 4 & 5) for converting those.
 - **Response scope discipline (2026-03-02)**: Formalized as L-00143 scope sizing ritual. Supersedes ad-hoc ">3 items = split" rule with systematic verification-isolation-based sizing.
+- **Slash commands & skills — Code-only (2026-03-02)**: Both `.claude/commands/` and `.claude/skills/` only work in Claude Code (terminal). They do NOT work in Claude.ai Chat tab or Desktop Chat. For Chat-based workflows (extract-learnings, checkpoint), rely on Claude's memory + Desktop Commander + natural language triggers. Skills were created anyway for Code tab agent use.
 - **CLAUDE.md audit (2026-03-01)**: Root CLAUDE.md 468 lines, ~80% stale SDD scaffold (L-00087, L-00094). stakd/CLAUDE.md has battle-tested Next.js 15 patterns not in root. Tasks: (1) strip root to ~100-150 lines of operational content, (2) evaluate whether stakd-specific patterns should be in learnings or stay project-local.
 - **Memory slot optimization (2026-03-01)**: 15/30 slots, ~1,500 words always-injected. Not urgent now but monitor. (L-00095)
 - **ONBOARDING.md overhaul for efficient context (2026-03-01)**: Checkpoint expansion DONE. Remaining: broader audit after graph conversion lands.

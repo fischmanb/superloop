@@ -169,3 +169,15 @@ First real token measurement via `get_session_actual_tokens` showed the proxy fo
 - **Related:** L-00145, L-00148, L-00143
 
 Cache tokens dominate cumulative session totals but are irrelevant to scope estimation. A checkpoint session reported 3.17M "actual" tokens — 87.6% was cache reads (re-sent context: CLAUDE.md, tool definitions, conversation history). Active computation was ~31.5k (input + output). Comparing scope estimates against cumulative tokens produces meaningless calibration data — the number scales with API call count and session length, not with the work unit being estimated. The estimator must compare against active_tokens (input + output) only. This is distinct from L-00145 (proxy formula wrong) and L-00148 (magnitude error) — those identified the proxy was broken. This identifies that even real token data needs decomposition before it's useful for calibration.
+
+---
+
+## L-00152
+- **Type:** empirical-finding
+- **Tags:** [claude-code, slash-commands, skills, chat-interface, platform-capabilities]
+- **Confidence:** high — tested directly, confirmed by official docs
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00150, M-00076
+
+`.claude/commands/` (slash commands) and `.claude/skills/` (agent skills) only work in Claude Code (terminal). They do NOT work in claude.ai Chat tab or Claude Desktop Chat, despite docs suggesting skills work "outside of Claude Code." For cross-interface workflows (extract-learnings, checkpoint), the working path is: Claude's memory recognizes the trigger phrase + Desktop Commander provides filesystem access + natural language drives execution. No infrastructure file needed — just say the words.

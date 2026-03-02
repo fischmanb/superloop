@@ -878,6 +878,16 @@ Brian treats small operational friction (zsh `!` escaping in filenames/commit me
 
 ---
 
+## M-00077
+- **Type:** workflow_fact
+- **Tags:** [interface-routing, chat-vs-code, workflow-design]
+- **Date:** 2026-03-02
+- **Related:** M-00076, L-00152
+
+Brian uses Chat tab (claude.ai / Desktop) for interactive sessions — planning, reviews, extract-learnings, checkpoints — and Code tab for agent dispatches that need git/branch permissions. He expects workflows like "extract learnings" and "checkpoint" to work from Chat via natural language + Desktop Commander, not requiring Code tab infrastructure. Interface routing is deliberate: Chat for thinking, Code for executing.
+
+---
+
 ## Accumulation
 
 Raw captures from checkpoint scans. New entries land here as `- (YYYY-MM-DD) text` during checkpoint step 5, then get converted to graph-schema entries above during periodic curation passes.
