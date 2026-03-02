@@ -421,13 +421,13 @@ When the execution environment is available, execute directly instead of writing
 
 ## L-00151
 - **Type:** process-rule
-- **Tags:** [dispatch-verification, pre-dispatch, redundant-work, scope-sizing]
-- **Confidence:** high — Dispatch 2 was fully complete before the prompt was written
+- **Tags:** [pre-work-verification, redundant-work, scope-sizing, state-check]
+- **Confidence:** high — an agent prompt was written for 5 work items that were already complete
 - **Status:** active
 - **Date:** 2026-03-02
 - **Related:** L-00142, L-00143
 
-Check whether dispatch work items are already done before writing the dispatch. Dispatch 2 (5 work items: core injection, scope format, token reporting, behavioral compliance, core maintenance) was fully complete — the L-00143 engrain agent and checkpoint agent had covered all items across separate sessions. The prompt was written, scoped, and ready to run for work that didn't exist. A 30-second grep for each expected output in the target file would have caught it. Pre-dispatch verification: for each work item, grep the target file for the expected string before writing the prompt.
+Before writing an agent prompt, verify that the target work items aren't already done. A prompt was written for 5 changes (core injection, scope format, token reporting, behavioral compliance, core maintenance) — all 5 had already been completed by two earlier agent sessions working on related tasks. The prompt was scoped, estimated, and ready to run for work that didn't exist. A 30-second grep of each target file for the expected output string would have caught this. Rule: for each work item in any planned agent prompt, grep the target file for the expected artifact before writing the prompt. If the artifact exists, skip the item.
 
 ---
 
@@ -452,3 +452,15 @@ A process rule that references infrastructure which doesn't exist yet is decorat
 - **Related:** L-00111, L-00124
 
 Writing new infrastructure in the outgoing language during a migration creates compound debt. The session identified that Dispatch 1 would create `lib/general-estimates.sh` — a new bash file — while the project was actively converting bash to Python. Claude flagged this ("building infrastructure in the outgoing language") and recommended Python implementation. The agent wrote bash anyway because the prompt specified bash. The file now works, passes tests, and needs to be migrated. New code written in the old language has double cost: the effort to write it plus the effort to migrate it. During active migrations, new infrastructure should use the target language unless there's a blocking dependency on the old system.
+
+---
+
+## L-00163
+- **Type:** process-rule
+- **Tags:** [learnings-quality, self-containment, jargon, system-legibility, actionability]
+- **Confidence:** high — Brian corrected L-00151 for using project-internal jargon ("dispatch") that future readers wouldn't understand
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00128, L-00141
+
+Every learning entry must be self-contained, use system-legible language, and be actionable where possible. Project-internal jargon (e.g., "dispatch" meaning "agent prompt") makes entries opaque to a fresh Claude instance that onboards without session context. Each entry is read by future instances that may never have seen the term — if the entry requires external context to parse, it fails at its purpose. Three requirements: (1) define or avoid jargon — use plain descriptions a new reader can follow; (2) include enough context that the learning is understandable without reading other entries; (3) state a concrete countermeasure or action, not just an observation. An entry that says "dispatches should be sequenced" teaches nothing; "agent prompts with file dependencies must verify those files exist before execution" is actionable.

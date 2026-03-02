@@ -233,4 +233,40 @@ Performing the motions of an active scan while retaining a passive default produ
 - **Date:** 2026-03-02
 - **Related:** L-00001, L-00150
 
-When Claude's response hits its output limit, it looks identical to a task failure. In this session, Claude confused its own output truncation with the dispatched agent failing and began error-handling a non-error. Brian corrected: "the agent finished." The medium's constraint (output token limit) was misread as the task's outcome (failure). Countermeasure: before assuming a dispatched task failed, verify actual state — check the branch, check `git log`, check for commits. The error message is about the channel, not the work.
+When Claude's response hits its output limit, it looks identical to a task failure. In this session, Claude confused its own output truncation with a separate Claude Code agent failing and began error-handling a non-error. Brian corrected: "the agent finished." The medium's constraint (output token limit) was misread as the task's outcome (failure). Countermeasure: before assuming any task failed, verify actual state — check the branch, check `git log`, check for commits. The error message is about the communication channel, not the work.
+
+---
+
+## L-00160
+- **Type:** failure-pattern
+- **Tags:** [bootstrap-paradox, self-referential, circular-dependency, infrastructure]
+- **Confidence:** high — observed directly: estimator couldn't prevent its own construction from blowing context
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00155, L-00128, L-00143
+
+Self-referential infrastructure hits a bootstrap paradox: the tool that prevents a problem cannot be built without the tool that prevents the problem. The token estimator was designed to prevent context blowouts during agent runs. But building the estimator itself required an agent run — which blew the context because no estimator existed yet. The prompt said "use the estimator" but there was nothing to use. This isn't solvable by process rules alone because the process rule ("use the estimator before running") has the same circular dependency. Countermeasure: bootstrap self-referential tools from outside the system they protect — use a simpler heuristic or manual check for the first build, then switch to the mechanical tool once it exists.
+
+---
+
+## L-00161
+- **Type:** failure-pattern
+- **Tags:** [multi-agent-coordination, work-absorption, deduplication, redundant-work]
+- **Confidence:** high — three agents independently solved overlapping problems in one session
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00151, L-00142
+
+Multiple agents working on related tasks will independently solve overlapping problems without coordination. In one session, a scope-sizing agent, a checkpoint agent, and a planned third agent prompt all targeted the same 5 work items (core learnings injection, scope format, token reporting, behavioral compliance, core maintenance). The first two agents completed all 5 items across separate runs. The third prompt was written, scoped, and ready for work that no longer existed. There is no deduplication mechanism — agents can't see what other agents have done unless they grep for artifacts. Countermeasure: before writing any agent prompt, grep target files for expected outputs (L-00151). At scale, a shared work-item registry that agents check and update would prevent redundant execution.
+
+---
+
+## L-00162
+- **Type:** failure-pattern
+- **Tags:** [estimation-theater, false-precision, decoration, L-00128]
+- **Confidence:** high — three estimates stated without computation in one session, all wrong
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00128, L-00143, M-00080
+
+Stating a number as an "estimate" without showing the computation is decoration that creates false confidence. In one session: "8.5% utilization" was stated, accepted, and the agent blew the context; "~12k tokens" appeared in a scope section with no supporting calculation; "well within bounds" was asserted without checking bounds. Each number looked like a calculation — formatted with units, placed in an "Estimate" section — but was a guess wearing a costume. The failure mode: estimates that aren't computed get accepted without scrutiny because they look like they were computed. Countermeasure: every estimate must show the full arithmetic. If the calculation can't be shown, the number isn't an estimate — it's a guess, and should be labeled as such.

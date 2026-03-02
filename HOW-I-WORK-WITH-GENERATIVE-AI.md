@@ -928,6 +928,36 @@ Brian's sessions routinely cross three interfaces with different capabilities: (
 
 ---
 
+## M-00082
+- **Type:** observation
+- **Tags:** [quality-probing, calibration-test, output-verification]
+- **Date:** 2026-03-02
+- **Related:** M-00079, L-00145
+
+Brian actively probes output quality rather than passively consuming it. "Does this seem right to you?" is typically a calibration test, not a genuine question — he already suspects the answer and is checking whether Claude catches the problem independently. In this session, he pasted a token report with a broken proxy formula and asked if it seemed right. The correct response is to analyze critically, not to affirm. When Brian asks "does this look right," treat it as a challenge to find what's wrong.
+
+---
+
+## M-00083
+- **Type:** principle
+- **Tags:** [recursive-self-application, meta-process, eat-your-own-cooking]
+- **Date:** 2026-03-02
+- **Related:** L-00143, L-00162, M-00080
+
+Brian demands recursive self-application: the system must use its own rules on itself. A session about scope estimation must itself use scope estimation. Brian corrected Claude when a response about the scope estimator didn't use the scope estimator: "that response did not complete, which means you did not use the scope estimator." Rules that apply to agents also apply to the session producing the agents. If the meta-process can't follow its own rules, the rules don't work.
+
+---
+
+## M-00084
+- **Type:** observation
+- **Tags:** [failure-as-output, emergent-rules, same-session-learning]
+- **Date:** 2026-03-02
+- **Related:** L-00160, L-00162, L-00155
+
+Process rules emerge from failures in the same session they're needed. L-00143 (scope sizing) was born from context blowouts during the session. L-00145 (proxy formula broken) from the session's own broken reports. L-00147 (context accounting) from the session's own wrong ceiling calculations. The session's failures ARE the session's primary output — the code changes are secondary to the process rules extracted from what went wrong. A session that produces zero failures is either not pushing hard enough or not scanning for them.
+
+---
+
 ## Accumulation
 
 Raw captures from checkpoint scans. New entries land here as `- (YYYY-MM-DD) text` during checkpoint step 5, then get converted to graph-schema entries above during periodic curation passes.
