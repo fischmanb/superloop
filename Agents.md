@@ -1281,6 +1281,20 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 
 **Verification**: mypy --strict: Success (0 issues in 2 files). pytest: 31 passed, 77 assertions. git diff --stat: only py/auto_sdd/scripts/eval_sidecar.py, py/tests/test_eval_sidecar.py, Agents.md.
 
+### Round 43: General Estimates Infrastructure — Dispatch 1 of 3 (branch: claude/general-estimates-infrastructure-K6CoD)
+
+**Date**: Mar 2, 2026
+
+**What was asked**: Create general-estimates.jsonl schema, append function, query function, and calibration-aware estimator (L-00143). Parallel system to cost-log.jsonl for general activities (chat responses, agent prompts, checkpoints).
+
+**What actually happened**: Created `lib/general-estimates.sh` (134 lines) with three functions: `append_general_estimate` (validates required fields, auto-computes estimation_error_pct via bc), `query_estimate_actuals` (per-activity-type stats via jq aggregation, includes sample_count/avg/min/max/calibration_ready), and `estimate_general_tokens` (blended estimator: <5 samples weighted-average actuals+heuristic, 5+ samples pure actuals). Created empty `general-estimates.jsonl`. Fixed bc precision issue (scale=1 caused integer truncation in division; changed to scale=4 with printf rounding). Fixed jq `-c` flag for compact JSONL output. All 8 verification checks pass. Self-appended this dispatch as first data point (estimated 12k tokens, actual ~5.8k, error +104.8%).
+
+**What was NOT changed**: lib/decision-log.sh (does not exist), cost-log.jsonl, lib/claude-wrapper.sh, scripts/build-loop-local.sh, any agent prompts or checklists.
+
+**Verification**: All 8 mechanical checks passed: file existence (2), append with auto error_pct (2), query returns correct stats, calibrated estimate blending (13700 from 8500 actual + 15000 fallback at 1 sample), fallback for unknown types (20000), cleanup. git diff --stat: only lib/general-estimates.sh, general-estimates.jsonl, Agents.md.
+
+---
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
