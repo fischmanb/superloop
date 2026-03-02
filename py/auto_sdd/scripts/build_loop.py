@@ -640,6 +640,12 @@ class BuildLoop:
                 )
                 continue
 
+            # Re-detect build/test commands (project structure changes as features land)
+            self.build_cmd = detect_build_check(self.project_dir, _env_str("BUILD_CHECK_CMD", "") or None)
+            self.test_cmd = detect_test_check(self.project_dir, _env_str("TEST_CHECK_CMD", "") or None)
+            self.build_config.build_cmd = self.build_cmd
+            self.build_config.test_cmd = self.test_cmd
+
             feature_start = int(time.time())
             elapsed = feature_start - self.script_start
 

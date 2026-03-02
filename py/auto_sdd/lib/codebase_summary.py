@@ -76,17 +76,35 @@ _LOCAL_IMPORT_RE = re.compile(
 )
 
 
-def _find_component_files(project_dir: Path) -> list[Path]:
-    """Find .tsx and .jsx files under src/ and app/, sorted by relative path."""
+_EXCLUDED_DIRS: frozenset[str] = frozenset({
+    "node_modules", ".git", "dist", "build", ".next",
+    "__pycache__", "target", ".build-worktrees", "venv", ".venv",
+})
+
+
+def _walk_files(project_dir: Path, extensions: tuple[str, ...]) -> list[Path]:
+    """Walk *project_dir* collecting files matching *extensions*, skipping excluded dirs."""
     results: list[Path] = []
-    for subdir_name in ("src", "app"):
-        subdir = project_dir / subdir_name
-        if subdir.is_dir():
-            for ext in ("*.tsx", "*.jsx"):
-                results.extend(subdir.rglob(ext))
-    # Sort by relative path string, matching bash `find ... | sort`
+    stack: list[Path] = [project_dir]
+    while stack:
+        current = stack.pop()
+        try:
+            entries = sorted(current.iterdir(), key=lambda p: p.name)
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.is_dir():
+                if entry.name not in _EXCLUDED_DIRS:
+                    stack.append(entry)
+            elif entry.is_file() and entry.suffix in extensions:
+                results.append(entry)
     results.sort(key=lambda p: str(p.relative_to(project_dir)))
     return results
+
+
+def _find_component_files(project_dir: Path) -> list[Path]:
+    """Find .tsx and .jsx files across the entire project, sorted by relative path."""
+    return _walk_files(project_dir, (".tsx", ".jsx"))
 
 
 def _has_export_default(filepath: Path) -> bool:
@@ -110,7 +128,7 @@ def _build_component_registry(
     builder.append("")
 
     if not component_files:
-        builder.append("No .tsx/.jsx files found under src/ or app/.")
+        builder.append("No .tsx/.jsx files found.")
     else:
         total_components = len(component_files)
         displayed = 0
@@ -132,26 +150,21 @@ def _build_component_registry(
 def _find_type_exports(
     project_dir: Path,
 ) -> list[tuple[str, str]]:
-    """Find type/interface exports in .ts and .tsx files under src/ and app/.
+    """Find type/interface exports in .ts and .tsx files across the project.
 
     Returns list of (relative_path, type_name) tuples.
     """
     results: list[tuple[str, str]] = []
-    for subdir_name in ("src", "app"):
-        subdir = project_dir / subdir_name
-        if not subdir.is_dir():
+    for filepath in _walk_files(project_dir, (".ts", ".tsx")):
+        try:
+            content = filepath.read_text(
+                encoding="utf-8", errors="replace"
+            )
+        except OSError:
             continue
-        for ext in ("*.ts", "*.tsx"):
-            for filepath in sorted(subdir.rglob(ext), key=lambda p: str(p)):
-                try:
-                    content = filepath.read_text(
-                        encoding="utf-8", errors="replace"
-                    )
-                except OSError:
-                    continue
-                for match in _TYPE_EXPORT_RE.finditer(content):
-                    relpath = str(filepath.relative_to(project_dir))
-                    results.append((relpath, match.group(1)))
+        for match in _TYPE_EXPORT_RE.finditer(content):
+            relpath = str(filepath.relative_to(project_dir))
+            results.append((relpath, match.group(1)))
     return results
 
 

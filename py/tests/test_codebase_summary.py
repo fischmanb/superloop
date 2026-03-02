@@ -10,7 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from auto_sdd.lib.codebase_summary import generate_codebase_summary
+from auto_sdd.lib.codebase_summary import (
+    _find_component_files,
+    _find_type_exports,
+    generate_codebase_summary,
+)
 
 
 # ── Fixture: create_fixture_project ──────────────────────────────────────────
@@ -318,3 +322,51 @@ class TestNoTypeExports:
         )
         output = generate_codebase_summary(tmp_path)
         assert "No type/interface exports found." in output
+
+
+# ── Test: monorepo / nested layouts ──────────────────────────────────────────
+
+
+class TestMonorepoLayout:
+    """Layout-agnostic scanning finds components and types in nested directories."""
+
+    def test_client_src_components_found(self, tmp_path: Path) -> None:
+        """Components under client/src/ are discovered."""
+        comp_dir = tmp_path / "client" / "src" / "components"
+        comp_dir.mkdir(parents=True)
+        (comp_dir / "Widget.tsx").write_text(
+            "export default function Widget() { return null; }\n"
+        )
+        files = _find_component_files(tmp_path)
+        names = [f.name for f in files]
+        assert "Widget.tsx" in names, "Widget.tsx not found in client/src/"
+
+    def test_server_src_types_found(self, tmp_path: Path) -> None:
+        """Type exports under server/src/ are discovered."""
+        types_dir = tmp_path / "server" / "src" / "types"
+        types_dir.mkdir(parents=True)
+        (types_dir / "models.ts").write_text(
+            "export type Order = {\n  id: string;\n  total: number;\n};\n"
+        )
+        exports = _find_type_exports(tmp_path)
+        type_names = [name for _, name in exports]
+        assert "Order" in type_names, "Order type not found in server/src/"
+
+    def test_nested_layout_with_exclusions(self, tmp_path: Path) -> None:
+        """Components in node_modules are excluded; client/src/ components are included."""
+        # Real component
+        comp_dir = tmp_path / "client" / "src" / "components"
+        comp_dir.mkdir(parents=True)
+        (comp_dir / "Real.tsx").write_text(
+            "export default function Real() { return null; }\n"
+        )
+        # node_modules component (should be excluded)
+        nm_dir = tmp_path / "node_modules" / "pkg" / "src"
+        nm_dir.mkdir(parents=True)
+        (nm_dir / "Fake.tsx").write_text(
+            "export default function Fake() { return null; }\n"
+        )
+        files = _find_component_files(tmp_path)
+        names = [f.name for f in files]
+        assert "Real.tsx" in names, "Real.tsx should be found"
+        assert "Fake.tsx" not in names, "Fake.tsx in node_modules should be excluded"
