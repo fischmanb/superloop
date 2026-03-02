@@ -98,14 +98,40 @@ Agents have landed on wrong branches and wrong commits multiple times. Precondit
 - `pytest -v` on all new/modified Python test files
 - Do NOT run the bash test suites — no bash files were touched, so they cannot break. Running them wastes agent context budget.
 
-### 5. Commit (no merge)
+### 5. Token Usage Report (required — L-00162, L-00164)
+Every agent prompt must include a Token Usage Report block as its final operational step before commit. This is not optional and not decorative — it feeds the calibration loop in `general-estimates.jsonl`. Without it, scope estimates remain guesses forever.
+
+```bash
+source lib/general-estimates.sh
+echo "=== TOKEN USAGE REPORT ==="
+echo "activity_type: <descriptive-slug>"
+echo "estimated_tokens_pre: <N from scope estimate>"
+ACTUAL_TOKENS=$(get_session_actual_tokens)
+echo "actual_tokens_data: $ACTUAL_TOKENS"
+ACTIVE=$(echo "$ACTUAL_TOKENS" | jq '.active_tokens // 0')
+CUMULATIVE=$(echo "$ACTUAL_TOKENS" | jq '.cumulative_tokens // 0')
+echo "active_tokens (input+output): $ACTIVE"
+echo "cumulative_tokens (incl cache): $CUMULATIVE"
+EST=<N>  # same number as estimated_tokens_pre
+echo "estimation_error_pct: $(echo "scale=1; (($EST - $ACTIVE) / $ACTIVE) * 100" | bc)"
+echo "source: $(echo "$ACTUAL_TOKENS" | jq -r '.source')"
+append_general_estimate "{\"timestamp\":\"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\",\"activity_type\":\"<slug>\",\"estimated_tokens_pre\":$EST,\"active_tokens\":$ACTIVE,\"cumulative_tokens\":$CUMULATIVE}"
+echo "=== END REPORT ==="
+```
+
+The chat session writing the prompt is responsible for:
+1. Computing the estimate (calling `estimate_general_tokens` or manual arithmetic) BEFORE writing the prompt
+2. Embedding the estimate in the prompt's Scope Estimate section AND the report block's `estimated_tokens_pre`
+3. Including this report block in every agent prompt — no exceptions
+
+### 6. Commit (no merge)
 - `git add` only the explicitly allowed files (never `git add -A` or `git add .`)
 - Commit with descriptive message to your feature branch
 - Do NOT merge to main — Brian merges manually after verification
 - Do NOT push — Brian pushes manually from his machine (sandbox lacks GitHub auth)
 - Report the branch name and commit hash
 
-### 6. Prompt Closing
+### 7. Prompt Closing
 Every prompt must end with: "Report your findings immediately upon completion. Do not wait for a follow-up question."
 
 ---

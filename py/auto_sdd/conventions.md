@@ -499,6 +499,30 @@ Each agent MUST maintain a changelog in a comment block at the top of its output
 
 This is not boilerplate — it captures WHY the Python version differs from bash. If there's nothing to log, the agent writes `# No deviations from bash interface.`
 
+## Token Usage Report (required — L-00162, L-00164)
+
+Every agent prompt that performs conversion work must include a Token Usage Report as the final step before commit. This feeds the calibration loop in `general-estimates.jsonl` and ensures scope estimates improve over time.
+
+```bash
+source lib/general-estimates.sh
+echo "=== TOKEN USAGE REPORT ==="
+echo "activity_type: <descriptive-slug>"
+echo "estimated_tokens_pre: <N>"
+ACTUAL_TOKENS=$(get_session_actual_tokens)
+echo "actual_tokens_data: $ACTUAL_TOKENS"
+ACTIVE=$(echo "$ACTUAL_TOKENS" | jq '.active_tokens // 0')
+CUMULATIVE=$(echo "$ACTUAL_TOKENS" | jq '.cumulative_tokens // 0')
+echo "active_tokens (input+output): $ACTIVE"
+echo "cumulative_tokens (incl cache): $CUMULATIVE"
+EST=<N>
+echo "estimation_error_pct: $(echo "scale=1; (($EST - $ACTIVE) / $ACTIVE) * 100" | bc)"
+echo "source: $(echo "$ACTUAL_TOKENS" | jq -r '.source')"
+append_general_estimate "{\"timestamp\":\"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\",\"activity_type\":\"<slug>\",\"estimated_tokens_pre\":$EST,\"active_tokens\":$ACTIVE,\"cumulative_tokens\":$CUMULATIVE}"
+echo "=== END REPORT ==="
+```
+
+The `estimated_tokens_pre` value comes from the Scope Estimate section of the prompt. It must be computed (via `estimate_general_tokens` or manual arithmetic), not guessed. See L-00162.
+
 ## What NOT to Do
 
 - Don't use `os.path`. Use `pathlib.Path` everywhere. (`os` module itself is fine for `os.fdopen`, `os.rename`, etc. — the ban is specifically `os.path` string manipulation.)

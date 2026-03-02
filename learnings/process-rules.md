@@ -464,3 +464,16 @@ Writing new infrastructure in the outgoing language during a migration creates c
 - **Related:** L-00128, L-00141
 
 Every learning entry must be self-contained, use system-legible language, and be actionable where possible. Project-internal jargon (e.g., "dispatch" meaning "agent prompt") makes entries opaque to a fresh Claude instance that onboards without session context. Each entry is read by future instances that may never have seen the term — if the entry requires external context to parse, it fails at its purpose. Three requirements: (1) define or avoid jargon — use plain descriptions a new reader can follow; (2) include enough context that the learning is understandable without reading other entries; (3) state a concrete countermeasure or action, not just an observation. An entry that says "dispatches should be sequenced" teaches nothing; "agent prompts with file dependencies must verify those files exist before execution" is actionable.
+
+
+---
+
+## L-00164
+- **Type:** process-rule
+- **Tags:** [token-estimation, calibration-loop, mechanical-enforcement, prompt-structure, L-00162-enforcement]
+- **Confidence:** high — Phase 4a prompt shipped without Token Usage Report; chat session wrote prose estimate without calling estimate_general_tokens
+- **Status:** active
+- **Date:** 2026-03-01
+- **Related:** L-00143 (related_to), L-00162 (depends_on), L-00155 (related_to)
+
+Token estimation must be wired into both chat-session scope rituals and agent prompt structure. Phase 4a agent prompt omitted the Token Usage Report section entirely; the chat session wrote a prose scope estimate ("~15,000 tokens") without calling `estimate_general_tokens` or showing arithmetic. Both are violations of L-00143 (scope sizing ritual) and L-00162 (estimation without computation is decoration) that survived because neither was mechanically enforced at prompt-writing time. The calibration loop in `general-estimates.jsonl` received no data from the session until Brian manually ran the report. Countermeasure: (1) memory slot 18 enforces chat-side — call `estimate_general_tokens` or compute manually before writing agent prompts; (2) Token Usage Report is now a required section in both `PROMPT-ENGINEERING-GUIDE.md` (section 5) and `conventions.md`, making omission a visible structural gap in any prompt review; (3) every agent prompt template must include the `source lib/general-estimates.sh` + `get_session_actual_tokens` + `append_general_estimate` block as a verification step equal in status to `git diff --stat`.
