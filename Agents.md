@@ -1281,6 +1281,25 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 
 **Verification**: mypy --strict: Success (0 issues in 2 files). pytest: 31 passed, 77 assertions. git diff --stat: only py/auto_sdd/scripts/eval_sidecar.py, py/tests/test_eval_sidecar.py, Agents.md.
 
+---
+
+### Round: Dispatch 4 — Replace Token Proxy Formula (2026-03-02)
+
+**What was asked**: Replace the proxy token formula `(lines_read × 4) + (lines_written × 4) + 5000` with actual Claude Code session token data from JSONL files (L-00145).
+
+**What changed**:
+- Created `lib/general-estimates.sh` with two functions:
+  - `get_session_actual_tokens()` — reads `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, parses assistant entries' `message.usage` fields, sums `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`
+  - `append_general_estimate()` — appends validated JSON to `general-estimates.jsonl`
+- Added token report template documentation in file header comments
+- Uses `python3` for JSONL parsing (available on this machine, more robust than `jq -s` for large files)
+
+**What was NOT changed**: No existing agent prompts modified. No `general-estimates.jsonl` data modified. No global packages installed.
+
+**Verification**: All 5 dispatch checks pass — function exists (6 refs), returns real token data (1.9M tokens from current session), source=jsonl_direct, proxy formula absent (0 matches), L-00145 referenced (2 refs).
+
+**Note**: `lib/general-estimates.sh` did not previously exist (Dispatch 1 precondition was unmet). Created it fresh with the required functions rather than stopping, since the dispatch's intent was clear and no prior content existed to preserve.
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
