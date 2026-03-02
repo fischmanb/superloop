@@ -193,3 +193,39 @@ Cache tokens dominate cumulative session totals but are irrelevant to scope esti
 - **Related:** L-00001, L-00116, L-00130
 
 After context compaction, Claude assessed a 9-hour, 15+ commit session as "relatively short in terms of new things." The compaction summary was compact, so the session *felt* compact — but the summary is lossy by design (L-00130). This is L-00001 (agent self-assessments unreliable) manifesting at session scope: Claude's subjective sense of "how much happened" tracks context window density, not actual elapsed work. Mechanical countermeasure: before assessing session scope, run `git log --oneline --since="[session start]"` and count commits, files changed, learnings captured. Never trust the vibes.
+
+---
+
+## L-00156
+- **Type:** empirical-finding
+- **Tags:** [shell-metacharacters, command-naming, zsh, cross-shell, silent-failure]
+- **Confidence:** high — `!learn` failed in zsh, required rename to `extract-learnings`
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** M-00075
+
+Shell metacharacters in command names cause silent failures across shells. The `!learn` command name was chosen to avoid conflicting with Claude's built-in `/learn`, but `!` is a history expansion character in zsh. `git commit -m "add !learn command"` triggered `zsh: event not found: learn`. `cp` and `git add` with the `!` required backslash escaping. The fix was renaming to `extract-learnings` — no metacharacters, no escaping, works everywhere. Rule: command names should contain only `[a-z0-9-]`. No `!`, `@`, `#`, `$`, `%`, `^`, `&`, `*`, or any character that any common shell treats specially.
+
+---
+
+## L-00157
+- **Type:** empirical-finding
+- **Tags:** [agent-resilience, precondition-recovery, dependency-chain, silent-deviation]
+- **Confidence:** high — Dispatch 4 agent created file that Dispatch 1 was supposed to create
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00146, L-00142
+
+Agents that recover from unmet preconditions are more robust but break dependency chain visibility. Dispatch 4 (replace token proxy formula) discovered that `lib/general-estimates.sh` didn't exist — Dispatch 1 had never been run. Rather than halting and reporting the precondition failure, the agent created the file from scratch and continued. The work completed successfully. But the dependency violation was silent: the dispatch chain assumed Dispatch 1 → 4 ordering, and 4 ran without 1. This worked because the agent had enough context to recreate the missing piece. It could have gone wrong if Dispatch 1 had established conventions that Dispatch 4 unknowingly violated. Precondition failures should be reported even when recovered from — log it, then proceed.
+
+---
+
+## L-00158
+- **Type:** empirical-finding
+- **Tags:** [token-metrics, cumulative-vs-active, cache-reads, measurement, calibration]
+- **Confidence:** high — 3.17M cumulative vs 31.5k active tokens in same session
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00145, L-00148
+
+Cumulative token metrics (including cache reads) and active tokens (input + output) measure fundamentally different things and must never be compared or conflated. A 61-API-call session reported 3,174,082 cumulative tokens — 87.6% were cache reads (the same conversation context re-sent and cached on each call). Active tokens were ~31.5k. Reporting the cumulative number against a 9,380 scope estimate made the estimate look 337x wrong when it was actually 3.4x wrong. The fix: `get_session_actual_tokens()` now returns both `active_tokens` and `cumulative_tokens` as separate fields. Scope estimates compare against `active_tokens`. Billing analysis uses `cumulative_tokens`. Mixing them poisons calibration data.

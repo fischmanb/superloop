@@ -428,3 +428,27 @@ When the execution environment is available, execute directly instead of writing
 - **Related:** L-00142, L-00143
 
 Check whether dispatch work items are already done before writing the dispatch. Dispatch 2 (5 work items: core injection, scope format, token reporting, behavioral compliance, core maintenance) was fully complete — the L-00143 engrain agent and checkpoint agent had covered all items across separate sessions. The prompt was written, scoped, and ready to run for work that didn't exist. A 30-second grep for each expected output in the target file would have caught it. Pre-dispatch verification: for each work item, grep the target file for the expected string before writing the prompt.
+
+---
+
+## L-00155
+- **Type:** process-rule
+- **Tags:** [rule-infrastructure-gap, prose-vs-mechanical, dependency-ordering, L-00128]
+- **Confidence:** high — observed three times in one session
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00128, L-00143, L-00142
+
+A process rule that references infrastructure which doesn't exist yet is decoration. This session wrote L-00143 (scope sizing ritual requiring `estimate_general_tokens()`), then wrote agent prompts saying "use the estimator" — but the estimator function didn't exist for three more dispatches. The rule was real, the prompts referenced it, and nothing worked because the dependency wasn't built yet. This is L-00128 (prose gets ignored) at the meta level: the rule about using the tool was itself prose until the tool existed. Countermeasure: when writing a process rule, immediately check whether its dependencies exist. If not, the first dispatch must build the dependency, and subsequent rules/dispatches must wait.
+
+---
+
+## L-00159
+- **Type:** process-rule
+- **Tags:** [migration-debt, language-migration, compound-cost, bash-to-python]
+- **Confidence:** high — lib/general-estimates.sh written in bash during active bash→Python migration
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00111, L-00124
+
+Writing new infrastructure in the outgoing language during a migration creates compound debt. The session identified that Dispatch 1 would create `lib/general-estimates.sh` — a new bash file — while the project was actively converting bash to Python. Claude flagged this ("building infrastructure in the outgoing language") and recommended Python implementation. The agent wrote bash anyway because the prompt specified bash. The file now works, passes tests, and needs to be migrated. New code written in the old language has double cost: the effort to write it plus the effort to migrate it. During active migrations, new infrastructure should use the target language unless there's a blocking dependency on the old system.

@@ -888,6 +888,46 @@ Brian uses Chat tab (claude.ai / Desktop) for interactive sessions — planning,
 
 ---
 
+## M-00078
+- **Type:** workflow_fact
+- **Tags:** [desktop-commander, execution-style, act-dont-instruct]
+- **Date:** 2026-03-02
+- **Related:** M-00077, L-00150
+
+Brian expects Claude to execute operations (git merges, pushes, conflict resolution, file edits) directly via Desktop Commander from Chat tab — not present bash blocks to copy-paste. "Execute using desktop commander as always." Desktop Commander is Claude's hands. When Claude has the tools to act, it should act. Writing instructions for Brian to execute manually is wasting his time.
+
+---
+
+## M-00079
+- **Type:** workflow_fact
+- **Tags:** [correction-style, calibration-signals, communication-pattern]
+- **Date:** 2026-03-02
+- **Related:** M-00020
+
+Brian's correction style is blunt and specific ("you dope", "you loon", "you scoped badly", "you failed"). These are calibration signals, not hostility. Each correction pinpoints exactly what went wrong and what the expected behavior was. Claude should take corrections immediately and apply them — no defensive hedging, no excessive apology, no multi-paragraph acknowledgment of the mistake. Fix the thing and keep moving.
+
+---
+
+## M-00080
+- **Type:** methodology_signal
+- **Tags:** [show-your-work, transparency, verification, estimation]
+- **Date:** 2026-03-02
+- **Related:** L-00128, L-00143, L-00155
+
+"Show your work" is a general principle, not just for token estimates. A bare number ("Estimated: ~12k tokens") is decoration that no one can verify. The full calculation (files × lines × tokens/line + overhead = total) is verifiable and exposes errors. This applies to scope estimates, dependency counts, risk assessments — any claim that includes a number. If the number can't be reverse-engineered from the shown work, it's a guess labeled as an estimate. L-00128 (prose gets ignored) is the failure mode; showing the work is the countermeasure.
+
+---
+
+## M-00081
+- **Type:** workflow_fact
+- **Tags:** [multi-interface, session-architecture, chat-code-dc]
+- **Date:** 2026-03-02
+- **Related:** M-00077, L-00152
+
+Brian's sessions routinely cross three interfaces with different capabilities: (1) Chat tab for interactive thinking — planning, reviews, learnings extraction, checkpoint coordination; (2) Code tab for agent dispatches needing git branch creation, isolation, and push permissions; (3) Desktop Commander (from Chat) for direct filesystem and git operations on main. The interfaces have different permission models and Claude should know which one it's operating in. Chat + DC can do most things except create new branches. Code tab is for isolated agent work that needs branch protection.
+
+---
+
 ## Accumulation
 
 Raw captures from checkpoint scans. New entries land here as `- (YYYY-MM-DD) text` during checkpoint step 5, then get converted to graph-schema entries above during periodic curation passes.

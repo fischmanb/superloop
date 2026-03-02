@@ -222,3 +222,15 @@ Date: 2026-03-02T03:00:00-05:00
 Related: L-00113 (depends_on), L-00116 (related_to), L-00117 (related_to)
 
 Performing the motions of an active scan while retaining a passive default produces the same outcome as not scanning. The checkpoint after L-00113 walked through all five scan categories, produced analysis for each, but concluded "no new learnings" — because the analytical frame was still "find reasons to include" rather than "assume capture, find reasons to skip." The form was correct (categories checked) but the substance was unchanged (nothing captured). A scan that reviews every category and finds zero candidates in a session that had agent completions, corrections, and system improvements is evidence of the scan failing, not evidence of nothing to capture.
+
+---
+
+## L-00154
+- **Type:** failure-pattern
+- **Tags:** [output-truncation, state-verification, medium-vs-message, false-failure]
+- **Confidence:** high — observed directly in session
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00001, L-00150
+
+When Claude's response hits its output limit, it looks identical to a task failure. In this session, Claude confused its own output truncation with the dispatched agent failing and began error-handling a non-error. Brian corrected: "the agent finished." The medium's constraint (output token limit) was misread as the task's outcome (failure). Countermeasure: before assuming a dispatched task failed, verify actual state — check the branch, check `git log`, check for commits. The error message is about the channel, not the work.
