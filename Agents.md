@@ -1336,6 +1336,19 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 
 **Note**: `lib/general-estimates.sh` did not previously exist (Dispatch 1 precondition was unmet). Created it fresh with the required functions rather than stopping, since the dispatch's intent was clear and no prior content existed to preserve.
 
+### Round 46: Inline Core Learnings + Scope Ritual into CLAUDE.md (2026-03-02)
+
+**What was asked**: Compress all 13 core learnings from `learnings/core.md` into an operational block in CLAUDE.md. Add a Scope Discipline section (L-00143). Insert-only — no deletion of existing content.
+
+**What changed**:
+- `CLAUDE.md`: Inserted two new sections above `## Core Principle`:
+  - `## Core Learnings (compressed from learnings/core.md)` — 13 compressed entries (L-00001, L-00005, L-00011, L-00012, L-00016, L-00020, L-00026, L-00028, L-00113, L-00116, L-00125, L-00130, L-00143)
+  - `## Response & Prompt Scope Discipline (L-00143)` — scope sizing ritual reference
+
+**What was NOT changed**: `learnings/core.md` (source of truth, untouched). No existing CLAUDE.md content deleted. No other files modified.
+
+**Verification**: All 5 checks pass — Core Learnings block present (1), all 13 L-numbers found, Scope Discipline present (1), block size 256 words (< 450), core.md unchanged (0 diff lines).
+
 ---
 ## Questions?
 
