@@ -878,16 +878,6 @@ Brian treats small operational friction (zsh `!` escaping in filenames/commit me
 
 ---
 
-## M-00076
-- **Type:** workflow_fact
-- **Tags:** [slash-commands, naming, shell-special-characters]
-- **Date:** 2026-03-02
-- **Related:** M-00075
-
-`!` prefix in Claude Code slash command filenames escapes the `/` trigger, making the command unreachable. `!learn.md` was renamed to `extract-learnings.md`. Naming convention for `.claude/commands/`: avoid shell-special characters (`!`, `#`, `$`, etc.) in filenames.
-
----
-
 ## Accumulation
 
 Raw captures from checkpoint scans. New entries land here as `- (YYYY-MM-DD) text` during checkpoint step 5, then get converted to graph-schema entries above during periodic curation passes.
