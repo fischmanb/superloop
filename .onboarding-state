@@ -1,6 +1,6 @@
 {
-  "last_check_ts": "2026-03-02T04:00:00Z",
+  "last_check_ts": "2026-03-02T05:35:00Z",
   "last_check_hash": "c2a4912b8d6c926c6c336b8e96dbe93c",
-  "prompt_count": 1,
-  "pending_captures": ["handoff.md used dot-less filename vs protocol .handoff.md — naming mismatch to fix"]
+  "prompt_count": 6,
+  "pending_captures": ["Phase 5 prompt delivered for overnight-autonomous.sh → Python. Decomposition: composition over subclass, ~850 lines estimated output, 20k token estimate."]
 }

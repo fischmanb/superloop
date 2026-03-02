@@ -279,6 +279,48 @@ py/auto_sdd/
 
 **Eval Feedback — fold into eval_lib.py or build_loop.py**: read_latest_eval_feedback, update_repeated_mistakes, get_cumulative_mistakes
 
+---
+
+## Phase 5 Decomposition: overnight-autonomous.sh (1,310 lines)
+
+### Analysis
+
+~80% of overnight-autonomous.sh is copy-pasted from build-loop-local.sh. These functions are already converted as Python modules:
+
+**Already converted (import, don't rewrite):**
+- build_gates.py: check_build, check_tests, check_lint, check_dead_exports, detect_build_check, detect_test_check, detect_lint_check, should_run_step, agent_cmd, run_cmd_safe
+- drift.py: check_drift, extract_drift_targets, run_code_review
+- branch_manager.py: branch setup/cleanup (overnight uses chained/independent only)
+- prompt_builder.py: prompt generation patterns
+- reliability.py: acquire_lock, release_lock, run_agent_with_backoff, emit_topo_order, check_circular_deps, read_state, write_state, clean_state
+- eval_sidecar.py: start/stop sidecar
+- claude_wrapper.py: agent invocation
+
+**Overnight-specific code (~300 lines new):**
+- Step 0: git sync with base branch (~30 lines)
+- Step 1: PR rebase via `gh` CLI (~40 lines)
+- Step 2: Triage via agent (Slack/Jira → roadmap) (~30 lines)
+- Step 3: Simplified build loop — no "both" mode, no signal fallback inference, non-blocking drift/test failures, PR creation after each feature (~120 lines)
+- Step 4: Summary report + optional Slack notification (~40 lines)
+- Overnight-specific prompt templates (~50 lines)
+- OvernightConfig dataclass, main() entry point (~40 lines)
+
+### Design Decision: Composition, Not Subclass
+
+OvernightRunner does NOT subclass BuildLoop. The behavioral differences are too substantial:
+1. Overnight pushes branches + creates draft PRs; BuildLoop doesn't
+2. Overnight treats drift/test failures as non-blocking (push anyway, document in PR); BuildLoop blocks
+3. Overnight has no signal fallback inference (paths 2 & 3 from BuildLoop); just FEATURE_BUILT or fail
+4. Overnight expects agent to leave uncommitted changes and commits them itself; BuildLoop expects agent to commit
+
+OvernightRunner imports the shared modules directly and has its own orchestration loop.
+
+### Estimated Output
+- overnight_autonomous.py: ~500 lines
+- test_overnight_autonomous.py: ~350 lines
+- Total: ~850 lines
+- Active token estimate: 20,000 (calibrated: 4b was 18k est → 28k actual, using 1.3x + buffer for orchestration complexity)
+
 ### L-00111 Design Improvements for Phase 4 Agent Prompts
 
 These patterns from the bash→Python conversion itself should be wired into the converted build loop:
