@@ -1,6 +1,6 @@
 {
   "last_check_ts": "2026-03-02T06:00:00Z",
   "last_check_hash": "c2a4912b8d6c926c6c336b8e96dbe93c",
-  "prompt_count": 0,
-  "pending_captures": []
+  "prompt_count": 3,
+  "pending_captures": ["Phase 6 merged at b7114f8. Bash-to-Python conversion COMPLETE. 568 tests, zero regressions. Remaining: integration test, bash retirement, reliability.py monolith extraction."]
 }

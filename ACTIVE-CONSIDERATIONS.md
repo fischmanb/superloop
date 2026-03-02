@@ -25,8 +25,9 @@ Ordered by efficiency gain per complexity added:
    - **Phase 3 DONE**: build-loop-local decomposition analysis. 10 logical sections, 2-agent sequential split (4a: support modules, 4b: core orchestration). Key finding: 3+1 duplicated success-recording blocks → single `_record_build_result()`. Full analysis in `WIP/bash-to-python-conversion.md`.
    - **Phase 4a DONE**: 4 support modules (build_gates, drift, branch_manager, prompt_builder). 1,714 lines, 103 tests. Merged at `b534d22`.
    - **Phase 4b DONE**: BuildLoop class (core orchestration, 3+1 dedup, json.dumps summary). 1,521 lines, 40 tests. Merged at `6dc6497`. 384 tests total, zero regressions.
-   - **Phase 5 READY**: overnight-autonomous.sh → OvernightRunner (composition, not subclass). ~80% reuse from existing modules. Prompt delivered, pending execution.
-   - **Remaining after Phase 5**: nightly_review.sh (170 lines), generate_mapping.sh (318 lines), general_estimates.sh (278 lines) — one agent prompt for all three. Then: integration test against real project, retire bash test suites.
+   - **Phase 5 DONE**: OvernightRunner (overnight-autonomous.sh → Python). Composition over subclass. 640 lines, 70 tests. Merged at `9bf0f05`. 454 tests total, zero regressions.
+   - **Phase 6 DONE**: Final scripts (nightly_review, generate_mapping, general_estimates). 760 lines impl + 890 lines tests. 114 new tests. Merged at `b7114f8`. 568 tests total, zero regressions.
+   - **CONVERSION COMPLETE.** All bash scripts and libs have Python equivalents. Remaining: integration test against real project, retire bash test suites (2,149 lines), extract errors.py/signals.py/state.py from reliability.py monolith (conventions specify these but Phase 1 inlined them).
 3. ~~**Build loop design improvements — folded into Phase 4 (2026-03-01).**~~ ✅ DONE — L-00111 patterns wired into Phase 4 prompts.
 4. **Eval sidecar gap: quality gate → learning system (post-migration).**
    - Current: per-commit scoring (compliance, scope, integration) + `repeated_mistakes` feedback into next build prompt. Campaign summary is aggregate tallies only.
