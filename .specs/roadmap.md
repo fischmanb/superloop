@@ -23,7 +23,7 @@
 
 | Status | Count |
 |--------|-------|
-| ✅ Completed | 1 |
+| ✅ Completed | 2 |
 | 🔄 In Progress | 0 |
 | ⬜ Pending | 0 |
 | ⏸️ Blocked | 0 |
@@ -39,6 +39,7 @@
 | # | Feature | Source | Jira | Complexity | Deps | Status |
 |---|---------|--------|------|------------|------|--------|
 | 1 | Auth and dashboard shell | build-next | - | M | - | ✅ |
+| 2 | Lease comp search and filtering | build-next | - | M | 1 | ✅ |
 
 ---
 
