@@ -1303,6 +1303,18 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 
 **Verification**: All 8 mechanical checks passed: file existence (2), append with auto error_pct (2), query returns correct stats, calibrated estimate blending (13700 from 8500 actual + 15000 fallback at 1 sample), fallback for unknown types (20000), cleanup. git diff --stat: only lib/general-estimates.sh, general-estimates.jsonl, Agents.md.
 
+### Round 44: Checkpoint — L-00142–L-00145, M-00072–M-00074 (branch: claude/review-onboarding-checkpoint-l8VHB)
+
+**Date**: Mar 2, 2026
+
+**What was asked**: Execute checkpoint protocol. Merge schema-standardization and general-estimates branches. Write 4 learnings (L-00142–L-00145: scope sizing, token estimation). Write 3 methodology signals (M-00072–M-00074). Run active scan. Update ACTIVE-CONSIDERATIONS.md with pending dispatch items.
+
+**What actually happened**: (1) Merged `claude/schema-standardization-id-expansion-FxlVR` and `claude/general-estimates-infrastructure-K6CoD` into feature branch (resolved Agents.md conflict). (2) Wrote L-00142 (bundled migrations create multiplicative debugging surface), L-00143 (scope sizing ritual — CORE), L-00144 (schema agent near-miss), L-00145 (token formula broken proxy). (3) Added L-00143 to core.md. (4) Wrote M-00072 (recursive scope discipline), M-00073 (interface routing precondition), M-00074 (proxy metrics false confidence). (5) Ran 5-category active scan — no uncaptured learnings beyond L-00142–L-00145. (6) Updated ACTIVE-CONSIDERATIONS.md: refreshed learnings count, added 5 pending dispatch items, updated stale entries. (7) Updated .onboarding-state.
+
+**What was NOT changed**: No source code, scripts, or lib files modified. No learnings body text changed (new entries only). Main branch not modified (merges to feature branch only).
+
+**Verification**: git diff --stat shows only: learnings/process-rules.md, learnings/empirical-findings.md, learnings/core.md, HOW-I-WORK-WITH-GENERATIVE-AI.md, ACTIVE-CONSIDERATIONS.md, Agents.md, .onboarding-state.
+
 ---
 
 ## Questions?

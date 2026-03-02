@@ -98,3 +98,9 @@ Checkpoint step 4 must actively scan: agent completions (validate/contradict exi
 ## L-00130 — Design for context loss as the default
 **Source:** `architectural-rationale.md`
 **Why core:** Context windows compact, sessions end, responses fail mid-stream. The only state that survives is file state. A fresh session that doesn't know this will keep plans, progress, and work-in-progress in context only — then lose it. Self-test (checkpoint step 9): "If context dies now, can the next session resume from files alone?" Check: `.onboarding-state` current? `ACTIVE-CONSIDERATIONS.md` accurate? Work committed? Multi-response plans externalized? If no — fix before responding.
+
+---
+
+## L-00143 — Scope sizing ritual before every prompt/response/dispatch
+**Source:** `process-rules.md`
+**Why core:** Repeated scope failures (L-00127, L-00131, L-00142) prove that unbounded work units hit context limits, mix verification methods, and create debugging surface area. Without this, a fresh session will bundle independent changes into one dispatch, exceed token budgets, or attempt verification that spans multiple unrelated concerns. The scope sizing ritual — count items, estimate tokens, check verification isolation, split or proceed — is the operational discipline that prevents these failures. Token budget estimation and continuous calibration from actuals apply project-wide.

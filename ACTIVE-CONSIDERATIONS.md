@@ -6,7 +6,7 @@
 
 ---
 
-### Priority stack (updated 2026-02-28)
+### Priority stack (updated 2026-03-02)
 
 Ordered by efficiency gain per complexity added:
 
@@ -36,14 +36,18 @@ Correlates t-shirt sizes with actual metrics from `logs/build-summary-*.json`. W
 
 ### Other active items
 
-- **Learnings system — IMPLEMENTED (2026-03-01)**: 74 graph-compliant entries (L-00001–L-00141, non-contiguous), 12 curated in `core.md`. Fresh onboard path works. Remaining: old-format conversion (Prompts 4/5), index.md stale.
+- **Learnings system — IMPLEMENTED (2026-03-02)**: 78 graph-compliant entries (L-00001–L-00145, non-contiguous), 13 curated in `core.md`. Schema standardization complete (5-digit IDs). Fresh onboard path works. Remaining: old-format conversion (Prompts 4/5), index.md stale.
+- **Replace token estimation proxy formula with actual Claude Code API token counts (Dispatch 4)** — L-00145 exposed that lines_read × 4 + lines_written × 4 + 5000 is a broken proxy. Produces confidently wrong data that would miscalibrate general-estimates.jsonl. Need real API token counts from Claude Code session metadata.
+- **Wire L-00143 into active infrastructure** — agent-prompt-engrain-L00143.md ready. Scope sizing ritual needs mechanical enforcement, not just prose rule.
+- **Dispatch 2: core learnings mechanical wiring** — dispatch-2-core-wiring.md ready. Wire core.md entries into agent prompt templates.
+- **Dispatch 3: wire estimate_general_tokens into scope sizing ritual read path** — Connect the estimator to the ritual that needs it.
+- **Merge and review: core learnings inline into CLAUDE.md** — agent-prompt-core-inline.md ready. Evaluate whether core learnings should be injected into CLAUDE.md for every agent session.
+- **HOW-I-WORK corpus curation (2026-03-02)**: 74 entries converted to graph schema (M-00001–M-00074). Full corpus read identified 4+ coherent clusters ready for formalization. Action: curate entries into named sections, promote mature patterns to learnings.
 - **Knowledge graph for workflow continuity (2026-02-28)**: Personal workflow tool for cross-session context. *Design phase — no implementation started.*
-- **`HOW-I-WORK-WITH-GENERATIVE-AI.md` (2026-03-01)**: Repo-agnostic methodology document at repo root. Checkpoint step 5 auto-captures methodology signals to accumulation section; Brian curates into prose. Bootstrapped with 8 captures. Context window onboarding cost is an open question.
-- **State format migration (2026-03-01)**: Post-Python-conversion project. Current file-based state preserved during bash→Python conversion. Future consideration: SQLite or structured JSON for queryable state ("show me all features that failed with error X across all rounds"). Not started, intentionally deferred — one variable at a time.
-- **Learnings graph-schema conversion (2026-03-01)**: 74 graph-compliant entries (L-00001–L-00141) across type-specific files. Some old-format entries may remain in `.specs/learnings/` files. Two agent prompts ready (Prompts 4 & 5) for converting those. Studio candidate.
-- **Response scope discipline (2026-03-01)**: Two truncations + one approval gate violation in one session (L-00098, L-00103, L-00104). Rules: count work items BEFORE first tool call, >3 items = split. "Do what you need to do" ≠ "yes to push." Confidence is not approval.
-- **HOW-I-WORK corpus curation (2026-03-02)**: Accumulation section has 60+ raw entries and zero curated sections. Full corpus read identified 4+ coherent clusters ready for formalization: (1) prompt engineering theory (~5 entries: token cost as quality metric, compression principle, boilerplate vs verbosity), (2) agent autonomy model (~4 entries: test→investigate→evaluate→verify→report, spec prescriptiveness calibration), (3) session type theory (~3 entries: sustained context for planning, fresh agents for execution, zero-code sessions as productive), (4) capture philosophy (~5 entries: capture-biased over precision-biased, density-matched, perishable lucidity). "We want to be 1" is the philosophical foundation connecting all clusters. Action: curate entries into named sections, promote mature patterns to learnings. L-00133 (corpus-level review) documents the method that surfaced this.
-- **CLAUDE.md audit (2026-03-01)**: Root CLAUDE.md 468 lines, ~80% stale SDD scaffold (L-00087, L-00094). stakd/CLAUDE.md has battle-tested Next.js 15 patterns not in root. Tasks: (1) strip root to ~100-150 lines of operational content, (2) evaluate whether stakd-specific patterns should be in learnings or stay project-local, (3) stakd-v2/v3 versions are near-identical to stakd — no action needed. Brian confirmed root placement correct; "wrong place" = orphaned stakd versions.
-- **Memory slot optimization (2026-03-01)**: 15/30 slots, ~1,500 words always-injected. Slots #10-14 situational (~300 tokens, ~30% hit rate). When approaching 20 slots, migrate situational rules to repo and trust onboarding. Not urgent now but monitor. (L-00095)
-- **ONBOARDING.md overhaul for efficient context (2026-03-01)**: Checkpoint expansion DONE (Prompt 6 merged, 788f8a8). Remaining: broader audit — does a fresh session get proper bootstrap without bloat? Evaluate after graph conversion lands.
+- **State format migration (2026-03-01)**: Post-Python-conversion project. Current file-based state preserved during bash→Python conversion. Not started, intentionally deferred — one variable at a time.
+- **Learnings graph-schema conversion (2026-03-02)**: Schema standardization complete. Some old-format entries may remain in `.specs/learnings/` files. Two agent prompts ready (Prompts 4 & 5) for converting those.
+- **Response scope discipline (2026-03-02)**: Formalized as L-00143 scope sizing ritual. Supersedes ad-hoc ">3 items = split" rule with systematic verification-isolation-based sizing.
+- **CLAUDE.md audit (2026-03-01)**: Root CLAUDE.md 468 lines, ~80% stale SDD scaffold (L-00087, L-00094). stakd/CLAUDE.md has battle-tested Next.js 15 patterns not in root. Tasks: (1) strip root to ~100-150 lines of operational content, (2) evaluate whether stakd-specific patterns should be in learnings or stay project-local.
+- **Memory slot optimization (2026-03-01)**: 15/30 slots, ~1,500 words always-injected. Not urgent now but monitor. (L-00095)
+- **ONBOARDING.md overhaul for efficient context (2026-03-01)**: Checkpoint expansion DONE. Remaining: broader audit after graph conversion lands.
 

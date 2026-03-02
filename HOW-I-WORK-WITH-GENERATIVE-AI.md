@@ -818,6 +818,42 @@ Brian's definition of "close read" is a structural audit, not a summary. The exp
 
 ---
 
+## M-00072
+Type: observation
+Tags: scope-discipline, recursive-application
+Confidence: high
+Status: active
+Date: 2026-03-02
+Related: L-00143 (validates)
+
+Brian enforces scope discipline recursively — pointed out that Claude's own response about scope estimation didn't use the scope estimator. The system must apply to itself, not just to agents it dispatches.
+
+---
+
+## M-00073
+Type: workflow_fact
+Tags: interface-routing, desktop-app, code-tab
+Confidence: high
+Status: active
+Date: 2026-03-02
+Related: L-00130 (related_to)
+
+Desktop app Chat tab cannot access local filesystem. Checkpoint protocol requires Code tab (Claude Code). Session routing is a precondition for protocol execution, not an afterthought.
+
+---
+
+## M-00074
+Type: observation
+Tags: proxy-metrics, calibration, false-confidence
+Confidence: high
+Status: active
+Date: 2026-03-02
+Related: L-00145 (validates), L-00143 (related_to)
+
+Token estimation proxy formula produced data that would miscalibrate the estimator it feeds. Confidently wrong data is worse than no data. Brian's instinct to question the report ("does this seem right to you?") caught what the mechanical check could not — the formula validated its own output.
+
+---
+
 ## Accumulation
 
 Raw captures from checkpoint scans. New entries land here as `- (YYYY-MM-DD) text` during checkpoint step 5, then get converted to graph-schema entries above during periodic curation passes.

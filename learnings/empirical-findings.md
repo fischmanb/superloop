@@ -111,3 +111,27 @@ Date: 2026-03-02T05:00:00-05:00
 Related: L-00130 (validates)
 
 L-00130 (design for context loss) was validated by real compaction event in the same session that wrote it. File-based architecture survived: .onboarding-state, learnings files, ACTIVE-CONSIDERATIONS.md, and transcript provided enough state for replacement context to resume work without asking "where were we?" Per L-00123's language distinction between "demonstrated" and "validated": the original writing was demonstration; this compaction event is confirming validation.
+
+---
+
+## L-00144
+- **Type:** empirical-finding
+- **Tags:** [near-miss, agent-prompts, scope-sizing, schema-migration]
+- **Confidence:** high — direct observation
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00142, L-00143, L-00123
+
+Schema standardization agent succeeded despite overscoped prompt (L-00142 violation). 23 files, +1275/-501 lines, zero orphaned IDs, all verification checks passed. This is a near-miss per L-00123 language: correct outcome does not validate the process. The agent could have hit context limits on a larger repo or with more complex entries. Verification passing confirms the output was correct, not that the scope was safe. Near-misses that succeed are harder to learn from than failures — they create false confidence that bundling works.
+
+---
+
+## L-00145
+- **Type:** empirical-finding
+- **Tags:** [token-estimation, calibration, proxy-metrics, general-estimates]
+- **Confidence:** high — direct observation from Dispatch 1 token report
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00143, lib/general-estimates.sh
+
+Token estimation formula (lines_read × 4 + lines_written × 4 + 5000) produced 5860 "actual" tokens for a run with 37 tool calls. The formula only measures file I/O — it cannot see prompt injection, CLAUDE.md/repo context auto-loaded by the agent, tool call overhead (~200 tokens per invocation), inter-call reasoning, or verification output. True consumption was likely 20-30k. The 5000 "reasoning overhead" constant masks a variable that scales with tool call count and conversation complexity. Feeding this proxy data into general-estimates.jsonl would miscalibrate the estimator — the system would learn from wrong numbers. Proxy measurement that produces confidently wrong data is worse than no measurement. Replace with actual API token counts from Claude Code session metadata.

@@ -350,3 +350,51 @@ Date: 2026-03-02T05:30:00-05:00
 Related: L-00140 (depends_on), L-00133 (related_to)
 
 In HOW-I-WORK corpus, Brian's direct quotes ("we want to be 1", "half the length", "I may not be this lucid tomorrow") carry more signal per token than the third-person observations wrapping them. When curating accumulation entries into sections, quotes should survive verbatim — the surrounding gloss can be compressed or restructured. Curation heuristic inferred from the close-read process itself: the entries that anchored cluster identification were quotes, not observations.
+
+---
+
+## L-00142
+- **Type:** process-rule
+- **Tags:** [agent-prompts, scope-sizing, verification, blast-radius]
+- **Confidence:** high — demonstrated by schema-standardization agent overscope
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00143, L-00127, L-00131
+
+Agent prompts that bundle independent migrations into one dispatch create debugging surface area proportional to the product, not the sum, of their scopes. Schema standardization prompt combined two orthogonal operations: mechanical rename (L-NNNN → L-NNNNN, 414 references) and judgment-heavy conversion (70 HOW-I-WORK entries needing Type/Tags/Confidence classification). If the rename breaks, the diff contains both changes. If a classification is wrong, you're reviewing it inside a 414-line rename diff. One agent prompt per independent migration. Verification is only as good as the isolation of what you're verifying.
+
+---
+
+## L-00143
+- **Type:** process-rule
+- **Tags:** [scope-sizing, active-scan, verification, context-limits, agent-prompts, response-discipline, token-budget, calibration]
+- **Confidence:** high — synthesized from L-00127, L-00131, L-00142 and repeated scope failures
+- **Status:** active
+- **Date:** 2026-03-02
+- **Related:** L-00127, L-00131, L-00142, lib/decision-log.sh
+
+**Active Scan: before every prompt is written for an agent, or response is executed against a user prompt, or for any activity that could push limits of any kind, the proper process scope sizing rituals must be employed.**
+
+The scope of any work unit — prompt, response, agent dispatch, or commit — must be set by its verification method and its token budget, not its task list. Two changes that require different verification strategies are different work units, regardless of thematic relatedness.
+
+**Token budget estimation applies project-wide.** The degradation ceiling formula from lib/decision-log.sh is the canonical method for any context-consuming activity:
+
+degradation_ceiling = max_context × quality_factor (default 0.6, calibrate from actuals)
+estimated_cost = input_tokens + expected_output + reasoning_overhead
+available_room = degradation_ceiling - estimated_cost
+
+Budget allocation: 5% for build loop agents, 8–10% for general system activities. Use estimate_feature_tokens() with cost-log.jsonl actuals when available; fall back to spec_tokens × 15 for first runs.
+
+**Continuous calibration from actuals:**
+- Build loop: cost-log.jsonl already feeds estimate_feature_tokens(). Replace heuristic multipliers with empirical ratios once data exists.
+- General system: general-estimates.jsonl records estimated vs actual per activity type. estimate_general_tokens() blends actuals with heuristic (graduated: 1 sample = 20% actuals, 5+ = 100%).
+- Never treat a heuristic as permanent. Every default is an initial guess tagged for replacement by empirical data. Mean error >20% after 5+ runs triggers mandatory update to the source number.
+
+**Scope sizing ritual (run before every prompt/response/dispatch):**
+1. Count and classify work items. State each item's verification method in one sentence.
+2. Estimate token budget via degradation ceiling with show-your-work line-by-line breakdown. If it doesn't fit at applicable %: split.
+3. Check verification isolation. Different methods = different dispatches.
+4. Split or proceed. Stash progress per L-00131 between units.
+5. State the plan: "N items, verification per item, estimated [X of Y] tokens at N%."
+
+Diagnostic: if verification requires more than one method, or estimated tokens exceed available room, the scope contains more than one work unit.
