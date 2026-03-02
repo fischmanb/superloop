@@ -3,11 +3,11 @@
 > Framework/tool/platform-specific knowledge that agents need. External-world facts, not project-specific decisions.
 >
 > Schema: see `DESIGN-PRINCIPLES.md` §3 (edge types) and §4 (confidence/status enums).
-> ID range: global sequential `L-XXXX` shared across all learnings files.
+> ID range: global sequential `L-XXXXX` shared across all learnings files.
 
 ---
 
-## L-0029
+## L-00029
 Type: domain_knowledge
 Tags: macos, bash, compatibility
 Confidence: high
@@ -18,7 +18,7 @@ macOS ships bash 3.2. Scripts using associative arrays (`declare -A`) or other b
 
 ---
 
-## L-0030
+## L-00030
 Type: domain_knowledge
 Tags: git, force-push, fetch
 Confidence: high
@@ -29,7 +29,7 @@ Date: 2026-02-28T20:31:00-05:00
 
 ---
 
-## L-0031
+## L-00031
 Type: domain_knowledge
 Tags: git, http, large-pushes
 Confidence: high
@@ -40,62 +40,62 @@ HTTP 408 on large pushes. Git pushes over ~25MB can fail with `HTTP 408 curl 22`
 
 ---
 
-## L-0032
+## L-00032
 Type: domain_knowledge
 Tags: claude-code, sandbox, github, push
 Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
-Related: L-0005 (related_to)
-Related: L-0011 (related_to)
+Related: L-00005 (related_to)
+Related: L-00011 (related_to)
 
 Sandbox environments have not been able to push to GitHub. The Claude Code sandbox at `/home/user/` does not have GitHub authentication. Prompts ending with `git push origin main` have failed in this context. Pattern that has worked: agent commits to feature branch, Brian pulls and merges locally.
 
 ---
 
-## L-0033
+## L-00033
 Type: domain_knowledge
 Tags: claude-code, git, branch-naming
 Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
-Related: L-0034 (related_to)
+Related: L-00034 (related_to)
 
 CLAUDE.md appends random suffixes to branch names. Claude Code appends random suffixes like `-f05hV` to branch names. Fix: don't hardcode branch names in merge/push steps. Accept merge-to-main as a manual step.
 
 ---
 
-## L-0034
+## L-00034
 Type: domain_knowledge
 Tags: git, branch-cleanup, remote
 Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
-Related: L-0033 (related_to)
+Related: L-00033 (related_to)
 
 Orphan branches have accumulated on remote. Every agent run that pushes creates a remote branch that hasn't been cleaned up automatically. 22 orphan branches found after a few failed runs. Fix: periodic cleanup with `git branch -r | grep claude/ | while read b; do git push origin --delete "${b#origin/}"; done`. Avoiding pushing feature branches to origin has reduced this problem.
 
 ---
 
-## L-0035
+## L-00035
 Type: domain_knowledge
 Tags: git, force-push, data-loss
 Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
-Related: L-0030 (related_to)
+Related: L-00030 (related_to)
 
 Force push can destroy agent work. Round 8: `git push --force-with-lease` to clean up node_modules also wiped agent branches with unmerged work. Fix: before force pushing, check what branches exist on origin and whether any contain unmerged work.
 
 ---
 
-## L-0036
+## L-00036
 Type: domain_knowledge
 Tags: macos, terminal, scrollback, data-recovery
 Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
-Related: L-0013 (related_to)
+Related: L-00013 (related_to)
 
 Terminal.app `history` property recovers scrollback. If build logs are lost (deleted inodes, killed tee), Terminal.app retains full scrollback accessible via AppleScript:
 ```bash
@@ -105,7 +105,7 @@ osascript -e 'tell application "Terminal" to return history of tab 1 of window i
 
 ---
 
-## L-0037
+## L-00037
 Type: domain_knowledge
 Tags: cost-tracking, claude-wrapper, configuration
 Confidence: high
@@ -116,13 +116,13 @@ Cost log defaults to cwd — must be explicitly set. `claude-wrapper.sh` writes 
 
 ---
 
-## L-0038
+## L-00038
 Type: domain_knowledge
 Tags: macos, lsof, deleted-files, data-recovery
 Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
-Related: L-0013 (related_to)
-Related: L-0036 (related_to)
+Related: L-00013 (related_to)
+Related: L-00036 (related_to)
 
 `lsof +L1` finds deleted-but-open files. Shows tee processes with open fds to deleted files. On Linux, recoverable via `/proc/<pid>/fd/<N>`. On macOS, unrecoverable without root/SIP bypass — use Terminal.app `history` fallback instead.

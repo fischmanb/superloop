@@ -39,13 +39,13 @@ Defined here, enforced everywhere. Keep the set small — every new edge type in
 
 | Edge type | Meaning | Directionality | Example |
 |-----------|---------|----------------|---------|
-| `related_to` | General topical connection. Default when the relationship exists but doesn't fit a stronger type. | Bidirectional | L-0042 (push discipline) ↔ L-0015 (agent behavior) |
-| `supersedes` | This entry replaces or updates an earlier one. The earlier entry's status should be `superseded`. | Directional | L-0051 (revised retry logic) → supersedes → L-0030 (original retry logic) |
-| `depends_on` | This entry's validity or applicability requires the referenced entry to hold. | Directional | L-0060 (sidecar feedback) → depends_on → L-0045 (eval system) |
-| `contradicts` | These entries are in tension. Both may be valid in different contexts, or one may be wrong. Requires human judgment to resolve. | Bidirectional | L-0070 (concise prompts faster) ↔ contradicts ↔ L-0071 (terse prompts miss requirements) |
+| `related_to` | General topical connection. Default when the relationship exists but doesn't fit a stronger type. | Bidirectional | L-00042 (push discipline) ↔ L-00015 (agent behavior) |
+| `supersedes` | This entry replaces or updates an earlier one. The earlier entry's status should be `superseded`. | Directional | L-00051 (revised retry logic) → supersedes → L-00030 (original retry logic) |
+| `depends_on` | This entry's validity or applicability requires the referenced entry to hold. | Directional | L-00060 (sidecar feedback) → depends_on → L-00045 (eval system) |
+| `contradicts` | These entries are in tension. Both may be valid in different contexts, or one may be wrong. Requires human judgment to resolve. | Bidirectional | L-00070 (concise prompts faster) ↔ contradicts ↔ L-00071 (terse prompts miss requirements) |
 
 **Rules:**
-- Every `Related:` field must specify the edge type: `Related: L-0015 (related_to), L-0030 (supersedes)`
+- Every `Related:` field must specify the edge type: `Related: L-00015 (related_to), L-00030 (supersedes)`
 - No new edge types without Brian's approval. If none of these four fit, use `related_to` and add context in the body.
 - `supersedes` and `depends_on` are directional. `related_to` and `contradicts` are bidirectional.
 - When an entry is created with a relationship, the referenced entry should be updated to include the back-reference. This is a maintenance task, not a blocker — missing back-references get caught during periodic sweeps.

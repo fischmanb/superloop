@@ -10,6 +10,8 @@ Verify learnings counts: $ARGUMENTS
 Run: `grep -ch "^## L-" learnings/*.md` per file.
 Sum for total. Also count core.md curated entries separately.
 Get highest L-number: `grep -h "^## L-" learnings/*.md | sort -t'-' -k2 -n | tail -1`
+Also count methodology entries: `grep -c "^## M-" HOW-I-WORK-WITH-GENERATIVE-AI.md`
+Get highest M-number: `grep -h "^## M-" HOW-I-WORK-WITH-GENERATIVE-AI.md | sort -t'-' -k2 -n | tail -1`
 
 ### 2. Compare Against Documentation Claims
 Check these files for numeric claims about learnings:
@@ -25,7 +27,7 @@ Check these files for numeric claims about learnings:
 Actual:
   Total entries (type files): 59
   Core curated entries: 10
-  Highest ID: L-0124
+  Highest ID: L-00124
   By file:
     process-rules.md: 15
     failure-patterns.md: 12
@@ -34,7 +36,7 @@ Actual:
     domain-knowledge.md: 19
 
 Documentation claims:
-  ONBOARDING.md key files table: "59 graph-format entries (L-0001–L-0124)" ✅
+  ONBOARDING.md key files table: "59 graph-format entries (L-00001–L-00124)" ✅
   ONBOARDING.md prose: "59 graph-format entries" ✅
   ACTIVE-CONSIDERATIONS.md: "59 graph-compliant" ✅
 
@@ -47,6 +49,6 @@ This is a mechanical fix — no Brian approval needed for count corrections.
 
 ## When to Run
 
-- During checkpoint step 4 propagation check (L-0114)
+- During checkpoint step 4 propagation check (L-00114)
 - After writing new learnings entries
 - When `--quick` flag: just report counts, skip doc comparison

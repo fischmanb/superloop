@@ -54,7 +54,7 @@ Full campaign data, raw logs, and analysis in [`campaign-results/`](campaign-res
 
 **78% build failure rate was not a code problem.** Round 11 diagnosed a sustained failure rate. Root cause: API credit exhaustion, not context loss or bad prompts. The system was retrying doomed calls. Credit exhaustion detection now halts immediately instead of burning cycles.
 
-The full failure catalog lives in [`learnings/`](learnings/) — entries across 5 type files (failure patterns, process rules, empirical findings, domain knowledge, architectural rationale), with the highest-signal entries curated in [`learnings/core.md`](learnings/core.md). Each entry uses a flat key:value schema with global L-XXXX IDs. The round-by-round work log is in [`Agents.md`](Agents.md).
+The full failure catalog lives in [`learnings/`](learnings/) — entries across 5 type files (failure patterns, process rules, empirical findings, domain knowledge, architectural rationale), with the highest-signal entries curated in [`learnings/core.md`](learnings/core.md). Each entry uses a flat key:value schema with global L-XXXXX IDs. The round-by-round work log is in [`Agents.md`](Agents.md).
 
 ---
 

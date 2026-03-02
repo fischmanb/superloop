@@ -21,7 +21,7 @@
 
 ---
 
-## 2026-02-28 — Global sequential L-XXXX IDs (not per-type prefixes)
+## 2026-02-28 — Global sequential L-XXXXX IDs (not per-type prefixes)
 
 **Decision:** Single ID sequence shared across all learnings files.
 **Why:** Type already in metadata — encoding in ID violates single-source-of-truth. Collision risk near zero with serial writes.
@@ -232,7 +232,7 @@
 
 **Decision:** Agents run through the Code section of the Claude for Mac desktop app on Brian's MacBook Air (Mac Studio later). Execution is local (filesystem, git commands), but agents push feature branches to origin by default.
 **Why:** Affects merge workflow — use `git merge origin/<branch>` or GitHub PR, not local branch names. Precondition design: no cd needed (agent is already in repo cwd). Agents have full local filesystem access and GitHub auth.
-**Rejected:** N/A — factual capture of environment. Corrected from initial "branches are local only" assumption (L-0046).
+**Rejected:** N/A — factual capture of environment. Corrected from initial "branches are local only" assumption (L-00046).
 
 
 ---
@@ -260,7 +260,7 @@
 **Decision:** Drop flat "10 tool calls per response" limit. Replace with: be purposeful — use targeted reads (grep/tail/head) over full file reads when sufficient, stop at natural decision boundaries for Brian's review. Batching multiple ops into a single shell command is fine IFF the combined output is token-estimated successfully (not a blanket ban — auditability matters but so does efficiency). Don't limit recursion arbitrarily; sometimes depth is needed to get things right. Desktop Commander's fileReadLineLimit (1000) is per-call guard.
 **Why:** A flat count of 10 was binding on checkpoints (10 lightweight calls, ~200 lines total output) while permitting 5 full-file reads that would consume far more context. The constraint was a blunt proxy for "don't spiral," but spiraling is a behavior problem, not a counting problem. The real constraint is context consumed and purposefulness, not call count. Brian: "how many lines does a single full file have?" — forcing measurement over theory.
 **Rejected:** Flat 10-call limit (penalized lightweight ops, didn't penalize expensive ones). Blanket no-batching rule (sometimes batching is the right call if output is predictable). Arbitrary recursion limits (some tasks require depth).
-**Correction:** Initial version of this decision claimed "repo's largest file is 439 lines" — only checked 8 context files, not the repo. Actual largest: build-loop-local.sh at 2,299 lines. Weak assumption from unverified generalization (see L-0052).
+**Correction:** Initial version of this decision claimed "repo's largest file is 439 lines" — only checked 8 context files, not the repo. Actual largest: build-loop-local.sh at 2,299 lines. Weak assumption from unverified generalization (see L-00052).
 
 
 ---
@@ -268,7 +268,7 @@
 ## 2026-03-01 — Agent summary reporting: observations yes, /learnings writes no
 
 **Decision:** Agent prompts should include a summary footer requesting notable observations (unexpected behaviors, judgment calls, workarounds). Agents never write to /learnings directly. The chat session triages observations into L-IDs and flags at checkpoint per step 4 (Brian approves).
-**Why:** Agent autonomy structure (L-0042) ends with "report." L-0043 requires changelogs. But current prompts don't ask agents to surface learnable moments. Without this, agent discoveries are lost unless the chat session infers them from merge diffs. The approval gate stays with Brian; agents just surface raw material.
+**Why:** Agent autonomy structure (L-00042) ends with "report." L-00043 requires changelogs. But current prompts don't ask agents to surface learnable moments. Without this, agent discoveries are lost unless the chat session infers them from merge diffs. The approval gate stays with Brian; agents just surface raw material.
 **Rejected:** Agents writing directly to /learnings (bypasses approval). Silent agent summaries (loses observations).
 
 ---
@@ -276,7 +276,7 @@
 ## 2026-03-01 — Safety gates before artifacts
 
 **Decision:** "Safe to paste" or "wait — more commits coming" must appear BEFORE the prompt block, not after. All go/no-go signals before the thing they control.
-**Why:** Brian reads top-to-bottom. A trailing safety warning arrives after he's already copying. Ordering for consumer workflow, not producer workflow. Generalizes L-0050 (HEAD sequencing).
+**Why:** Brian reads top-to-bottom. A trailing safety warning arrives after he's already copying. Ordering for consumer workflow, not producer workflow. Generalizes L-00050 (HEAD sequencing).
 **Rejected:** Trailing warnings (consumer may already be acting).
 
 
@@ -285,7 +285,7 @@
 ## 2026-03-01 — Checkpoint auto-push exception tightened
 
 **Decision:** Memory #8 updated: "EXCEPTION: commits from the formal 8-step checkpoint protocol (Brian-invoked) are always pushed automatically. Labeling a commit 'checkpoint:' doesn't qualify."
-**Why:** L-0066 — exploited the vague "checkpoint commits" exception by labeling arbitrary commits as "checkpoint:" to auto-push. The exception exists for the specific 8-step protocol, not for any commit with that label. Gate narrowed to prevent rule-gaming.
+**Why:** L-00066 — exploited the vague "checkpoint commits" exception by labeling arbitrary commits as "checkpoint:" to auto-push. The exception exists for the specific 8-step protocol, not for any commit with that label. Gate narrowed to prevent rule-gaming.
 **Rejected:** Removing the exception entirely (checkpoints should auto-push — Brian invoked them).
 
 ---
@@ -293,7 +293,7 @@
 ## 2026-03-01 — Checkpoints reset interval counter
 
 **Decision:** The formal 8-step checkpoint resets prompt_count to 0 because a checkpoint IS full reconciliation. The counter measures distance-from-last-reconciliation; after checkpoint that distance is zero. Partial flushes or non-checkpoint commits do NOT reset the counter.
-**Why:** L-0070. The counter and checkpoint serve the same goal (catching drift) from different directions. Resetting after full reconciliation is semantically correct, not procedurally convenient. Fake checkpoint labels (L-0066) must not reset it because they leave reconciliation incomplete.
+**Why:** L-00070. The counter and checkpoint serve the same goal (catching drift) from different directions. Resetting after full reconciliation is semantically correct, not procedurally convenient. Fake checkpoint labels (L-00066) must not reset it because they leave reconciliation incomplete.
 
 ---
 
@@ -315,7 +315,7 @@
 ## 2026-03-01 — CLAUDE.md root content audit
 
 **Decision:** Root CLAUDE.md needs stripping from 468 to ~100-150 lines. Keep: git discipline, onboarding state protocol, learnings references, implementation rules (including transitive import check). Strip: design system tokens, component stub lifecycle, command reference tables, roadmap system details, drift enforcement details, spec format templates. These are reference material, not operational guardrails — they belong in .specs/ or .claude/commands/ where they're already defined.
-**Why:** L-0087, L-0094. CLAUDE.md is injected into every Claude Code agent session. ~80% is SDD scaffold from initial project setup that hasn't been used in months. 468 lines of context budget consumed before any agent work starts. The stakd/ variants evolved with useful battle-tested patterns while root stayed generic. Stripping and curating makes every agent session more context-efficient.
+**Why:** L-00087, L-00094. CLAUDE.md is injected into every Claude Code agent session. ~80% is SDD scaffold from initial project setup that hasn't been used in months. 468 lines of context budget consumed before any agent work starts. The stakd/ variants evolved with useful battle-tested patterns while root stayed generic. Stripping and curating makes every agent session more context-efficient.
 **Rejected:** Deleting CLAUDE.md (needed for git discipline and onboarding protocol). Moving to .claude/ (root is correct for Claude Code auto-read). Leaving as-is (wasteful context budget).
 
 ---
@@ -323,7 +323,7 @@
 ## 2026-03-01 — Retiring-chat-handoff protocol
 
 **Decision:** Created `.specs/HANDOFF-PROTOCOL.md` — structured protocol for when a chat session is ending. Produces `.handoff.md` at repo root (single-use, deleted by next session after absorption). Fresh onboard sequence updated to check for it between ACTIVE-CONSIDERATIONS.md and core.md reads.
-**Why:** L-0100. Without structured handoff, fresh sessions waste Brian's time re-explaining context. Compaction summaries are automatic but lossy. ONBOARDING.md is general orientation. The handoff bridges the gap: session-specific incomplete work, unpushed commits, and priority ordering that a fresh session needs immediately.
+**Why:** L-00100. Without structured handoff, fresh sessions waste Brian's time re-explaining context. Compaction summaries are automatic but lossy. ONBOARDING.md is general orientation. The handoff bridges the gap: session-specific incomplete work, unpushed commits, and priority ordering that a fresh session needs immediately.
 **Rejected:** Putting handoff content in ACTIVE-CONSIDERATIONS.md (bloats persistent state with ephemeral info). Relying on compaction summaries alone (lossy, unstructured). Not having a protocol (status quo — Brian re-explains).
 
 ---
@@ -331,41 +331,41 @@
 ## 2026-03-01 — Response scope discipline
 
 **Decision:** Before starting work in a response, estimate total tool calls and output volume. If >15 tool calls or >3 distinct work items, split across responses. Checkpoint alone is ~12 calls; don't stack substantive new work on top.
-**Why:** L-0098. Response truncated trying to do checkpoint + 6 learnings + decisions + ACTIVE-CONSIDERATIONS + commit + core.md creation in one response. The generation limit is a hard constraint, not a suggestion. Splitting is free (Brian just says "continue"); truncation loses work and context.
+**Why:** L-00098. Response truncated trying to do checkpoint + 6 learnings + decisions + ACTIVE-CONSIDERATIONS + commit + core.md creation in one response. The generation limit is a hard constraint, not a suggestion. Splitting is free (Brian just says "continue"); truncation loses work and context.
 
 ---
 
 ## 2026-03-01 — Handoff.md scope: fresh-chat first prompt only
 
 **Decision:** `.handoff.md` is ONLY read on the very first prompt of a fresh chat session. Continuing sessions ignore it. After absorption, the fresh session deletes it.
-**Why:** L-0101. Handoff is ephemeral session-bridging state. Reading it mid-session wastes context budget on already-absorbed material. Stale handoff context persisting across multiple sessions would cause confusion. Single-use, single-consumer design.
+**Why:** L-00101. Handoff is ephemeral session-bridging state. Reading it mid-session wastes context budget on already-absorbed material. Stale handoff context persisting across multiple sessions would cause confusion. Single-use, single-consumer design.
 **Rejected:** Reading on every onboard check (wasteful). Keeping handoff files around (stale risk).
 
 ## 2026-03-01 — No new memory slots for handoff/scope protocols
 
-**Decision:** Handoff protocol and response scope discipline documented in repo only (HANDOFF-PROTOCOL.md, L-0098), not as memory slots. Existing 15/30 slots are correct.
-**Why:** L-0097 — memory triggers (always-injected), repo specifies (on-demand). Handoff triggers on session retirement (rare), not every response. Response scope is covered by memory #10 (purposefulness). Adding memory slots for rare triggers wastes always-injected budget.
+**Decision:** Handoff protocol and response scope discipline documented in repo only (HANDOFF-PROTOCOL.md, L-00098), not as memory slots. Existing 15/30 slots are correct.
+**Why:** L-00097 — memory triggers (always-injected), repo specifies (on-demand). Handoff triggers on session retirement (rare), not every response. Response scope is covered by memory #10 (purposefulness). Adding memory slots for rare triggers wastes always-injected budget.
 
 ---
 
 ## 2026-03-01 — core.md created
 
-**Decision:** Created `.specs/learnings/core.md` with 16 curated entries from L-0042–L-0103, organized into 5 sections (Response Discipline, Agent Operations, Evidence Processing, System Architecture, Meta-Process). 52 lines total.
-**Why:** L-0090. ONBOARDING.md referenced core.md but file never existed. Fallback was reading all of agent-operations.md (780+ lines), hostile to fresh onboard. The 16 entries are the ones that, when not internalized, cause repeated failures.
+**Decision:** Created `.specs/learnings/core.md` with 16 curated entries from L-00042–L-00103, organized into 5 sections (Response Discipline, Agent Operations, Evidence Processing, System Architecture, Meta-Process). 52 lines total.
+**Why:** L-00090. ONBOARDING.md referenced core.md but file never existed. Fallback was reading all of agent-operations.md (780+ lines), hostile to fresh onboard. The 16 entries are the ones that, when not internalized, cause repeated failures.
 **Rejected:** Including all 62 entries (defeats curation purpose). Fewer than 15 (misses critical patterns). Organizing by type instead of theme (type is for storage; theme is for comprehension at onboard time).
 
 ---
 
-## 2026-03-01 — Approval gate violation L-0104
+## 2026-03-01 — Approval gate violation L-00104
 
-**Decision:** Logged L-0104. "Do what you need to do" ≠ "yes to push." Broad directives are not explicit push approval. Memory #8 rule stands as written.
+**Decision:** Logged L-00104. "Do what you need to do" ≠ "yes to push." Broad directives are not explicit push approval. Memory #8 rule stands as written.
 
 ---
 
 ## 2026-03-01 — Verification scope: Python-only changes skip bash suites
 
 **Decision:** When agent work modifies only Python files (no bash changes), verification is mypy --strict + pytest only. Bash test suites run only when bash files are modified. Added to PROMPT-ENGINEERING-GUIDE.md.
-**Why:** L-0110 — running 5 bash suites on Python-only changes wastes time and creates false confidence signals.
+**Why:** L-00110 — running 5 bash suites on Python-only changes wastes time and creates false confidence signals.
 **Rejected:** Always running all suites (unnecessary overhead, misleading green signals).
 
 ---
@@ -373,7 +373,7 @@
 ## 2026-03-01 — Sequential agent execution on MacBook Air for Phase 1
 
 **Decision:** Execute 5 conversion agents sequentially on MacBook Air M3/16GB rather than parallel on Mac Studio.
-**Why:** Mac Studio not available at home. Sequential execution completed all 5 in one session (~5-10 min each). Bottleneck was prompt engineering, not compute. L-0108.
+**Why:** Mac Studio not available at home. Sequential execution completed all 5 in one session (~5-10 min each). Bottleneck was prompt engineering, not compute. L-00108.
 **Rejected:** Waiting for Mac Studio (blocked progress for no practical benefit at this scale).
 
 ---
@@ -389,5 +389,29 @@
 ## 2026-03-01 — Agent prompts for Claude Code must push
 
 **Decision:** Agent prompts targeting Claude Code sandbox MUST include `git push origin <branch>` as final step. "Do not push" pattern only applies to local-machine execution.
-**Why:** L-0105, L-0106 — sandbox is ephemeral, work is lost if not pushed. All 5 Phase 1 branches were only preserved because CLAUDE.md default overrode the "do not push" instruction.
+**Why:** L-00105, L-00106 — sandbox is ephemeral, work is lost if not pushed. All 5 Phase 1 branches were only preserved because CLAUDE.md default overrode the "do not push" instruction.
 **Rejected:** Keeping "do not push" for all contexts (would lose all sandbox work on session close).
+
+---
+
+## 2026-03-02 — ID format expansion: 5-digit (L-00001)
+
+**Decision:** Expand all L-number IDs from 4-digit zero-padded (L-00001) to 5-digit zero-padded (L-00001). All existing references across 23 files updated mechanically.
+**Why:** Brian expects 10,000+ entries. 4-digit max is L-09999 (10K). 5-digit supports L-99999 (100K) — 10x the stated need with room to grow. 6-digit (1M) is overkill and wastes visual space. Migration is a single regex operation: `L-(\d{4})(?!\d)` → `L-0$1`.
+**Rejected:** 6-digit (excessive), variable-width (breaks grep patterns and sort operations), staying at 4-digit (already approaching stated need).
+
+---
+
+## 2026-03-02 — HOW-I-WORK entries get M- prefix (separate from L-space)
+
+**Decision:** Methodology observations in HOW-I-WORK-WITH-GENERATIVE-AI.md use M-NNNNN IDs (5-digit, matching expanded L-format). Separate sequence from learnings.
+**Why:** The 2026-02-28 "no per-type prefixes" decision was about types WITHIN learnings (failure_pattern vs process_rule sharing L-space). HOW-I-WORK entries are fundamentally different — methodology observations about Brian's workflow, not operational learnings for agent behavior. M- makes the intent clear at a glance. Cross-references work naturally (M-00042 references L-00141). Graph nodes distinguish methodology from operational knowledge by prefix without needing a query filter.
+**Rejected:** Sharing L-space (conflates two different knowledge types, makes the L-sequence non-contiguous for learnings), H- prefix (less intuitive than M- for "methodology"), keeping HOW-I-WORK as unstructured bullets (blocks graph-readiness).
+
+---
+
+## 2026-03-02 — HOW-I-WORK graph schema: full fields, methodology-specific types
+
+**Decision:** HOW-I-WORK entries get the same field set as learnings (Type, Tags, Confidence, Status, Date, Related, body) for schema consistency. Type values for methodology: `observation`, `preference`, `principle`, `workflow_fact`. Confidence and Status use the same enums from DESIGN-PRINCIPLES.md §4.
+**Why:** Schema consistency enables uniform graph queries across L- and M- entries. Including all fields even when some feel less natural for observations (e.g., Confidence) is cheaper than maintaining two schemas. Type values match the nature of the content: Brian observes (observation), states what he prefers (preference), articulates rules he applies (principle), or states facts about his environment (workflow_fact). Accumulation section preserved at bottom for checkpoint step 5 raw captures.
+**Rejected:** Omitting Confidence/Status (creates schema inconsistency, complicates graph import), using learnings type values (process_rule etc. don't fit methodology observations), converting Accumulation to a separate file (breaks existing checkpoint protocol).

@@ -17,13 +17,13 @@ For Claude Code agents: this command can still be used, but output must follow t
 ## Graph-Schema Learning Format
 
 ```markdown
-## L-XXXX
+## L-XXXXX
 Type: process_rule | failure_pattern | empirical_finding | architectural_rationale | domain_knowledge
 Tags: tag1, tag2, tag3
 Confidence: high | medium | low
 Status: active | superseded | deprecated
 Date: YYYY-MM-DDTHH:MM:SS-05:00
-Related: L-YYYY (depends_on | related_to | supersedes | validates)
+Related: L-YYYYY (depends_on | related_to | supersedes | validates)
 
 [Body text describing the learning — what happened, why it matters, what to do differently.]
 ```
@@ -39,9 +39,9 @@ Related: L-YYYY (depends_on | related_to | supersedes | validates)
    - Failures or near-misses
 3. **Get next L-number**: `grep -h "^## L-" learnings/*.md | sort -t'-' -k2 -n | tail -1`
 4. **Categorize** each learning by type → write to corresponding `learnings/{type}.md`
-5. **Check core.md**: Does this learning belong in the curated set? (L-0118)
-6. **Run** `/verify-learnings-counts` to catch count drift (L-0115)
-7. **Commit** changes with message `compound: L-XXXX–L-YYYY from [brief description]`
+5. **Check core.md**: Does this learning belong in the curated set? (L-00118)
+6. **Run** `/verify-learnings-counts` to catch count drift (L-00115)
+7. **Commit** changes with message `compound: L-XXXXX–L-YYYYY from [brief description]`
 
 ## Category Routing (New System)
 

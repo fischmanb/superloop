@@ -154,7 +154,7 @@ Build logs use a `FileHandler` added at runtime — the lib code just calls `log
 
 ## Signal Protocol
 
-Signals are flat grep-parseable strings printed to stdout. This is a hard constraint from L-0028. The build loop, eval sidecar, and overnight scripts all parse signals with grep/awk.
+Signals are flat grep-parseable strings printed to stdout. This is a hard constraint from L-00028. The build loop, eval sidecar, and overnight scripts all parse signals with grep/awk.
 
 ```python
 # auto_sdd/lib/signals.py

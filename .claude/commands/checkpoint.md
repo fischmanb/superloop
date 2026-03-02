@@ -27,23 +27,24 @@ Single command to ensure all context management files are current. Prevents cont
 - If none → skip
 
 ### 4. Learnings
-- **Default assumption: something to capture.** Find reasons to skip, not reasons to include. A scan that finds zero candidates in a session with agent completions, corrections, or system changes is evidence of the scan failing. (L-0116)
+- **Default assumption: something to capture.** Find reasons to skip, not reasons to include. A scan that finds zero candidates in a session with agent completions, corrections, or system changes is evidence of the scan failing. (L-00116)
 - Active scan — review the session for learnable moments. Do not rely on recall; check each category:
   - **Agent completions**: Did an agent finish this session? What worked, failed, or surprised? Does the outcome validate or contradict existing learnings?
   - **Corrections**: Did Brian correct something? Each correction is a candidate learning.
   - **New rules or patterns**: Were any stated or discovered?
   - **Empirical findings**: Any measurements, outcomes, or data points?
   - **Failures or near-misses**: Anything that went wrong or almost did?
-  - **Methodology signals review**: Run `/review-signals quick` to scan HOW-I-WORK accumulation for patterns that should become learnings or protocol changes. Full `/review-signals` writes new learnings. (L-0124)
+  - **Methodology signals review**: Run `/review-signals quick` to scan HOW-I-WORK accumulation for patterns that should become learnings or protocol changes. Full `/review-signals` writes new learnings. (L-00124)
 - For each candidate: propose entry to Brian (type, tags, body)
 - Do NOT auto-write to learnings files — Brian approves entries
-- **Self-test**: If this session wrote a new process rule, re-run the step it modifies to verify it works. Protocol adoption has a one-response latency (L-0117).
-- **Propagation check**: If any learning or protocol change was made, run `/verify-propagation`. This mechanically checks: core.md membership (L-0118), count drift via `/verify-learnings-counts` (L-0115), ONBOARDING.md/ACTIVE-CONSIDERATIONS.md staleness, and convention file references including CLAUDE.md (L-0125). (L-0114)
+- **Self-test**: If this session wrote a new process rule, re-run the step it modifies to verify it works. Protocol adoption has a one-response latency (L-00117).
+- **Propagation check**: If any learning or protocol change was made, run `/verify-propagation`. This mechanically checks: core.md membership (L-00118), count drift via `/verify-learnings-counts` (L-00115), ONBOARDING.md/ACTIVE-CONSIDERATIONS.md staleness, and convention file references including CLAUDE.md (L-00125). (L-00114)
 ### 5. Methodology Signals
 - Scan session for operator-level insights: preferences, principles, reasoning patterns, workflow decisions, distinctions Brian drew, corrections that reveal generalizable observations
 - Bias toward capture — a false positive costs 5 seconds to delete, a false negative is gone
-- If any found: append raw notes to the accumulation section at the bottom of `HOW-I-WORK-WITH-GENERATIVE-AI.md` (create file with preamble + accumulation section if it doesn't exist)
+- If any found: append raw notes to the `## Accumulation` section at the bottom of `HOW-I-WORK-WITH-GENERATIVE-AI.md`
 - Format: `- (YYYY-MM-DD) <raw observation>`
+- Existing entries above Accumulation use graph-schema format with M-XXXXX IDs. Raw captures in Accumulation get converted to graph-schema during periodic curation passes.
 - Voice: Third person ("Brian prefers...", "Brian has found..."), empirical not prescriptive. Describe what was observed/tried/preferred, not universal laws. "Brian has found X effective" over "one must always X." This does not apply to operational gates elsewhere in the repo.
 - NEVER use first person. The document is written *about* Brian by AI; first-person would misrepresent authorship.
 
@@ -70,7 +71,7 @@ Write `.onboarding-state`:
 }
 ```
 
-### 9. Context-Loss Self-Test (L-0130)
+### 9. Context-Loss Self-Test (L-00130)
 Before ending: "If the context window were wiped after this response, could the next session pick up from file state alone?" Check:
 - `.onboarding-state` reflects current HEAD?
 - `ACTIVE-CONSIDERATIONS.md` lists what's in flight and what's next?

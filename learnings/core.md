@@ -8,7 +8,7 @@
 
 ---
 
-## L-0001 — Agent self-assessments are unreliable
+## L-00001 — Agent self-assessments are unreliable
 **Source:** `failure-patterns.md`
 **Why core:** Foundation of the entire verification architecture. Without this, a session will trust agent self-reports and miss failures.
 
@@ -16,7 +16,7 @@ Agent self-assessments have proven unreliable. Agents report "all verifications 
 
 ---
 
-## L-0005 — Push discipline requires repeated preemptive reminders
+## L-00005 — Push discipline requires repeated preemptive reminders
 **Source:** `failure-patterns.md`
 **Why core:** Every prompt-writing session needs this. Single-mention prohibition has 0% success rate.
 
@@ -24,7 +24,7 @@ Agents have consistently failed to check before pushing to remote. Most effectiv
 
 ---
 
-## L-0011 — Agents work around failures instead of stopping
+## L-00011 — Agents work around failures instead of stopping
 **Source:** `failure-patterns.md`
 **Why core:** Without this, a fresh session won't include STOP instructions in prompts for unexpected situations.
 
@@ -32,7 +32,7 @@ Agents have been observed to work around failures instead of stopping. When bloc
 
 ---
 
-## L-0012 — Client→server import chain (most common build failure)
+## L-00012 — Client→server import chain (most common build failure)
 **Source:** `failure-patterns.md`
 **Why core:** Most common post-campaign build failure. Any session touching stakd or Next.js needs this.
 
@@ -40,15 +40,15 @@ Client components transitively importing server-only modules. A `"use client"` c
 
 ---
 
-## L-0016 — Verification gates on every prompt
+## L-00016 — Verification gates on every prompt
 **Source:** `process-rules.md`
-**Why core:** Direct consequence of L-0001. The operational discipline that makes agent output trustworthy.
+**Why core:** Direct consequence of L-00001. The operational discipline that makes agent output trustworthy.
 
 Every prompt must end with verification gates — `bash -n`, grep, test suite, `git diff --stat`. Agent self-assessment has proven unreliable; machine-checkable gates are the only trustworthy signal.
 
 ---
 
-## L-0020 — Session discipline boundary
+## L-00020 — Session discipline boundary
 **Source:** `process-rules.md`
 **Why core:** Prevents a fresh chat from "just making a quick fix" and bypassing verification gates.
 
@@ -56,7 +56,7 @@ Implementation work (scripts, lib/, tests) → fresh Claude Code agent session w
 
 ---
 
-## L-0026 — Token speed ≠ build speed
+## L-00026 — Token speed ≠ build speed
 **Source:** `empirical-findings.md`
 **Why core:** Counterintuitive finding that shapes model selection and parallelism decisions.
 
@@ -64,7 +64,7 @@ Token speed does NOT translate to build speed. Haiku 2x faster tokens but only m
 
 ---
 
-## L-0028 — Signal protocol uses grep not JSON
+## L-00028 — Signal protocol uses grep not JSON
 **Source:** `architectural-rationale.md`
 **Why core:** Architectural cornerstone. A session that doesn't know this might propose JSON signals and break the protocol.
 
@@ -72,7 +72,7 @@ Agents communicate via flat strings (`FEATURE_BUILT: {name}`, `BUILD_FAILED: {re
 
 ---
 
-## L-0113 — Checkpoint learnings capture requires active scan
+## L-00113 — Checkpoint learnings capture requires active scan
 **Source:** `process-rules.md`
 **Why core:** Without this, every fresh session runs checkpoint step 4 passively ("anything come to mind?") and under-captures. The gap between step 4 (passive) and step 5 (active scan) caused a session to declare "none new" while skipping agent outcome validation, correction analysis, and near-miss review.
 
@@ -80,21 +80,21 @@ Checkpoint step 4 must actively scan: agent completions (validate/contradict exi
 
 ---
 
-## L-0116 — "Nothing to capture" is never the correct default
+## L-00116 — "Nothing to capture" is never the correct default
 **Source:** `process-rules.md`
-**Why core:** L-0113 added scan categories but the very next checkpoint still under-captured because the default assumption didn't flip. Without this, a session can walk through all five categories and still conclude "none new" because it's looking for reasons to include rather than reasons to skip. This is the behavioral root that makes L-0113 work or fail.
+**Why core:** L-00113 added scan categories but the very next checkpoint still under-captured because the default assumption didn't flip. Without this, a session can walk through all five categories and still conclude "none new" because it's looking for reasons to include rather than reasons to skip. This is the behavioral root that makes L-00113 work or fail.
 
 "Nothing to capture" must never be the default assumption. The default is "something to capture" — the scan must find reasons to skip, not reasons to include. A scan that reviews every category and finds zero candidates in a session with agent completions, corrections, and system improvements is evidence of the scan failing, not evidence of nothing to capture.
 
 ---
 
-## L-0125 — Scan existing project assets before building new process infrastructure
+## L-00125 — Scan existing project assets before building new process infrastructure
 **Source:** `architectural-rationale.md`
 **Why core:** The checkpoint/learnings system was built without checking what slash commands and conventions files already existed. Four commands already had reusable patterns (`/catch-drift`, `/check-coverage`, `/update-test-docs`, `/verify-test-counts`). CLAUDE.md — the file every Claude Code agent reads — pointed to the old learnings location (`.specs/learnings/`) while the new system lived in `learnings/`. `/compound` wrote to the wrong place. Any process change must audit: (1) existing commands for reusable patterns, (2) CLAUDE.md and other conventions files for references the change invalidates, (3) existing tooling that can be wired in mechanically instead of rebuilt.
 
 
 ---
 
-## L-0130 — Design for context loss as the default
+## L-00130 — Design for context loss as the default
 **Source:** `architectural-rationale.md`
 **Why core:** Context windows compact, sessions end, responses fail mid-stream. The only state that survives is file state. A fresh session that doesn't know this will keep plans, progress, and work-in-progress in context only — then lose it. Self-test (checkpoint step 9): "If context dies now, can the next session resume from files alone?" Check: `.onboarding-state` current? `ACTIVE-CONSIDERATIONS.md` accurate? Work committed? Multi-response plans externalized? If no — fix before responding.

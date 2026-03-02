@@ -3,11 +3,11 @@
 > Prescriptive operational discipline. Often the fix for a `failure_pattern`.
 >
 > Schema: see `DESIGN-PRINCIPLES.md` §3 (edge types) and §4 (confidence/status enums).
-> ID range: global sequential `L-XXXX` shared across all learnings files.
+> ID range: global sequential `L-XXXXX` shared across all learnings files.
 
 ---
 
-## L-0014
+## L-00014
 Type: process_rule
 Tags: prompt-engineering, agent-behavior, conciseness
 Confidence: high
@@ -18,7 +18,7 @@ Keeping agent prompts concise — describing intent, not implementation code —
 
 ---
 
-## L-0015
+## L-00015
 Type: process_rule
 Tags: prompt-engineering, scope, agent-behavior
 Confidence: high
@@ -29,19 +29,19 @@ Scope to ≤3-4 files per round, independently testable. Larger scopes increase 
 
 ---
 
-## L-0016
+## L-00016
 Type: process_rule
 Tags: prompt-engineering, verification, gates
 Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
-Related: L-0001 (depends_on)
+Related: L-00001 (depends_on)
 
 Every prompt must end with verification gates — `bash -n`, grep, test suite, `git diff --stat`. Agent self-assessment has proven unreliable; machine-checkable gates are the only trustworthy signal.
 
 ---
 
-## L-0017
+## L-00017
 Type: process_rule
 Tags: git, agent-behavior, origin, merge-conflicts
 Confidence: high
@@ -52,7 +52,7 @@ Push main to origin before running agent prompts. Claude Code agents fork from `
 
 ---
 
-## L-0018
+## L-00018
 Type: process_rule
 Tags: git, approval, permissions
 Confidence: high
@@ -63,19 +63,19 @@ Edit approval ≠ commit approval. Approving a file edit does not implicitly app
 
 ---
 
-## L-0019
+## L-00019
 Type: process_rule
 Tags: git, push-discipline, agent-behavior
 Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
-Related: L-0005 (depends_on)
+Related: L-00005 (depends_on)
 
-Agents should commit locally but not push. Brian pushes to GitHub manually. This is a design constraint, not a fixable behavior — agents ignore push restrictions (see L-0005).
+Agents should commit locally but not push. Brian pushes to GitHub manually. This is a design constraint, not a fixable behavior — agents ignore push restrictions (see L-00005).
 
 ---
 
-## L-0020
+## L-00020
 Type: process_rule
 Tags: session-discipline, agent-sessions, chat-sessions
 Confidence: high
@@ -86,19 +86,19 @@ Implementation work (scripts, lib/, tests) → fresh Claude Code agent session w
 
 ---
 
-## L-0021
+## L-00021
 Type: process_rule
 Tags: session-discipline, desktop-commander, temptation
 Confidence: high
 Status: active
 Date: 2026-02-28T20:31:00-05:00
-Related: L-0020 (depends_on)
+Related: L-00020 (depends_on)
 
 Desktop Commander gives chat full filesystem access — making it tempting to "just make a quick fix." Resist. Write the agent prompt instead. Quick fixes in chat bypass the verification gates that catch agent mistakes.
 
 ---
 
-## L-0022
+## L-00022
 Type: process_rule
 Tags: grep, verification, comment-filter
 Confidence: high
@@ -113,7 +113,7 @@ Not `grep -v "^\s*#"` — that pattern fails because `grep -rn` prepends `filena
 
 ---
 
-## L-0023
+## L-00023
 Type: process_rule
 Tags: learnings, organization, repo-structure
 Confidence: high
@@ -125,7 +125,7 @@ Learnings/patterns belong in the main `learnings/` catalog (previously `.specs/l
 
 ---
 
-### L-0040
+### L-00040
 - **Type:** process_rule
 - **Tags:** session-discipline, tool-limits
 - **Confidence:** high
@@ -137,216 +137,216 @@ Learnings/patterns belong in the main `learnings/` catalog (previously `.specs/l
 
 ---
 
-## L-0109
+## L-00109
 Type: process_rule
 Tags: prompts, agents, review
 Confidence: high
 Status: active
 Date: 2026-03-01T20:00:00-05:00
-Related: L-0104 (related_to)
+Related: L-00104 (related_to)
 
-Prompt engineering review before execution prevents rework. Brian caught 5 violations in draft prompts before any agent ran: wrong branch naming convention, abbreviated hard constraints missing full template clauses, over-prescribed interfaces (violating L-0045/L-0042), nested markdown inside code blocks, wrong verification scope (bash suites for Python-only changes). Fixing prompts costs minutes; fixing agent output costs full re-runs. Always review prompts against the guide before handing to agents.
+Prompt engineering review before execution prevents rework. Brian caught 5 violations in draft prompts before any agent ran: wrong branch naming convention, abbreviated hard constraints missing full template clauses, over-prescribed interfaces (violating L-00045/L-00042), nested markdown inside code blocks, wrong verification scope (bash suites for Python-only changes). Fixing prompts costs minutes; fixing agent output costs full re-runs. Always review prompts against the guide before handing to agents.
 
 ---
 
-## L-0110
+## L-00110
 Type: process_rule
 Tags: testing, verification
 Confidence: high
 Status: active
 Date: 2026-03-01T20:00:00-05:00
-Related: L-0109 (related_to)
+Related: L-00109 (related_to)
 
 Verification scope must match change scope. Python-only changes need only mypy --strict + pytest. Bash test suites (5 suites) only needed when bash files are modified. Running irrelevant test suites wastes time and creates false confidence signals ("all bash tests pass" is meaningless when no bash changed). Added to PROMPT-ENGINEERING-GUIDE.md as explicit rule.
 
 ---
 
-## L-0113
+## L-00113
 Type: process_rule
 Tags: checkpoint, learnings, capture, meta
 Confidence: high
 Status: active
 Date: 2026-03-02T02:30:00-05:00
-Related: L-0109 (related_to), L-0016 (related_to)
+Related: L-00109 (related_to), L-00016 (related_to)
 
 Checkpoint step 4 (learnings) must use active scan, not passive recall. The original wording "if any surfaced: flag" produced under-capture — a short session was declared "none new" without reviewing agent outcomes, corrections, or near-misses. Step 5 (methodology signals) already had active scan language ("scan session for...") and produced rich output. Step 4 needed the same structure. Active scan categories: agent completions (validate/contradict existing learnings?), Brian's corrections (each is a candidate), new rules or patterns, empirical findings, failures or near-misses. Under-capture is a failure mode equal to over-capture. Match capture density to session density.
 
 ---
 
-## L-0114
+## L-00114
 Type: process_rule
 Tags: documentation, propagation, protocol
 Confidence: high
 Status: active
 Date: 2026-03-02T03:00:00-05:00
-Related: L-0113 (depends_on)
+Related: L-00113 (depends_on)
 
-Protocol changes must propagate to all consumption points. A rule has (at minimum) a definition point (e.g. checkpoint.md), a summary point (e.g. ONBOARDING.md), and a delivery point (e.g. core.md that fresh sessions read). Changing one without the others creates silent drift — the protocol says one thing, the onboarding path teaches another. Discovered when L-0113 was written to checkpoint.md and ONBOARDING.md but not core.md until Brian corrected. Checklist for any protocol change: (1) definition file, (2) ONBOARDING.md summary, (3) core.md if it's a constitutional learning, (4) any ACTIVE-CONSIDERATIONS references.
+Protocol changes must propagate to all consumption points. A rule has (at minimum) a definition point (e.g. checkpoint.md), a summary point (e.g. ONBOARDING.md), and a delivery point (e.g. core.md that fresh sessions read). Changing one without the others creates silent drift — the protocol says one thing, the onboarding path teaches another. Discovered when L-00113 was written to checkpoint.md and ONBOARDING.md but not core.md until Brian corrected. Checklist for any protocol change: (1) definition file, (2) ONBOARDING.md summary, (3) core.md if it's a constitutional learning, (4) any ACTIVE-CONSIDERATIONS references.
 
 ---
 
-## L-0115
+## L-00115
 Type: process_rule
 Tags: documentation, counts, staleness, maintenance
 Confidence: high
 Status: active
 Date: 2026-03-02T03:00:00-05:00
-Related: L-0114 (related_to)
+Related: L-00114 (related_to)
 
 Numeric references in documentation rot silently. ONBOARDING.md said "38 entries" when actual was 57. ACTIVE-CONSIDERATIONS said "63 graph-compliant" and "~47 old-format" — both wrong. Nobody noticed because prose ages gracefully but numbers go stale on every commit. Mitigation: `/verify-learnings-counts` slash command performs mechanical count and compares against documentation claims. Wired into checkpoint step 4 propagation check.
 
 ---
 
-## L-0116
+## L-00116
 Type: process_rule
 Tags: checkpoint, learnings, defaults
 Confidence: high
 Status: active
 Date: 2026-03-02T03:00:00-05:00
-Related: L-0113 (depends_on)
+Related: L-00113 (depends_on)
 
-"Nothing to capture" must never be the default assumption. The default should be "something to capture" and the scan must find reasons to skip, not reasons to include. The checkpoint immediately after L-0113 was committed demonstrated the failure: the AI performed the new active scan categories but still concluded "no new learnings" — because the default was still passive. The bias must flip: assume every session produces learnings unless the scan proves otherwise.
+"Nothing to capture" must never be the default assumption. The default should be "something to capture" and the scan must find reasons to skip, not reasons to include. The checkpoint immediately after L-00113 was committed demonstrated the failure: the AI performed the new active scan categories but still concluded "no new learnings" — because the default was still passive. The bias must flip: assume every session produces learnings unless the scan proves otherwise.
 
 ---
 
-## L-0117
+## L-00117
 Type: process_rule
 Tags: protocol, adoption, latency
 Confidence: high
 Status: active
 Date: 2026-03-02T03:00:00-05:00
-Related: L-0113 (depends_on), L-0116 (related_to)
+Related: L-00113 (depends_on), L-00116 (related_to)
 
-New protocol rules have a one-response adoption latency. L-0113 codified active scan. The very next checkpoint executed step 4 with the new categories but still under-captured — the behavioral pattern hadn't changed despite the written rule changing. A fresh session reading L-0113 cold would likely apply it more faithfully than the session that just wrote it, because the session that wrote it still carries the old behavioral inertia. Implication: after writing a new process rule, explicitly test it in the same session by re-running the step it modifies. Mechanical enforcement: `/verify-propagation` step 5 flags self-test requirement when process-rules.md has new entries.
+New protocol rules have a one-response adoption latency. L-00113 codified active scan. The very next checkpoint executed step 4 with the new categories but still under-captured — the behavioral pattern hadn't changed despite the written rule changing. A fresh session reading L-00113 cold would likely apply it more faithfully than the session that just wrote it, because the session that wrote it still carries the old behavioral inertia. Implication: after writing a new process rule, explicitly test it in the same session by re-running the step it modifies. Mechanical enforcement: `/verify-propagation` step 5 flags self-test requirement when process-rules.md has new entries.
 
 ---
 
-## L-0118
+## L-00118
 Type: process_rule
 Tags: core-learnings, onboarding, delivery
 Confidence: high
 Status: active
 Date: 2026-03-02T03:00:00-05:00
-Related: L-0114 (depends_on)
+Related: L-00114 (depends_on)
 
 core.md is the actual delivery mechanism for learnings to fresh sessions. If a learning isn't in core.md, fresh sessions won't know it exists unless they happen to read the type-specific file. The onboarding protocol reads core.md — it does not read all type files. Therefore any learning that would cause a consequential mistake if missed must be in core.md. The selection criterion: "if a fresh session doesn't know this, will it make a mistake that matters?" If yes, it's core.
 
 ---
 
-## L-0127
+## L-00127
 Type: process_rule
 Tags: response-scope, work-items, planning
 Confidence: high
 Status: active
 Date: 2026-03-02T03:45:00-05:00
-Related: L-0113 (related_to)
+Related: L-00113 (related_to)
 
 Count work items BEFORE the first tool call, every response. The instruction exists in memory ("Count work items BEFORE first tool call. >3 distinct work items or >15 tool calls = split across responses") but was not followed in the response that failed — it attempted learnings capture, three file integrations, and system wiring all at once. The count must be explicit and visible, not implicit. State "N work items this response, splitting M for next" before starting work. A failed response wastes more time than two successful ones.
 
 ---
 
-## L-0128
+## L-00128
 Type: process_rule
 Tags: learnings, enforcement, mechanical-vs-prose
 Confidence: high
 Status: active
 Date: 2026-03-02T03:45:00-05:00
-Related: L-0113 (depends_on), L-0115 (validates), L-0116 (validates)
+Related: L-00113 (depends_on), L-00115 (validates), L-00116 (validates)
 
-Learnings that remain prose get ignored; learnings that become mechanical checks get followed. L-0113 (active scan) was prose — the very next checkpoint under-captured. `/verify-learnings-counts` (L-0115) is mechanical — it runs grep, compares numbers, reports discrepancies. The pattern: when a learning identifies a recurring failure mode, the fix is not a better-worded rule but a tool or command that enforces the rule without requiring the AI to remember it. Prose rules require behavioral compliance. Mechanical checks require only invocation.
+Learnings that remain prose get ignored; learnings that become mechanical checks get followed. L-00113 (active scan) was prose — the very next checkpoint under-captured. `/verify-learnings-counts` (L-00115) is mechanical — it runs grep, compares numbers, reports discrepancies. The pattern: when a learning identifies a recurring failure mode, the fix is not a better-worded rule but a tool or command that enforces the rule without requiring the AI to remember it. Prose rules require behavioral compliance. Mechanical checks require only invocation.
 
 ---
 
-## L-0131
+## L-00131
 Type: process_rule
 Tags: checkpoint, context-loss, multi-response
 Confidence: high
 Status: active
 Date: 2026-03-02T05:00:00-05:00
-Related: L-0130 (depends_on), L-0127 (related_to)
+Related: L-00130 (depends_on), L-00127 (related_to)
 
-Multi-response checkpoints must stash progress incrementally. Checkpoints spanning multiple responses are vulnerable to the same context loss L-0130 addresses. Each completed step must be written to files before proceeding to the next. Pattern: write learnings to stash file → commit or update .onboarding-state → proceed to methodology signals → stash again. If context dies mid-checkpoint, the completed steps survive. Instruction origin: Brian's "stash as you go to prevent lost progress."
+Multi-response checkpoints must stash progress incrementally. Checkpoints spanning multiple responses are vulnerable to the same context loss L-00130 addresses. Each completed step must be written to files before proceeding to the next. Pattern: write learnings to stash file → commit or update .onboarding-state → proceed to methodology signals → stash again. If context dies mid-checkpoint, the completed steps survive. Instruction origin: Brian's "stash as you go to prevent lost progress."
 
 ---
 
-## L-0133
+## L-00133
 Type: process_rule
 Tags: methodology, review, corpus-analysis
 Confidence: high
 Status: active
 Date: 2026-03-02T05:00:00-05:00
-Related: L-0124 (extends), L-0128 (related_to)
+Related: L-00124 (extends), L-00128 (related_to)
 
 Corpus-level review is a distinct operation from keyword-based signal scanning. `/review-signals` greps HOW-I-WORK for keywords matching existing learnings. Reading the full corpus end-to-end revealed structure that keyword matching cannot: emergent clusters (prompt engineering, agent autonomy, session types, capture philosophy), a philosophical foundation ("we want to be 1"), and accumulation-without-curation debt. Periodic full-read review — not just keyword scan — surfaces patterns that exist between entries, not within them.
 
 ---
 
-## L-0135
+## L-00135
 Type: process_rule
 Tags: prompts, agents, compression
 Confidence: high
 Status: active
 Date: 2026-03-02T05:30:00-05:00
-Related: L-0016 (extends), L-0020 (related_to)
+Related: L-00016 (extends), L-00020 (related_to)
 
 "Half the length and do not solve the thing the agent will be able to solve. Show them where to look if you must for success." Calibrate spec prescriptiveness by agent capability — only lock down decisions an agent would high-percentage get wrong. Token cost and agent behavior efficiency are the quality metrics, not just output correctness. Distinguish boilerplate (load-bearing rules proven by failure) from verbosity (excess words expressing those rules). Cut verbosity, keep the rules.
 
 ---
 
-## L-0136
+## L-00136
 Type: process_rule
 Tags: capture, sessions, meta-work
 Confidence: high
 Status: active
 Date: 2026-03-02T05:30:00-05:00
-Related: L-0116 (extends), L-0113 (related_to)
+Related: L-00116 (extends), L-00113 (related_to)
 
 High-lucidity sessions — systematic, meta-level, philosophical about the system — are rare and perishable. "I may not be this lucid tomorrow, so do what you can when you can." The AI should recognize these windows and maximize capture density because the next session may be purely task-focused. The learnings system exists to encode lucid-state decisions so they persist into less-lucid states. Corollary: zero features built with 24 learnings produced is a productive session when the lucidity is there.
 
 ---
 
-## L-0137
+## L-00137
 Type: process_rule
 Tags: prompts, agents, quality
 Confidence: high
 Status: active
 Date: 2026-03-02T05:30:00-05:00
-Related: L-0016 (depends_on), L-0001 (related_to)
+Related: L-00016 (depends_on), L-00001 (related_to)
 
 Prompt review catches errors dramatically cheaper than output rework. Brian reviewed 5 agent prompts line-by-line before execution, catching 5 violations that would have caused full re-runs. Quality-gating at the prompt layer (input) is the highest-leverage checkpoint in agent-based workflows. Post-execution QA is necessary but is the expensive fallback, not the primary defense.
 
 ---
 
-## L-0138
+## L-00138
 Type: process_rule
 Tags: rules, design, precision
 Confidence: high
 Status: active
 Date: 2026-03-02T05:30:00-05:00
-Related: L-0128 (related_to)
+Related: L-00128 (related_to)
 
 When a rule feels wrong, replace it with the actual constraint it was proxying for — don't tweak the number. Flat 10-call limit → "be purposeful, stop at natural decision boundaries." Arbitrary recursion depth → diagnose spiraling by purposelessness, not depth. The diagnostic for constraint quality: does the rule penalize correct behavior? If yes, it's a proxy — find the real constraint. Brian demands logical precision: "IFF" means the biconditional. "Generally fine" is not a rule.
 
 ---
 
-## L-0140
+## L-00140
 Type: process_rule
 Tags: review, methodology, corpus-analysis
 Confidence: high
 Status: active
 Date: 2026-03-02T05:30:00-05:00
-Related: L-0133 (extends), L-0124 (related_to)
+Related: L-00133 (extends), L-00124 (related_to)
 
-"Read each line closely, tell me your impressions" is not a summary request — it's a structural audit. Identify emergent clusters across entries, find the philosophical foundation, surface gaps between what the document promises (curated sections) and what exists (raw accumulation only), assess maturity signals, and report inter-entry relationships no single entry reveals. Close read differs from keyword scan (L-0133's /review-signals) by operating on structure and meaning, not pattern matching. The output is cluster identification + gap analysis + maturity assessment, not a précis.
+"Read each line closely, tell me your impressions" is not a summary request — it's a structural audit. Identify emergent clusters across entries, find the philosophical foundation, surface gaps between what the document promises (curated sections) and what exists (raw accumulation only), assess maturity signals, and report inter-entry relationships no single entry reveals. Close read differs from keyword scan (L-00133's /review-signals) by operating on structure and meaning, not pattern matching. The output is cluster identification + gap analysis + maturity assessment, not a précis.
 
 ---
 
-## L-0141
+## L-00141
 Type: process_rule
 Tags: methodology, capture, curation
 Confidence: high
 Status: active
 Date: 2026-03-02T05:30:00-05:00
-Related: L-0140 (depends_on), L-0133 (related_to)
+Related: L-00140 (depends_on), L-00133 (related_to)
 
 In HOW-I-WORK corpus, Brian's direct quotes ("we want to be 1", "half the length", "I may not be this lucid tomorrow") carry more signal per token than the third-person observations wrapping them. When curating accumulation entries into sections, quotes should survive verbatim — the surrounding gloss can be compressed or restructured. Curation heuristic inferred from the close-read process itself: the entries that anchored cluster identification were quotes, not observations.

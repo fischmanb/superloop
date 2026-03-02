@@ -154,7 +154,7 @@ The conventions doc must cover ALL of the following before any agent starts:
 | generate-mapping.sh | validation.sh | — |
 | nightly-review.sh | — | `bash lib/claude-wrapper.sh` |
 
-**Key finding:** claude-wrapper.sh is never `source`d — always invoked as external command. Python equivalent is a callable function, not an imported module (L-0041).
+**Key finding:** claude-wrapper.sh is never `source`d — always invoked as external command. Python equivalent is a callable function, not an imported module (L-00041).
 
 **Interface stubs — function signatures build-loop-local calls from each lib:**
 

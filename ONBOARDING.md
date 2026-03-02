@@ -95,7 +95,7 @@ See **`ACTIVE-CONSIDERATIONS.md`** — priority stack, in-flight work, and open 
 | **INDEX.md** | One-line lookup table for the whole repo | When you need to find something |
 | **DECISIONS.md** | Append-only decision log with rationale | Before re-opening a settled question |
 | **DESIGN-PRINCIPLES.md** | Project-wide constraints: grepability, graph-readiness, relationship type schema, confidence/status enums, when to apply | Before writing prompts that produce structured output. Before designing new knowledge capture formats. |
-| **learnings/** | Learnings catalog: `core.md` (**read first — 12 curated constitutional learnings**), `failure-patterns.md`, `process-rules.md`, `empirical-findings.md`, `architectural-rationale.md`, `domain-knowledge.md`. 64 graph-format entries (L-0001–L-0130, non-contiguous). | `core.md` on every fresh onboard — no exceptions. Type files when adding/reviewing learnings or during checkpoint step 4 active scan. |
+| **learnings/** | Learnings catalog: `core.md` (**read first — 12 curated constitutional learnings**), `failure-patterns.md`, `process-rules.md`, `empirical-findings.md`, `architectural-rationale.md`, `domain-knowledge.md`. 64 graph-format entries (L-00001–L-00130, non-contiguous). | `core.md` on every fresh onboard — no exceptions. Type files when adding/reviewing learnings or during checkpoint step 4 active scan. |
 | **Agents.md** | Agent work log (Rounds 1-30), architecture reference, signal protocol, verification checklist, known gaps, process lessons | Before making ANY changes — this is the source of truth for what happened and what works |
 | **README.md** | Public-facing docs: quick start, config, file structure, what works and what breaks | For understanding the user-facing narrative |
 | **CLAUDE.md** | Instructions that Claude Code agents read automatically when invoked by the build loop | When modifying agent behavior or build prompts |
@@ -224,7 +224,7 @@ Full details in `Agents.md`. Here's the arc:
 
 ## Process Lessons (Hard-Won)
 
-See `learnings/core.md` for the curated essentials (read on every fresh onboard) and `learnings/` type-specific files for the full catalog (64 graph-format entries, L-0001–L-0130). All process lessons, failure modes, and session discipline rules are maintained there as the single source of truth.
+See `learnings/core.md` for the curated essentials (read on every fresh onboard) and `learnings/` type-specific files for the full catalog (64 graph-format entries, L-00001–L-00130). All process lessons, failure modes, and session discipline rules are maintained there as the single source of truth.
 
 ---
 
@@ -333,7 +333,7 @@ Saying **"checkpoint"** (in chat or as `/checkpoint` in Claude Code) triggers a 
 1. **State file read** — Read `.onboarding-state`. If `pending_captures` non-empty → proceed to 2, else skip to 3.
 2. **Flush pending_captures** → `ACTIVE-CONSIDERATIONS.md`. Staleness scan first: flag items marked ✅/complete/merged/done to Brian, don't auto-remove.
 3. **Decisions** → `DECISIONS.md`. Append any settled questions (date, what, why, rejected alternatives). Skip if none.
-4. **Learnings** → Default: something to capture (L-0116). Active scan: agent outcomes, corrections, new patterns, empirical findings, failures/near-misses, methodology signals for patterns (L-0124). Self-test new rules in same session (L-0117). Propagation check: core.md, counts, references (L-0114). Flag candidates for Brian — do NOT auto-write.
+4. **Learnings** → Default: something to capture (L-00116). Active scan: agent outcomes, corrections, new patterns, empirical findings, failures/near-misses, methodology signals for patterns (L-00124). Self-test new rules in same session (L-00117). Propagation check: core.md, counts, references (L-00114). Flag candidates for Brian — do NOT auto-write.
 5. **Methodology signals** → `HOW-I-WORK-WITH-GENERATIVE-AI.md` accumulation section. Scan for operator-level insights, preferences, corrections. Format: `- (YYYY-MM-DD) <raw observation>`. Third person, empirical voice.
 6. **ONBOARDING.md drift check** — `md5sum ONBOARDING.md`, compare to `last_check_hash` in `.onboarding-state`. Note changes if hash differs. Update hash.
 7. **Commit and push** — `git add` state/context files, commit. Checkpoint commits are always pushed, no approval needed.
