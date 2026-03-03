@@ -23,11 +23,13 @@ from auto_sdd.scripts.post_campaign_validation import (
     Phase1Result,
     Phase2Result,
     Phase3Result,
+    Phase4aResult,
     ValidationPipeline,
     ValidationState,
     _find_seed_script,
     build_ac_generation_prompt,
     build_discovery_prompt,
+    build_failure_catalog,
     build_playwright_prompt,
     detect_coverage_gaps,
     detect_dev_command,
@@ -1254,3 +1256,348 @@ class TestPhase3AgentFailureContinues:
 
         # Pipeline continued (both features processed)
         assert mock_run_claude.call_count == 2
+
+
+# ── Phase 4a: Failure Catalog tests ─────────────────────────────────────────
+
+
+class TestBuildFailureCatalogBasic:
+    def test_build_failure_catalog_basic(self) -> None:
+        """Two features: A has 2 criteria (1 PASS, 1 FAIL), B has 1 BLOCKED.
+        Catalog should have 2 entries. Stats: total=3, passed=1, failed=1, blocked=1."""
+        phase_3_results: list[dict[str, Any]] = [
+            {
+                "feature": "Feature A",
+                "criteria_results": [
+                    {
+                        "criterion_id": "AC-001",
+                        "status": "PASS",
+                        "description": "Page loads",
+                        "screenshot_path": "",
+                        "error": "",
+                    },
+                    {
+                        "criterion_id": "AC-002",
+                        "status": "FAIL",
+                        "description": "Sort control not found",
+                        "screenshot_path": "phase-3/a/fail-ac002.png",
+                        "error": "Element not found",
+                    },
+                ],
+            },
+            {
+                "feature": "Feature B",
+                "criteria_results": [
+                    {
+                        "criterion_id": "AC-003",
+                        "status": "BLOCKED",
+                        "description": "Settings page 404",
+                        "screenshot_path": "phase-3/b/block-ac003.png",
+                        "error": "HTTP 404",
+                    },
+                ],
+            },
+        ]
+        phase_2_features: list[dict[str, Any]] = [
+            {
+                "feature": "Feature A",
+                "status": "PARTIAL",
+                "criteria": [
+                    {"id": "AC-001", "expected_outcome": "Page loads fine"},
+                    {"id": "AC-002", "expected_outcome": "Sort dropdown present"},
+                ],
+            },
+            {
+                "feature": "Feature B",
+                "status": "DRIFTED",
+                "criteria": [
+                    {"id": "AC-003", "expected_outcome": "Settings page loads"},
+                ],
+            },
+        ]
+
+        result = build_failure_catalog(phase_3_results, phase_2_features, "val-test-001")
+
+        assert len(result["catalog"]) == 2
+        assert result["stats"]["total_criteria"] == 3
+        assert result["stats"]["passed"] == 1
+        assert result["stats"]["failed"] == 1
+        assert result["stats"]["blocked"] == 1
+
+        # FAIL entry
+        fail_entry = result["catalog"][0]
+        assert fail_entry["id"] == "FAIL-001"
+        assert fail_entry["criterion_id"] == "AC-002"
+        assert fail_entry["feature"] == "Feature A"
+        assert fail_entry["feature_status"] == "PARTIAL"
+        assert fail_entry["result"] == "FAIL"
+        assert fail_entry["expected"] == "Sort dropdown present"
+
+        # BLOCKED entry
+        block_entry = result["catalog"][1]
+        assert block_entry["id"] == "BLOCK-001"
+        assert block_entry["result"] == "BLOCKED"
+
+
+class TestBuildFailureCatalogAllPass:
+    def test_build_failure_catalog_all_pass(self) -> None:
+        """All criteria pass — catalog should be empty."""
+        phase_3_results: list[dict[str, Any]] = [
+            {
+                "feature": "Feature A",
+                "criteria_results": [
+                    {"criterion_id": "AC-001", "status": "PASS",
+                     "description": "OK", "screenshot_path": "", "error": ""},
+                ],
+            },
+            {
+                "feature": "Feature B",
+                "criteria_results": [
+                    {"criterion_id": "AC-002", "status": "PASS",
+                     "description": "OK", "screenshot_path": "", "error": ""},
+                ],
+            },
+        ]
+        phase_2_features: list[dict[str, Any]] = [
+            {"feature": "Feature A", "status": "FOUND",
+             "criteria": [{"id": "AC-001", "expected_outcome": "Works"}]},
+            {"feature": "Feature B", "status": "FOUND",
+             "criteria": [{"id": "AC-002", "expected_outcome": "Works"}]},
+        ]
+
+        result = build_failure_catalog(phase_3_results, phase_2_features, "val-test")
+
+        assert result["catalog"] == []
+        assert result["stats"]["total_criteria"] == 2
+        assert result["stats"]["passed"] == 2
+        assert result["stats"]["failed"] == 0
+        assert result["stats"]["blocked"] == 0
+
+
+class TestBuildFailureCatalogMultipleFails:
+    def test_build_failure_catalog_multiple_fails(self) -> None:
+        """One feature with 3 criteria all FAIL — 3 entries with sequential ids."""
+        phase_3_results: list[dict[str, Any]] = [
+            {
+                "feature": "Feature X",
+                "criteria_results": [
+                    {"criterion_id": "AC-010", "status": "FAIL",
+                     "description": "Fail 1", "screenshot_path": "", "error": "err1"},
+                    {"criterion_id": "AC-011", "status": "FAIL",
+                     "description": "Fail 2", "screenshot_path": "", "error": "err2"},
+                    {"criterion_id": "AC-012", "status": "FAIL",
+                     "description": "Fail 3", "screenshot_path": "", "error": "err3"},
+                ],
+            },
+        ]
+        phase_2_features: list[dict[str, Any]] = [
+            {
+                "feature": "Feature X", "status": "FOUND",
+                "criteria": [
+                    {"id": "AC-010", "expected_outcome": "Exp 1"},
+                    {"id": "AC-011", "expected_outcome": "Exp 2"},
+                    {"id": "AC-012", "expected_outcome": "Exp 3"},
+                ],
+            },
+        ]
+
+        result = build_failure_catalog(phase_3_results, phase_2_features, "val-test")
+
+        assert len(result["catalog"]) == 3
+        assert result["catalog"][0]["id"] == "FAIL-001"
+        assert result["catalog"][1]["id"] == "FAIL-002"
+        assert result["catalog"][2]["id"] == "FAIL-003"
+
+
+class TestBuildFailureCatalogEnrichment:
+    def test_build_failure_catalog_enrichment(self) -> None:
+        """Verify enrichment: expected comes from Phase 2 expected_outcome,
+        feature_status comes from Phase 2 feature status — not from Phase 3."""
+        phase_3_results: list[dict[str, Any]] = [
+            {
+                "feature": "Feature Z",
+                "criteria_results": [
+                    {
+                        "criterion_id": "AC-050",
+                        "status": "FAIL",
+                        "description": "Phase 3 description",
+                        "screenshot_path": "shot.png",
+                        "error": "Phase 3 error detail",
+                    },
+                ],
+            },
+        ]
+        # Phase 2 has different data that should appear in the catalog
+        phase_2_features: list[dict[str, Any]] = [
+            {
+                "feature": "Feature Z from Phase 2",
+                "status": "MISSING",
+                "criteria": [
+                    {
+                        "id": "AC-050",
+                        "expected_outcome": "Phase 2 expected outcome text",
+                    },
+                ],
+            },
+        ]
+
+        result = build_failure_catalog(phase_3_results, phase_2_features, "val-enrich")
+
+        entry = result["catalog"][0]
+        # expected comes from Phase 2, not Phase 3
+        assert entry["expected"] == "Phase 2 expected outcome text"
+        # feature_status comes from Phase 2
+        assert entry["feature_status"] == "MISSING"
+        # feature name comes from Phase 2
+        assert entry["feature"] == "Feature Z from Phase 2"
+        # actual comes from Phase 3 error field
+        assert entry["actual"] == "Phase 3 error detail"
+        # description is from Phase 3
+        assert entry["description"] == "Phase 3 description"
+
+
+class TestReadPhase3Results:
+    def test_read_phase_3_results(self, tmp_project: Path) -> None:
+        """Create pipeline with Phase 3 output on disk. Assert read works."""
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Write Phase 3 results to disk
+        phase3_dir = pipeline.log_dir / "phase-3"
+        phase3_dir.mkdir(parents=True, exist_ok=True)
+        data: dict[str, Any] = {
+            "status": "VALIDATION_COMPLETE",
+            "feature_results": [
+                {
+                    "feature": "Auth",
+                    "criteria_results": [
+                        {"criterion_id": "AC-001", "status": "PASS",
+                         "description": "Login", "screenshot_path": "", "error": ""},
+                    ],
+                }
+            ],
+            "total_pass": 1,
+            "total_fail": 0,
+            "total_blocked": 0,
+        }
+        (phase3_dir / "validation-results.v1.json").write_text(json.dumps(data))
+
+        result = pipeline._read_phase_3_results()
+        assert result is not None
+        assert result["status"] == "VALIDATION_COMPLETE"
+        assert len(result["feature_results"]) == 1
+
+
+class TestPhase4aRequiresPhase3:
+    def test_phase_4a_requires_phase_3(self, tmp_project: Path) -> None:
+        """Phase 3 not completed — _run_phase_4a returns error."""
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Mark 0–2b complete but NOT 3
+        pipeline.state.mark_complete("0")
+        pipeline.state.mark_complete("1")
+        pipeline.state.mark_complete("2a")
+        pipeline.state.mark_complete("2b")
+
+        result = pipeline._run_phase_4a()
+        assert result.status == "CATALOG_FAILED"
+        assert "Phase 3" in result.error
+
+
+class TestPhase4aAllPassStillCompletes:
+    @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
+    def test_phase_4a_all_pass_still_completes(
+        self, mock_run_claude: MagicMock, tmp_project: Path,
+    ) -> None:
+        """All Phase 3 criteria passed — Phase 4a still completes with
+        empty catalog and CATALOG_COMPLETE status."""
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Mark prior phases complete
+        for p in ("0", "1", "2a", "2b", "3", "3b"):
+            pipeline.state.mark_complete(p)
+
+        # Write Phase 3 results (all PASS)
+        phase3_dir = pipeline.log_dir / "phase-3"
+        phase3_dir.mkdir(parents=True, exist_ok=True)
+        phase3_data: dict[str, Any] = {
+            "status": "VALIDATION_COMPLETE",
+            "feature_results": [
+                {
+                    "feature": "Home",
+                    "criteria_results": [
+                        {"criterion_id": "AC-001", "status": "PASS",
+                         "description": "OK", "screenshot_path": "", "error": ""},
+                    ],
+                },
+            ],
+            "total_pass": 1, "total_fail": 0, "total_blocked": 0,
+        }
+        (phase3_dir / "validation-results.v1.json").write_text(
+            json.dumps(phase3_data)
+        )
+
+        # Write Phase 2a acceptance criteria
+        phase2a_dir = pipeline.log_dir / "phase-2a"
+        phase2a_dir.mkdir(parents=True, exist_ok=True)
+        ac_data: list[dict[str, Any]] = [
+            {
+                "feature": "Home", "status": "FOUND", "route": "/",
+                "criteria": [
+                    {"id": "AC-001", "description": "Home loads",
+                     "targets_present_element": True, "steps": ["Navigate to /"],
+                     "expected_outcome": "Page loads"},
+                ],
+            },
+        ]
+        (phase2a_dir / "acceptance-criteria.v1.json").write_text(
+            json.dumps(ac_data)
+        )
+
+        result = pipeline._run_phase_4a()
+        assert result.status == "CATALOG_COMPLETE"
+        assert result.catalog == []
+        assert result.stats["passed"] == 1
+        assert result.stats["failed"] == 0
+        assert result.stats["blocked"] == 0
+        # Phase 4a marked complete
+        assert pipeline.state.is_complete("4a")
+        # No agent calls
+        mock_run_claude.assert_not_called()
+
+
+class TestBuildFailureCatalogRunId:
+    def test_build_failure_catalog_run_id(self) -> None:
+        """Assert the run_id is preserved in the output catalog."""
+        phase_3_results: list[dict[str, Any]] = [
+            {
+                "feature": "F",
+                "criteria_results": [
+                    {"criterion_id": "AC-001", "status": "FAIL",
+                     "description": "Nope", "screenshot_path": "", "error": "bad"},
+                ],
+            },
+        ]
+        phase_2_features: list[dict[str, Any]] = [
+            {"feature": "F", "status": "FOUND",
+             "criteria": [{"id": "AC-001", "expected_outcome": "Good"}]},
+        ]
+
+        result = build_failure_catalog(
+            phase_3_results, phase_2_features, "val-20260303-120000",
+        )
+        assert result["run_id"] == "val-20260303-120000"
