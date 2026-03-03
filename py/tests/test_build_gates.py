@@ -285,6 +285,35 @@ class TestCheckWorkingTreeClean:
         mock_run.return_value = MagicMock(stdout=" M file.py\n", returncode=0)
         assert check_working_tree_clean(Path("/fake")) is False
 
+    @patch("auto_sdd.lib.build_gates.subprocess.run")
+    def test_check_working_tree_clean_warns_on_untracked(
+        self, mock_run: object, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from unittest.mock import MagicMock
+        assert isinstance(mock_run, MagicMock)
+        mock_run.return_value = MagicMock(
+            stdout="?? leftover.txt\n?? debug.log\n", returncode=0
+        )
+        import logging
+        with caplog.at_level(logging.WARNING, logger="auto_sdd.lib.build_gates"):
+            result = check_working_tree_clean(Path("/fake"))
+        assert result is True
+        assert "2 untracked file(s)" in caplog.text
+        assert "leftover.txt" in caplog.text
+
+    @patch("auto_sdd.lib.build_gates.subprocess.run")
+    def test_check_working_tree_clean_no_warning_when_no_untracked(
+        self, mock_run: object, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from unittest.mock import MagicMock
+        assert isinstance(mock_run, MagicMock)
+        mock_run.return_value = MagicMock(stdout="", returncode=0)
+        import logging
+        with caplog.at_level(logging.WARNING, logger="auto_sdd.lib.build_gates"):
+            result = check_working_tree_clean(Path("/fake"))
+        assert result is True
+        assert "untracked" not in caplog.text
+
 
 # ── agent_cmd ────────────────────────────────────────────────────────────────
 

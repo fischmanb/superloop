@@ -564,10 +564,21 @@ def check_working_tree_clean(project_dir: Path) -> bool:
     except (subprocess.TimeoutExpired, OSError):
         return False
 
+    untracked: list[str] = []
     for line in result.stdout.splitlines():
-        # Skip untracked files (lines starting with ??)
-        if not line.startswith("??"):
+        if line.startswith("??"):
+            # Collect untracked file paths (strip "?? " prefix)
+            untracked.append(line[3:].strip())
+        else:
             return False
+
+    if untracked:
+        logger.warning(
+            "Working tree clean but %d untracked file(s) present: %s",
+            len(untracked),
+            ", ".join(untracked[:10]),
+        )
+
     return True
 
 

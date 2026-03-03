@@ -24,6 +24,7 @@ from auto_sdd.lib.reliability import DriftPair, Feature, ResumeState
 from auto_sdd.scripts.build_loop import (
     BuildLoop,
     FeatureRecord,
+    _detect_dep_excludes,
     _format_duration,
     _is_credit_exhaustion,
     _parse_signal,
@@ -827,3 +828,190 @@ class TestFeatureRecord:
         assert record.source_files == ""
         assert record.test_count is None
         assert record.token_usage is None
+
+
+# ── _detect_dep_excludes tests ────────────────────────────────────────────
+
+
+class TestDetectDepExcludes:
+    """Tests for _detect_dep_excludes."""
+
+    def test_detect_dep_excludes_empty_dir(self, tmp_path: Path) -> None:
+        result = _detect_dep_excludes(tmp_path)
+        assert result == []
+
+    def test_detect_dep_excludes_node_modules(self, tmp_path: Path) -> None:
+        (tmp_path / "node_modules").mkdir()
+        result = _detect_dep_excludes(tmp_path)
+        assert result == ["-e", "node_modules"]
+
+    def test_detect_dep_excludes_multiple(self, tmp_path: Path) -> None:
+        (tmp_path / "node_modules").mkdir()
+        (tmp_path / "venv").mkdir()
+        (tmp_path / "target").mkdir()
+        result = _detect_dep_excludes(tmp_path)
+        assert ["-e", "node_modules"] == result[0:2]
+        assert ["-e", "venv"] == result[2:4]
+        assert ["-e", "target"] == result[4:6]
+
+    def test_detect_dep_excludes_python_venvs(self, tmp_path: Path) -> None:
+        (tmp_path / ".venv").mkdir()
+        result = _detect_dep_excludes(tmp_path)
+        assert result == ["-e", ".venv"]
+
+    def test_detect_dep_excludes_vendor(self, tmp_path: Path) -> None:
+        (tmp_path / "vendor").mkdir()
+        result = _detect_dep_excludes(tmp_path)
+        assert result == ["-e", "vendor"]
+
+    def test_detect_dep_excludes_ignores_files(self, tmp_path: Path) -> None:
+        """Files named like dep dirs should be ignored (only dirs count)."""
+        (tmp_path / "node_modules").write_text("not a dir")
+        result = _detect_dep_excludes(tmp_path)
+        assert result == []
+
+
+# ── Independent pass prompt builder tests ─────────────────────────────────
+
+
+class TestIndependentPassUsesPromptBuilder:
+    """Fix 1: _run_independent_pass should use build_feature_prompt."""
+
+    @patch("auto_sdd.scripts.build_loop.run_claude")
+    @patch("auto_sdd.scripts.build_loop.build_feature_prompt")
+    @patch("subprocess.run")
+    def test_independent_pass_calls_build_feature_prompt(
+        self,
+        mock_subprocess: MagicMock,
+        mock_prompt: MagicMock,
+        mock_claude: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        loop = _make_loop(tmp_path)
+        mock_prompt.return_value = "generated prompt"
+
+        # Mock subprocess.run for worktree creation/cleanup
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_claude.return_value = MagicMock(output="BUILD_FAILED: test")
+
+        with patch.object(loop, "_run_post_build_gates", return_value=False):
+            loop._run_independent_pass(["auth"])
+
+        mock_prompt.assert_called_once()
+        call_kwargs = mock_prompt.call_args
+        assert call_kwargs[0][0] == 0  # feature_id
+        assert call_kwargs[0][1] == "auth"  # feature_name
+
+
+# ── Independent pass post-build gates tests ───────────────────────────────
+
+
+class TestIndependentPassRunsPostBuildGates:
+    """Fix 4: _run_independent_pass should run _run_post_build_gates."""
+
+    @patch("auto_sdd.scripts.build_loop.run_claude")
+    @patch("auto_sdd.scripts.build_loop.build_feature_prompt", return_value="prompt")
+    @patch("subprocess.run")
+    def test_independent_pass_calls_post_build_gates_on_success(
+        self,
+        mock_subprocess: MagicMock,
+        mock_prompt: MagicMock,
+        mock_claude: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        loop = _make_loop(tmp_path)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_claude.return_value = MagicMock(
+            output="FEATURE_BUILT: auth\nSPEC_FILE: spec.md\n"
+        )
+
+        with patch.object(
+            loop, "_run_post_build_gates", return_value=True
+        ) as mock_gates:
+            loop._run_independent_pass(["auth"])
+
+        mock_gates.assert_called_once()
+        # Verify project_dir kwarg is the worktree path (not self.project_dir)
+        call_kwargs = mock_gates.call_args
+        assert call_kwargs[1].get("project_dir") is not None
+        assert ".build-worktrees" in str(call_kwargs[1]["project_dir"])
+
+    @patch("auto_sdd.scripts.build_loop.run_claude")
+    @patch("auto_sdd.scripts.build_loop.build_feature_prompt", return_value="prompt")
+    @patch("subprocess.run")
+    def test_independent_pass_fails_when_gates_fail(
+        self,
+        mock_subprocess: MagicMock,
+        mock_prompt: MagicMock,
+        mock_claude: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        loop = _make_loop(tmp_path)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_claude.return_value = MagicMock(
+            output="FEATURE_BUILT: auth\nSPEC_FILE: spec.md\n"
+        )
+
+        with patch.object(loop, "_run_post_build_gates", return_value=False):
+            loop._run_independent_pass(["auth"])
+
+        assert loop.loop_failed == 1
+        assert loop.loop_built == 0
+
+
+# ── Post-build gates project_dir override tests ──────────────────────────
+
+
+class TestPostBuildGatesProjectDirOverride:
+    """Tests for _run_post_build_gates with project_dir kwarg."""
+
+    def test_uses_override_project_dir(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        loop.post_build_steps = ""
+        override_dir = tmp_path / "worktree"
+        override_dir.mkdir()
+
+        with patch(
+            "auto_sdd.scripts.build_loop._get_head",
+            return_value="new_hash",
+        ):
+            with patch(
+                "auto_sdd.scripts.build_loop.check_working_tree_clean",
+                return_value=True,
+            ) as mock_wt:
+                with patch(
+                    "auto_sdd.scripts.build_loop.check_build",
+                    return_value=BuildCheckResult(success=True, output=""),
+                ) as mock_build:
+                    result = loop._run_post_build_gates(
+                        "FEATURE_BUILT: auth\n",
+                        "auth",
+                        branch_start_commit="old_hash",
+                        project_dir=override_dir,
+                    )
+
+        assert result is True
+        # Verify the override dir was passed to the gate functions
+        mock_wt.assert_called_once_with(override_dir)
+        mock_build.assert_called_once_with(loop.build_cmd, override_dir)
+
+    def test_defaults_to_self_project_dir(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        loop.post_build_steps = ""
+
+        with patch(
+            "auto_sdd.scripts.build_loop.check_working_tree_clean",
+            return_value=True,
+        ) as mock_wt:
+            with patch(
+                "auto_sdd.scripts.build_loop.check_build",
+                return_value=BuildCheckResult(success=True, output=""),
+            ):
+                loop._run_post_build_gates(
+                    "FEATURE_BUILT: auth\n", "auth"
+                )
+
+        mock_wt.assert_called_once_with(tmp_path)

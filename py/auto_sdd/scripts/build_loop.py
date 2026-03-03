@@ -185,6 +185,23 @@ def _is_credit_exhaustion(output: str) -> bool:
     return bool(_CREDIT_RE.search(output))
 
 
+# Dependency directories to auto-detect for git clean exclusions.
+_DEP_DIRS = ("node_modules", "venv", ".venv", "target", "vendor")
+
+
+def _detect_dep_excludes(project_dir: Path) -> list[str]:
+    """Return ``-e <dir>`` args for each dependency directory that exists.
+
+    Auto-detects common dependency directories (node_modules, venv, .venv,
+    target, vendor) so ``git clean -fd`` doesn't delete them.
+    """
+    excludes: list[str] = []
+    for d in _DEP_DIRS:
+        if (project_dir / d).is_dir():
+            excludes.extend(["-e", d])
+    return excludes
+
+
 def _load_env_local(project_dir: Path) -> None:
     """Load ``.env.local`` into os.environ without overwriting existing vars.
 
@@ -715,10 +732,11 @@ class BuildLoop:
                         cwd=str(self.project_dir),
                         timeout=30,
                     )
+                    dep_excludes = _detect_dep_excludes(self.project_dir)
                     subprocess.run(
                         [
                             "git", "clean", "-fd",
-                            "-e", "node_modules",
+                            *dep_excludes,
                             "-e", ".env.local",
                             "-e", ".sdd-state",
                             "-e", "logs",
@@ -986,11 +1004,23 @@ class BuildLoop:
         build_result: str,
         feature_name: str,
         branch_start_commit: str = "",
+        *,
+        project_dir: Path | None = None,
     ) -> bool:
-        """Run all post-build verification gates. Return True if all pass."""
+        """Run all post-build verification gates. Return True if all pass.
+
+        Args:
+            build_result: Raw agent output containing signals.
+            feature_name: Name of the feature being checked.
+            branch_start_commit: If set, verify HEAD has advanced past this.
+            project_dir: Override project directory (e.g. worktree path).
+                         Defaults to ``self.project_dir``.
+        """
+        gate_dir = project_dir or self.project_dir
+
         # Gate 0: HEAD must have advanced (agent must have committed)
         if branch_start_commit:
-            head_now = _get_head(self.project_dir)
+            head_now = _get_head(gate_dir)
             if head_now == branch_start_commit:
                 logger.warning(
                     "Agent said FEATURE_BUILT but HEAD has not advanced "
@@ -999,14 +1029,14 @@ class BuildLoop:
                 return False
 
         # Gate 1: Clean working tree
-        if not check_working_tree_clean(self.project_dir):
+        if not check_working_tree_clean(gate_dir):
             logger.warning(
                 "Agent said FEATURE_BUILT but left uncommitted changes"
             )
             return False
 
         # Gate 2: Build check
-        build_ok = check_build(self.build_cmd, self.project_dir)
+        build_ok = check_build(self.build_cmd, gate_dir)
         if not build_ok.success:
             logger.warning(
                 "Agent said FEATURE_BUILT but build check failed"
@@ -1015,7 +1045,7 @@ class BuildLoop:
 
         # Gate 3: Test check
         if should_run_step("test", self.post_build_steps):
-            test_result = check_tests(self.test_cmd, self.project_dir)
+            test_result = check_tests(self.test_cmd, gate_dir)
             if not test_result.success:
                 logger.warning(
                     "Agent said FEATURE_BUILT but tests failed"
@@ -1026,7 +1056,7 @@ class BuildLoop:
         drift_ok = True
         if _validate_required_signals(build_result):
             drift_targets = extract_drift_targets(
-                build_result, self.project_dir
+                build_result, gate_dir
             )
             if self.parallel_validation:
                 self.drift_pairs.append(
@@ -1044,7 +1074,7 @@ class BuildLoop:
                 drift_result = check_drift(
                     drift_targets.spec_file,
                     drift_targets.source_files,
-                    self.project_dir,
+                    gate_dir,
                     model=self.drift_model or None,
                     max_retries=self.max_drift_retries,
                     drift_enabled=self.drift_check,
@@ -1067,29 +1097,29 @@ class BuildLoop:
         # Gate 5: Code review (optional, non-blocking for gate result)
         if should_run_step("code-review", self.post_build_steps):
             run_code_review(
-                self.project_dir,
+                gate_dir,
                 model=self.review_model or None,
                 test_cmd=self.test_cmd,
                 cost_log_path=self.cost_log_path,
             )
             # Re-validate after review
-            recheck = check_build(self.build_cmd, self.project_dir)
+            recheck = check_build(self.build_cmd, gate_dir)
             if not recheck.success:
                 logger.warning("Code review broke the build!")
             elif should_run_step("test", self.post_build_steps):
                 test_recheck = check_tests(
-                    self.test_cmd, self.project_dir
+                    self.test_cmd, gate_dir
                 )
                 if not test_recheck.success:
                     logger.warning("Code review broke tests!")
 
         # Gate 6: Dead exports (non-blocking)
         if should_run_step("dead-code", self.post_build_steps):
-            check_dead_exports(self.project_dir)
+            check_dead_exports(gate_dir)
 
         # Gate 7: Lint (non-blocking)
         if should_run_step("lint", self.post_build_steps):
-            check_lint(self.project_dir)
+            check_lint(gate_dir)
 
         return True
 
@@ -1158,18 +1188,14 @@ class BuildLoop:
                 )
                 continue
 
-            # Build in the worktree
-            prompt = (
-                f"Build the feature: {fn}\n\n"
-                "Instructions:\n"
-                f"1. Run /spec-first {fn} --full\n"
-                f"2. This is an independent build from {self.main_branch}\n"
-                "3. Create spec, write tests, implement, and commit\n"
-                "4. Regenerate mapping: ./scripts/generate-mapping.sh\n"
-                "5. Commit all changes\n\n"
-                "After completion, output exactly one of:\n"
-                f"FEATURE_BUILT: {fn}\n"
-                "BUILD_FAILED: {{reason}}\n"
+            # Build in the worktree — reuse the same prompt builder
+            # as the main loop (feature_id=0 since we only have names)
+            prompt = build_feature_prompt(
+                0,
+                fn,
+                worktree_path,
+                self.build_config,
+                mistake_tracker=self.mistake_tracker,
             )
 
             cmd_args = ["-p", "--dangerously-skip-permissions"]
@@ -1191,29 +1217,25 @@ class BuildLoop:
 
             duration = int(time.time()) - feature_start
 
-            if "FEATURE_BUILT" in build_output:
-                if check_working_tree_clean(
-                    worktree_path
-                ):
-                    self._record_build_result(
-                        fn, "built", model or "default",
-                        duration, branch_name,
-                        build_output=build_output,
+            if "FEATURE_BUILT" in build_output and self._run_post_build_gates(
+                build_output,
+                fn,
+                project_dir=worktree_path,
+            ):
+                self._record_build_result(
+                    fn, "built", model or "default",
+                    duration, branch_name,
+                    build_output=build_output,
+                )
+            else:
+                if "FEATURE_BUILT" not in build_output:
+                    logger.warning(
+                        "Independent build failed for: %s", fn
                     )
                 else:
                     logger.warning(
-                        "Independent build left uncommitted changes: %s",
-                        fn,
+                        "Independent build gates failed for: %s", fn
                     )
-                    self._record_build_result(
-                        fn, "failed", model or "default",
-                        duration, branch_name,
-                        build_output=build_output,
-                    )
-            else:
-                logger.warning(
-                    "Independent build failed for: %s", fn
-                )
                 self._record_build_result(
                     fn, "failed", model or "default",
                     duration, branch_name,
