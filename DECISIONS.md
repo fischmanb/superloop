@@ -447,3 +447,11 @@
 **Decision:** Do not fix `fcntl.flock()` Windows incompatibility in reliability.py. Defer indefinitely.
 **Why:** auto-sdd runs on Brian's Mac. Agents run on Mac. No Windows use case exists or is planned. Cross-platform locking is a yak-shave with zero near-term payoff.
 **Rejected:** Implementing platform-conditional locking now (speculative scope), using a cross-platform locking library (new dependency for no user).
+
+---
+
+## 2026-03-03 — Delineated BUILD PROGRESS blocks in build loop output
+
+**Decision:** Add a `_print_progress()` method to BuildLoop that emits clearly delineated `======` blocks at 5 phase transitions per feature: start, agent invocation, post-build gates, success, and failure. Each block shows features built/total, failures, elapsed time, current feature, phase, model, strategy, and branch.
+**Why:** Terminal output during builds had become too verbose to scan. Agent output, subprocess noise, gate checks, and logging all ran together with no visual anchors. Finding the current build status required scrolling through hundreds of lines. The `======` delineation and consistent field layout make progress blocks instantly findable — both visually when watching output and via grep (`grep "BUILD PROGRESS"`) when reviewing logs after the fact.
+**Rejected:** External progress file polled by a separate viewer (overengineered for the problem — the terminal is the primary interface), reducing existing logging verbosity (loses diagnostic value when debugging failures), a TUI/ncurses dashboard (dependency and complexity far beyond the need).
