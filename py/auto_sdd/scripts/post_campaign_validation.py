@@ -1,9 +1,10 @@
-"""Post-campaign validation orchestrator with Phases 0–3.
+"""Post-campaign validation orchestrator with Phases 0–4a.
 
 Boots a target project, validates it can start, discovers routes (Phase 1),
 generates acceptance criteria from specs (Phase 2a), runs gap detection
-(Phase 2b), and validates acceptance criteria via Playwright (Phase 3).
-Phases 4a–5 are stubs pending future milestones.
+(Phase 2b), validates acceptance criteria via Playwright (Phase 3), and
+builds a failure catalog from results (Phase 4a).
+Phases 4b–5 are stubs pending future milestones.
 
 Usage:
     python -m auto_sdd.scripts.post_campaign_validation
@@ -525,6 +526,25 @@ class Phase3Result:
         }
 
 
+class Phase4aResult:
+    """Structured result of Phase 4a (Failure Catalog)."""
+
+    def __init__(self) -> None:
+        self.status: str = "CATALOG_FAILED"
+        self.catalog: list[dict[str, Any]] = []
+        self.stats: dict[str, int] = {}
+        self.error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "catalog": self.catalog,
+            "stats": self.stats,
+            "error": self.error,
+            "timestamp": _now_iso(),
+        }
+
+
 # ── Phase 1 helpers ──────────────────────────────────────────────────────────
 
 
@@ -985,6 +1005,104 @@ def parse_playwright_output(raw_output: str) -> list[dict[str, Any]] | None:
             return None
 
     return results
+
+
+# ── Phase 4a helpers ─────────────────────────────────────────────────────
+
+
+def build_failure_catalog(
+    phase_3_results: list[dict[str, Any]],
+    phase_2_features: list[dict[str, Any]],
+    run_id: str,
+) -> dict[str, Any]:
+    """Build a structured failure catalog from Phase 3 results.
+
+    Pure Python — no agent call needed.  Collects all FAIL and BLOCKED
+    criteria from Phase 3, enriches them with Phase 2 metadata (feature
+    name, feature status, expected_outcome), and produces a catalog with
+    stats.
+
+    Same mechanical pattern as detect_coverage_gaps().
+    """
+    # Build lookup: criterion_id → {feature, feature_status, expected_outcome}
+    criterion_lookup: dict[str, dict[str, str]] = {}
+    for feat in phase_2_features:
+        feat_name = str(feat.get("feature", "unknown"))
+        feat_status = str(feat.get("status", "unknown"))
+        for criterion in feat.get("criteria", []):
+            if isinstance(criterion, dict):
+                cid = str(criterion.get("id", ""))
+                if cid:
+                    criterion_lookup[cid] = {
+                        "feature": feat_name,
+                        "feature_status": feat_status,
+                        "expected_outcome": str(
+                            criterion.get("expected_outcome", "")
+                        ),
+                    }
+
+    # Iterate Phase 3 results, collect failures and blocked
+    catalog: list[dict[str, Any]] = []
+    total_criteria = 0
+    passed = 0
+    failed = 0
+    blocked = 0
+    fail_seq = 0
+    block_seq = 0
+
+    for feature_result in phase_3_results:
+        for cr in feature_result.get("criteria_results", []):
+            if not isinstance(cr, dict):
+                continue
+            total_criteria += 1
+            status = str(cr.get("status", ""))
+            cid = str(cr.get("criterion_id", ""))
+
+            if status == "PASS":
+                passed += 1
+                continue
+
+            # Lookup Phase 2 metadata
+            meta = criterion_lookup.get(cid, {})
+
+            if status == "FAIL":
+                failed += 1
+                fail_seq += 1
+                entry_id = f"FAIL-{fail_seq:03d}"
+            else:
+                # BLOCKED or anything else
+                blocked += 1
+                block_seq += 1
+                entry_id = f"BLOCK-{block_seq:03d}"
+
+            # actual: prefer error field, fall back to description
+            error_val = str(cr.get("error", ""))
+            actual = error_val if error_val else str(cr.get("description", ""))
+
+            catalog.append({
+                "id": entry_id,
+                "criterion_id": cid,
+                "feature": meta.get("feature", "unknown"),
+                "feature_status": meta.get("feature_status", "unknown"),
+                "result": "FAIL" if status == "FAIL" else "BLOCKED",
+                "description": str(cr.get("description", "")),
+                "expected": meta.get("expected_outcome", ""),
+                "actual": actual,
+                "screenshot": str(cr.get("screenshot_path", "")),
+            })
+
+    stats = {
+        "total_criteria": total_criteria,
+        "passed": passed,
+        "failed": failed,
+        "blocked": blocked,
+    }
+
+    return {
+        "run_id": run_id,
+        "catalog": catalog,
+        "stats": stats,
+    }
 
 
 def run_phase_0(
@@ -1814,6 +1932,96 @@ class ValidationPipeline:
 
         return EXIT_ALL_PASS if any_ran else EXIT_PARTIAL
 
+    def _read_phase_3_results(self) -> dict[str, Any] | None:
+        """Read the latest validation-results.v*.json from Phase 3 output."""
+        phase3_dir = self.log_dir / "phase-3"
+        if not phase3_dir.exists():
+            return None
+        for p in sorted(
+            phase3_dir.glob("validation-results.v*.json"), reverse=True,
+        ):
+            data = _read_json(p)
+            if isinstance(data, dict):
+                return data
+        return None
+
+    def _run_phase_4a(self) -> Phase4aResult:
+        """Execute Phase 4a: Failure Catalog.
+
+        Collects FAIL/BLOCKED criteria from Phase 3, enriches with Phase 2
+        metadata, produces structured catalog.  Pure Python — no agent call.
+        """
+        phase = "4a"
+        result = Phase4aResult()
+
+        if self.resume and self.state.is_complete(phase):
+            logger.info("Phase 4a already complete — skipping (resume mode)")
+            result.status = "CATALOG_COMPLETE"
+            return result
+
+        logger.info("═══ Phase 4a: Failure Catalog ═══")
+
+        # Phase 3 must have completed
+        if not self.state.is_complete("3"):
+            result.error = "Phase 4a requires Phase 3 to be complete"
+            logger.error(result.error)
+            return result
+
+        # Read Phase 3 results
+        phase_3_data = self._read_phase_3_results()
+        if phase_3_data is None:
+            result.error = "Could not read Phase 3 results from disk"
+            logger.error(result.error)
+            return result
+
+        # Read Phase 2 acceptance criteria
+        phase_2_features = self._read_acceptance_criteria()
+        if phase_2_features is None:
+            result.error = "Could not read Phase 2 acceptance criteria"
+            logger.error(result.error)
+            return result
+
+        # Generate run_id
+        catalog_run_id = f"val-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+
+        # Build the catalog
+        catalog_data = build_failure_catalog(
+            phase_3_data.get("feature_results", []),
+            phase_2_features,
+            catalog_run_id,
+        )
+
+        # Write catalog to disk
+        catalog_json = json.dumps(catalog_data, indent=2) + "\n"
+        version = self.doc_registry._next_version("failure-catalog")
+        catalog_path = (
+            self.log_dir / "phase-4a" / f"failure-catalog.v{version}.json"
+        )
+        self.doc_registry.register(
+            doc_id="failure-catalog",
+            phase="4a",
+            path=catalog_path,
+            content=catalog_json,
+        )
+
+        # Log stats
+        stats = catalog_data.get("stats", {})
+        logger.info(
+            "Phase 4a complete: total=%d passed=%d failed=%d blocked=%d",
+            stats.get("total_criteria", 0),
+            stats.get("passed", 0),
+            stats.get("failed", 0),
+            stats.get("blocked", 0),
+        )
+
+        # Mark complete
+        self.state.mark_complete(phase)
+
+        result.status = "CATALOG_COMPLETE"
+        result.catalog = catalog_data.get("catalog", [])
+        result.stats = stats
+        return result
+
     def _run_phase_stub(self, phase: str) -> int:
         """Stub for phases 1–5: raises NotImplementedError."""
         phase_names: dict[str, str] = {
@@ -1865,8 +2073,14 @@ class ValidationPipeline:
         if exit_code != EXIT_ALL_PASS:
             return exit_code
 
-        # Phases 4a–5 (stubs)
-        for phase in PHASE_ORDER[6:]:
+        # Phase 4a (Failure Catalog — mechanical, no agent)
+        phase4a_result = self._run_phase_4a()
+        if phase4a_result.status != "CATALOG_COMPLETE":
+            logger.error("Phase 4a FAILED: %s", phase4a_result.error)
+            return EXIT_PARTIAL
+
+        # Phases 4b–5 (stubs)
+        for phase in PHASE_ORDER[7:]:
             if self.resume and self.state.is_complete(phase):
                 logger.info("Phase %s already complete — skipping", phase)
                 continue

@@ -1541,6 +1541,21 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - git diff --stat: Only 2 files modified (py/auto_sdd/scripts/post_campaign_validation.py, py/tests/test_post_campaign_validation.py)
 
 ---
+
+### Round: Phase 4a — Failure Catalog (2026-03-03)
+**Branch:** `claude/review-hard-constraints-Hqvqg`
+**Asked:** Implement Phase 4a (Failure Catalog) — mechanical Python, no agent call. Collect FAIL/BLOCKED criteria from Phase 3, enrich with Phase 2 metadata, produce structured catalog with stats.
+**Changed:**
+- `py/auto_sdd/scripts/post_campaign_validation.py`: Added `Phase4aResult` class, `build_failure_catalog()` pure Python function, `_read_phase_3_results()` method, `_run_phase_4a()` method. Updated `run()` to call Phase 4a instead of stub. Updated module docstring.
+- `py/tests/test_post_campaign_validation.py`: Added 8 tests: basic catalog, all-pass, multiple fails, enrichment verification, read Phase 3 results, Phase 4a requires Phase 3, all-pass still completes, run_id preservation.
+**NOT changed:** No other files. No agent prompts or parsers (Phase 4a is mechanical). No changes to Phases 0–3 or 4b–5 logic.
+**Verification:**
+- mypy --strict on both files: Success
+- Phase 4a tests (8 new): All passed
+- Full test suite (712 tests): All passed, 0 regressions
+- git diff --stat: Only 2 Python files modified
+
+---
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
