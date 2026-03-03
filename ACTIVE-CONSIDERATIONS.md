@@ -35,13 +35,16 @@ Ordered by efficiency gain per complexity added:
    - Gap: no learnings extraction, no cross-feature pattern analysis, no decision evaluation, no "what worked and why" synthesis. EVAL_NOTES is a one-line string, not structured.
    - Target: full learning loop — extract actionable patterns from build outcomes, synthesize across features, feed structured insights (not just mistake flags) back into prompts. Campaign summary should produce findings, not just counts.
    - Blocked on: migration completion + at least one real Python build campaign for data.
-5. **auto-QA (post-campaign validation pipeline)** — Multi-agent pipeline: boot app, Playwright browse, generate ACs from specs, test, catalog failures, RCA, fix through build gates. Seven phases (0-5, Phase 4 split into 4a+4b). Spec: `WIP/post-campaign-validation.md` (v0.3).
-   - **Phase 0 DONE**: Runtime bootstrap (package manager detection, production build gate, dev server start, health check, auth bootstrap). 41 tests. Merged at `b7feb18`.
-   - **Phase 1 DONE**: Discovery Agent (Playwright-based blind browse, structured inventory of routes/elements/nav graph). 8 new tests. Merged at `874cbd0`.
-   - **Phase 2a+2b DONE**: AC generation (spec-based criteria writer with FOUND/MISSING/PARTIAL/DRIFTED/UNEXPECTED classification) + mechanical gap detection (pure Python set operations, replaces second agent call). 11 new tests. Merged at `ca3d6f1`. Refactored at `df1d588` to eliminate second agent call.
-   - **Phase 3 DONE**: Playwright Validation (per-feature agent invocations, PASS/FAIL/BLOCKED per criterion, retry handling, screenshots on failure). 9 new tests. Merged at `891eda6`.
-   - **Phase 4a NEXT**: Failure Catalog — mechanical Python (no agent call). Agent prompt written, pending execution.
-   - Implementation in `py/auto_sdd/scripts/post_campaign_validation.py` (60 tests, mypy --strict clean).
+5. **auto-QA (post-campaign validation pipeline) — ALL PHASES COMPLETE.** Multi-agent pipeline: boot app, Playwright browse, generate ACs from specs, test, catalog failures, RCA, fix through build gates. Seven phases (0-5, Phase 4 split into 4a+4b). Spec: `WIP/post-campaign-validation.md` (v0.3).
+   - **Phase 0 DONE**: Runtime bootstrap. 41 tests. Merged at `b7feb18`.
+   - **Phase 1 DONE**: Discovery Agent. +8 tests. Merged at `874cbd0`.
+   - **Phase 2a+2b DONE**: AC generation + mechanical gap detection. +11 tests. Refactored at `df1d588`.
+   - **Phase 3 DONE**: Playwright Validation. +9 tests. Merged at `891eda6`.
+   - **Phase 4a DONE**: Failure Catalog (mechanical). +8 tests. Merged at `818b758`.
+   - **Phase 4b DONE**: Root Cause Analysis (agent-based). +9 tests. Merged at `f2d88cd`.
+   - **Phase 5 DONE**: Fix Agents (fix→gate→commit→revalidate→revert loop). +10 tests. Merged at `a7c1137`.
+   - Implementation: `py/auto_sdd/scripts/post_campaign_validation.py` (96 tests, mypy --strict clean).
+   - **NEXT: Live validation run against real project (cre-lease-tracker or stakd).**
 5. **Local model integration** — Replace cloud API with local LM Studio on Mac Studio. Reference: `archive/local-llm-pipeline/`. *Not started.*
 6. **Adaptive routing / parallelism** — Only if data from 1–3 justifies complexity. *Deprioritized.*
 

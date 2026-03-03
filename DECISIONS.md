@@ -463,3 +463,11 @@
 **Decision:** Replace Phase 2b's agent-based gap detection (which invoked `run_claude` with a separate prompt) with pure Python set operations (`detect_coverage_gaps()`). Merge UNEXPECTED element detection into the Phase 2a prompt so a single agent call handles all AC generation including unexpected elements.
 **Why:** The 2b agent received the exact same discovery inventory that 2a already had. Gap detection — "which routes have no criteria" and "which criteria target absent elements" — is a mechanical set comparison, not a reasoning task. Two agent calls meant two CLI startups, two full context loads, and 300-600s timeout windows. The mechanical version runs in microseconds with higher reliability (no parsing failures, no agent hallucination on structural comparison).
 **Rejected:** Keeping the second agent call with a shorter timeout (still slower and less reliable than set operations), deferring the refactor as tech debt (Brian flagged pipeline speed as a concern worth resolving now), making 2b fully optional/skippable (the gap report has value, just not as an agent task).
+
+---
+
+## 2026-03-03 — Auto-QA pipeline: all six phases implemented in single session
+
+**Decision:** Implement the full auto-QA pipeline (Phases 0–5) as a series of agent prompts dispatched sequentially, one phase per agent, rather than building a monolithic agent prompt or deferring phases to future sessions.
+**Why:** Each phase has a clean input/output contract. Sequential dispatch keeps agent scope small (14K–22K tokens per prompt), verification isolated per phase, and failures recoverable (any phase can be re-run independently). The mechanical-over-agent pattern (Phase 2b gap detection, Phase 4a failure catalog) emerged organically when Brian flagged the two-agent-call speed issue in Phase 2 — applied consistently thereafter for any structural comparison task.
+**Rejected:** Single mega-prompt covering multiple phases (token budget exceeded, verification impossible), deferring later phases to future sessions (momentum cost — the spec was complete and patterns were established), making Phase 4a agent-based (catalog construction is deterministic restructuring, not judgment).
