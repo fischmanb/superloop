@@ -123,3 +123,9 @@ Checkpoint step 4 must actively scan: agent completions (validate/contradict exi
 ## M-00087 — Checkpoint is the primary value-preservation mechanism
 **Source:** `HOW-I-WORK-WITH-GENERATIVE-AI.md`
 **Why core:** A session that treats checkpoint as administrative overhead will shortcut it — skipping learnings, methodology signals, and state flushes. This was observed directly: steps 2-6 skipped, 7 L-candidates and 3 M-candidates missed. The checkpoint isn't bookkeeping. It's how observations, patterns, corrections, and calibration data survive context boundaries. A session that produces good work but shortcuts the checkpoint is strictly worse than one that does less work but preserves it fully. Brian flagged both the missed steps AND the learnings deficit as equal-severity failures.
+
+---
+
+## L-00175 — Prefer mechanical validation over agent invocation for structural comparison
+**Source:** `architectural-rationale.md`
+**Why core:** Without this, a fresh session will default to dispatching an agent for every pipeline phase, including tasks that are pure data comparison. The distinction — agents for judgment, Python for structure — cuts phase execution time from minutes to milliseconds, eliminates parsing failure risk, and reduces API cost to zero for those phases. Applied in Phase 2b (gap detection) and Phase 4a (failure catalog). The heuristic: if you can write the function without an LLM, you should.

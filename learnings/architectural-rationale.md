@@ -132,3 +132,15 @@ Date: 2026-03-01
 Related: L-00128 (validates), L-00125 (related_to)
 
 "Structure catches its own gaps." The learnings graph referenced L-00048 but L-00048 didn't exist — the audit surfaced this mechanically, not through memory or vigilance. Design principle: failures should be visible to the structure itself, not dependent on an operator noticing. This is why /verify-learnings-counts works and prose rules don't (L-00128). A system that requires attention to detect failures will accumulate undetected failures proportional to the operator's distraction.
+
+---
+
+## L-00175
+Type: architectural_rationale
+Tags: performance, agent-invocation, mechanical-validation, pipeline-design
+Confidence: high
+Status: active
+Date: 2026-03-03
+Related: L-00001 (reinforces), L-00016 (extends), L-00028 (related_to)
+
+Prefer mechanical validation over agent invocation for structural comparison tasks. When the task is comparing two known data structures — routes vs criteria coverage, schema field validation, set membership, catalog construction from structured inputs — pure Python is faster (~0ms vs 300+s), cheaper ($0 vs API cost), and more reliable (deterministic vs parsing failures and hallucination risk) than a second agent call. Use agents for judgment tasks where ambiguous inputs require reasoning (classifying features as FOUND/MISSING/DRIFTED, grouping failures by root cause, writing fix code). Use mechanical code for comparison tasks where inputs and logic are fully determined. Applied in Phase 2b (gap detection refactored from agent to set operations) and Phase 4a (failure catalog is deterministic restructuring of Phase 3 output with Phase 2 metadata). The distinction: if you can write the function without an LLM, you should.

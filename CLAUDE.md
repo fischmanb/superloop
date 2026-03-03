@@ -33,6 +33,8 @@ This project uses a spec-driven development workflow. Follow these rules in all 
 
 **L-00143:** Scope sizing ritual before every prompt, response, or agent run. Count items, estimate tokens, check verification isolation, split or proceed.
 
+**L-00175:** Prefer mechanical Python over agent invocation for structural comparison. Agents for judgment (classification, RCA), code for structure (set operations, catalog construction). If you can write the function without an LLM, you should.
+
 ---
 
 ## Response & Prompt Scope Discipline (L-00143)

@@ -601,3 +601,16 @@ When a design decision is settled for one module (e.g., use `sh` instead of `bas
 - **Related:** L-00143 (related_to)
 
 Before adding support for languages, frameworks, or ecosystems not already present in the project, ask the operator what they actually target. Adding Go dead-export scanning or Rust import counting to a Python/TypeScript project is speculative scope expansion — it costs implementation time, increases test surface, and adds code that may never execute against real data. If the operator wants broad ecosystem support, they'll say so. Default to what exists. Derived from Round 48 where multilang eval patterns were added without confirming Brian's target stack.
+
+---
+
+## L-00176 — Prompt pipelining: write next prompt while current agent executes
+
+- **Type:** process_rule
+- **Tags:** throughput, prompt-engineering, pipeline-design
+- **Confidence:** high
+- **Status:** active
+- **Date:** 2026-03-03
+- **Related:** L-00175 (related_to), L-00143 (related_to)
+
+When dispatching sequential agent prompts, the next prompt can be written while the current agent executes — provided the current phase's output schema is deterministic. The prompt references the schema contract, not the actual output data. Preconditions in the next prompt verify the prior phase landed (grep-checks for expected classes/functions). Applied across Phases 4a→4b→5 of the auto-QA pipeline: Phase 4b prompt was written before 4a returned, Phase 5 before 4b returned. Zero rework from this approach. The prerequisite is that output schemas are fully specified before implementation — if the schema might change during implementation, pipelining creates rework risk. Saves significant wall-clock time in multi-phase pipelines.
