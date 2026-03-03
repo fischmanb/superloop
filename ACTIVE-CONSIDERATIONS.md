@@ -46,7 +46,8 @@ Correlates t-shirt sizes with actual metrics from `logs/build-summary-*.json`. W
 ### Other active items
 
 - **Learnings system — IMPLEMENTED (2026-03-01)**: 100+ graph-compliant entries (L-00001–L-00163, M-00001–M-00084), 13 curated in `core.md`, all inlined into CLAUDE.md. Schema standardization complete (5-digit IDs). Token calibration infrastructure: general-estimates.jsonl + 4 functions in lib/general-estimates.sh. Remaining: old-format conversion (Prompts 4/5), index.md stale.
-- **Recently completed (2026-03-03)**: Project-agnostic audit + 3 remediation rounds (47-49). Agent-based codebase summary, multilang eval patterns, infra portability. Main at `d2f8792`. All branches merged and cleaned.
+- **Recently completed (2026-03-03, evening)**: Hard constraints fixes — `run_claude()` cwd passthrough (agents ran in wrong dir), retry model fallback chain, summary model chain, configurable `AGENT_TIMEOUT` env var (default 1800s, was hardcoded 600). 619 tests passing. Main at `bf22cc0`.
+- **Recently completed (2026-03-03, earlier)**: Project-agnostic audit + 3 remediation rounds (47-49). Agent-based codebase summary, multilang eval patterns, infra portability. Main at `d2f8792`. All branches merged and cleaned.
 - **Recently completed (2026-03-01)**: Token estimation proxy replaced (L-00145/L-00148/L-00149), L-00143 wired into infrastructure (d1a1a72), core learnings inlined into CLAUDE.md (f7be98c), Dispatches 2–4 all landed. Queue empty.
 - **HOW-I-WORK corpus curation (2026-03-01)**: 74 entries converted to graph schema (M-00001–M-00074). Full corpus read identified 4+ coherent clusters ready for formalization. Action: curate entries into named sections, promote mature patterns to learnings.
 - **Knowledge graph for workflow continuity (2026-02-28)**: Personal workflow tool for cross-session context. *Design phase — no implementation started.*
