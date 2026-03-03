@@ -1427,6 +1427,31 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - Note: Verification step 3 (`grep 'agent_model or "default"'`) returns 2 matches because the new correct pattern (`self.build_model or self.agent_model or "default"`) contains the search substring. The old standalone `self.agent_model or "default"` pattern is gone — `build_model or` now precedes it in both locations.
 
 ---
+
+### Round N: Post-Campaign Validation Orchestrator + Phase 0 (branch: claude/apply-hard-constraints-N00Qs)
+
+**What was asked**: Build the post-campaign validation orchestrator skeleton and Phase 0 (Runtime Bootstrap) per `WIP/post-campaign-validation.md` Milestone 1. Two new files only.
+
+**What changed**:
+- `py/auto_sdd/scripts/post_campaign_validation.py` — New file (~500 lines):
+  - `ValidationPipeline` class: phase sequencing (0→1→2a→2b→3→3b→4a→4b→5), state persistence to `.sdd-state/validation-state.json`, document registry at `.sdd-state/validation-docs.json` with version increment/pruning/flush modes (auto/manual), atexit cleanup handler, CLI with `--resume`/`--flush`/`--flush-now`/`--flush-phase` args.
+  - Phase 0 (`run_phase_0`): package manager detection (pnpm>yarn>npm), production build gate, dev server start via Popen, port detection from stdout + common port fallback, health check with exponential backoff, optional QA auth bootstrap from seed script.
+  - Phases 1–5: stubs raising `NotImplementedError`.
+  - Exit codes: 0 (all pass), 1 (partial), 2 (runtime failed), 3 (infra failure).
+- `py/tests/test_post_campaign_validation.py` — New file (41 tests):
+  - Package manager detection (6 tests), dev command detection (7 tests), port parsing (7 tests), health check mock (3 tests), state persistence roundtrip (3 tests), document registry versioning + pruning (4 tests), resume skip (1 test), auth seed script detection (4 tests), manual flush mode (3 tests), cleanup (3 tests).
+- `Agents.md` — This entry.
+
+**What was NOT changed**: No existing files modified. No packages installed. No deletions.
+
+**Verification results**:
+- `mypy --strict` on implementation: Success, 0 errors
+- `mypy --strict --ignore-missing-imports` on tests: Success, 0 errors (pytest stub missing is pre-existing env issue, same as all other test files)
+- `pytest py/tests/test_post_campaign_validation.py -v`: 41 passed
+- `pytest py/tests/ --ignore=py/tests/test_comp_detail.py -q`: 676 passed (0 regressions, up from 635 in round before last)
+- `git diff --stat` after staging: Only 3 files (2 new Python + Agents.md)
+
+---
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
