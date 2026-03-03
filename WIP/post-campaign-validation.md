@@ -283,7 +283,7 @@ Every feature from the roadmap receives one of four statuses after comparing spe
 | **MISSING** | Feature is in the roadmap/specs but has no corresponding route, page section, or UI elements in discovery | Write criteria anyway — they become the test for "is this really missing or just hidden?" All criteria expected to FAIL or BLOCKED. |
 | **PARTIAL** | Route exists but only some spec'd behaviors/elements are present (e.g., page renders but half the controls are missing) | Write criteria for all spec'd behaviors. Mark which criteria target present vs absent elements. Expect mixed PASS/FAIL. |
 | **DRIFTED** | Feature exists in discovery but doesn't match spec (different route, different UI pattern, renamed elements, divergent behavior) | Write criteria per the spec's *intent*, not per discovery. If tests fail, that's signal of implementation divergence. Include a `drift_notes` field describing the observed vs expected difference. |
-| **UNEXPECTED** | Something exists in discovery that matches no spec at all | Handled by Phase 2b (gap detection), not 2a. |
+| **UNEXPECTED** | Something exists in discovery that matches no spec at all | Detected by 2a agent (included in single-pass prompt). Phase 2b mechanically verifies coverage gaps. |
 
 ### Phase 2a: Spec-Based AC Writer
 
@@ -343,15 +343,19 @@ Every feature from the roadmap receives one of four statuses after comparing spe
 }
 ```
 
-### Phase 2b: Gap Detection AC Writer (second pass)
+### Phase 2b: Mechanical Gap Detection (no agent call)
+
+**Implementation note (2026-03-03):** Originally spec'd as a second agent pass. Refactored to pure Python set operations (`detect_coverage_gaps()`). The 2b agent received the same discovery inventory that 2a already had, and gap detection is a structural comparison, not a reasoning task. UNEXPECTED element detection merged into the 2a prompt.
 
 **Inputs:**
-- Phase 2a output
+- Phase 2a output (feature list with criteria)
 - Discovery inventory
 
-**Instruction:** "Review the generated acceptance criteria against the discovery inventory. Identify any interactive elements or routes found during discovery that are NOT covered by any acceptance criterion — these are UNEXPECTED elements. Write additional criteria to cover those gaps. Also identify any criteria that reference UI elements not found in discovery — flag these as LIKELY_BROKEN."
+**Mechanical checks (pure Python):**
+1. Compare discovery routes against routes referenced in criteria → uncovered routes
+2. Flag criteria where `targets_present_element` is False → likely broken
 
-**Output:** Supplemental criteria appended to the Phase 2a output, plus a gap report.
+**Output:** Gap report with `uncovered_routes` and `likely_broken` lists.
 
 **Scope limit:** Total AC count should not exceed 10 per feature.
 
@@ -615,7 +619,7 @@ cd ~/auto-sdd && PROJECT_DIR=./stakd-v2 ./scripts/post-campaign-validation.sh --
 
 ### Milestone 3: AC Generation (Phase 2a + 2b)
 **Priority:** High — without criteria, there's nothing to test.
-**Scope:** Two agent prompts. Spec reader + discovery matcher. Discrepancy classification (FOUND/MISSING/PARTIAL/DRIFTED/UNEXPECTED).
+**Scope:** One agent prompt (2a: spec reader + discovery matcher + UNEXPECTED detection) + mechanical Python gap detection (2b). Discrepancy classification (FOUND/MISSING/PARTIAL/DRIFTED/UNEXPECTED).
 **Dependency:** Milestones 1 + 2.
 **Validation:** Human review of generated criteria. Do they make sense? Are they testable? Are discrepancy classifications accurate?
 **Estimated complexity:** Medium-Hard. The quality of generated AC and the accuracy of discrepancy classification determines the quality of everything downstream.
