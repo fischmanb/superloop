@@ -597,7 +597,7 @@ def parse_discovery_output(raw_output: str) -> dict[str, Any] | None:
 
 # ── Phase 2 helpers ──────────────────────────────────────────────────────────
 
-_VALID_STATUSES = {"FOUND", "MISSING", "PARTIAL", "DRIFTED"}
+_VALID_STATUSES = {"FOUND", "MISSING", "PARTIAL", "DRIFTED", "UNEXPECTED"}
 
 
 def build_ac_generation_prompt(
@@ -647,13 +647,20 @@ def build_ac_generation_prompt(
         "routes/elements. For MISSING features, write criteria based on spec "
         "alone. For DRIFTED features, write criteria per the spec's intent "
         "and include a drift_notes field.\n\n"
+        "Additionally, identify any routes or interactive elements in the "
+        "discovery inventory that do NOT correspond to any feature in the "
+        "roadmap/specs. Include these as entries with status 'UNEXPECTED'.\n\n"
+        "For each criterion, set targets_present_element to true if the "
+        "element/route exists in the discovery inventory, or false if the "
+        "criterion tests for something not found in discovery (these are "
+        "likely to fail or be blocked during validation).\n\n"
         "Output a JSON array (fenced with ``` markers) of feature objects "
         "using this exact schema:\n"
         "```json\n"
         "[\n"
         "  {\n"
         '    "feature": "Feature Name",\n'
-        '    "status": "FOUND|MISSING|PARTIAL|DRIFTED",\n'
+        '    "status": "FOUND|MISSING|PARTIAL|DRIFTED|UNEXPECTED",\n'
         '    "route": "/path",\n'
         '    "match_notes": "description of match quality",\n'
         '    "criteria": [\n'
@@ -672,61 +679,62 @@ def build_ac_generation_prompt(
     )
 
 
-def build_gap_detection_prompt(
-    phase_2a_output: list[dict[str, Any]],
+def detect_coverage_gaps(
+    features: list[dict[str, Any]],
     discovery_inventory: dict[str, Any],
-) -> str:
-    """Build the agent prompt for Phase 2b: Gap Detection AC Writer.
+) -> dict[str, Any]:
+    """Mechanically detect gaps between AC criteria and discovery inventory.
 
-    Instructs the agent to find routes/elements in discovery not covered by
-    any criterion (UNEXPECTED) and criteria referencing absent elements
-    (LIKELY_BROKEN).
+    Pure Python — no agent call needed.  Compares discovery routes against
+    criteria coverage and flags criteria targeting absent elements.
+
+    Returns a dict with 'uncovered_routes' and 'likely_broken' lists.
     """
-    criteria_json = json.dumps(phase_2a_output, indent=2)
-    discovery_json = json.dumps(discovery_inventory, indent=2)
+    # Collect all routes referenced in criteria
+    covered_routes: set[str] = set()
+    for feat in features:
+        route = feat.get("route")
+        if isinstance(route, str) and route:
+            covered_routes.add(route)
+        for criterion in feat.get("criteria", []):
+            if isinstance(criterion, dict):
+                for step in criterion.get("steps", []):
+                    if isinstance(step, str) and step.lower().startswith("navigate to "):
+                        # Extract route from "Navigate to /path"
+                        parts = step.split(maxsplit=2)
+                        if len(parts) >= 3:
+                            covered_routes.add(parts[2].strip())
 
-    return (
-        "You are a QA gap-detection agent. Review existing acceptance "
-        "criteria against a discovery inventory to find coverage gaps.\n\n"
-        "## Phase 2a Acceptance Criteria\n\n"
-        f"```json\n{criteria_json}\n```\n\n"
-        "## Discovery Inventory\n\n"
-        f"```json\n{discovery_json}\n```\n\n"
-        "## Instructions\n\n"
-        "1. Find routes or interactive elements in the discovery inventory "
-        "that are NOT covered by any acceptance criterion. Mark these as "
-        "UNEXPECTED and write supplemental criteria for them.\n"
-        "2. Find criteria that reference UI elements NOT found in the "
-        "discovery inventory. Flag these as LIKELY_BROKEN.\n"
-        "3. Total acceptance criteria per feature must not exceed 10 "
-        "(including the existing Phase 2a criteria).\n\n"
-        "Output a JSON object (fenced with ``` markers) with this schema:\n"
-        "```json\n"
-        "{\n"
-        '  "supplemental_criteria": [\n'
-        "    {\n"
-        '      "feature": "Feature Name or UNEXPECTED",\n'
-        '      "criteria": [\n'
-        "        {\n"
-        '          "id": "AC-GAP-001",\n'
-        '          "description": "...",\n'
-        '          "targets_present_element": true,\n'
-        '          "steps": ["..."],\n'
-        '          "expected_outcome": "..."\n'
-        "        }\n"
-        "      ]\n"
-        "    }\n"
-        "  ],\n"
-        '  "likely_broken": [\n'
-        "    {\n"
-        '      "criterion_id": "AC-003",\n'
-        '      "feature": "Feature Name",\n'
-        '      "reason": "Element not found in discovery"\n'
-        "    }\n"
-        "  ]\n"
-        "}\n"
-        "```\n"
-    )
+    # Collect all routes from discovery
+    discovered_routes: set[str] = set()
+    routes_found = discovery_inventory.get("routes_found", [])
+    if isinstance(routes_found, list):
+        for route_entry in routes_found:
+            if isinstance(route_entry, dict):
+                url = route_entry.get("url", "")
+                if isinstance(url, str) and url:
+                    discovered_routes.add(url)
+
+    # Uncovered routes: in discovery but not in any criterion
+    uncovered = sorted(discovered_routes - covered_routes)
+
+    # Likely broken: criteria where targets_present_element is False
+    likely_broken: list[dict[str, str]] = []
+    for feat in features:
+        feat_name = feat.get("feature", "unknown")
+        for criterion in feat.get("criteria", []):
+            if isinstance(criterion, dict):
+                if criterion.get("targets_present_element") is False:
+                    likely_broken.append({
+                        "criterion_id": str(criterion.get("id", "")),
+                        "feature": str(feat_name),
+                        "reason": "targets_present_element is False",
+                    })
+
+    return {
+        "uncovered_routes": uncovered,
+        "likely_broken": likely_broken,
+    }
 
 
 def parse_ac_output(raw_output: str) -> list[dict[str, Any]] | None:
@@ -788,56 +796,6 @@ def parse_ac_output(raw_output: str) -> list[dict[str, Any]] | None:
     return parsed
 
 
-def parse_gap_output(raw_output: str) -> dict[str, Any] | None:
-    """Extract and validate the gap report JSON from agent output.
-
-    Should contain 'supplemental_criteria' (list) and 'likely_broken' (list).
-    Returns None if parsing fails.
-    """
-    # Try fenced code block first
-    fence_pattern = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.DOTALL)
-    match = fence_pattern.search(raw_output)
-    candidate = match.group(1).strip() if match else None
-
-    parsed: dict[str, Any] | None = None
-
-    if candidate:
-        try:
-            obj = json.loads(candidate)
-            if isinstance(obj, dict):
-                parsed = obj
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Fallback: try to find a JSON object in the raw output
-    if parsed is None:
-        brace_start = raw_output.find("{")
-        if brace_start != -1:
-            depth = 0
-            for i in range(brace_start, len(raw_output)):
-                if raw_output[i] == "{":
-                    depth += 1
-                elif raw_output[i] == "}":
-                    depth -= 1
-                    if depth == 0:
-                        try:
-                            obj = json.loads(raw_output[brace_start : i + 1])
-                            if isinstance(obj, dict):
-                                parsed = obj
-                        except (json.JSONDecodeError, ValueError):
-                            pass
-                        break
-
-    if parsed is None:
-        return None
-
-    # Validate required keys
-    if not isinstance(parsed.get("supplemental_criteria"), list):
-        return None
-    if not isinstance(parsed.get("likely_broken"), list):
-        return None
-
-    return parsed
 
 
 def run_phase_0(
@@ -1379,12 +1337,12 @@ class ValidationPipeline:
     def _run_phase_2b(
         self, phase_2a_features: list[dict[str, Any]],
     ) -> Phase2Result:
-        """Execute Phase 2b: Gap Detection AC Writer.
+        """Execute Phase 2b: Mechanical Gap Detection.
 
-        Takes Phase 2a output and produces supplemental criteria + gap report.
-        Phase 2b failure is non-fatal — the Phase 2a output is preserved.
+        Uses pure Python set operations to find uncovered routes and
+        likely-broken criteria.  No agent call — instant execution.
         """
-        logger.info("═══ Phase 2b: Gap Detection AC Writer ═══")
+        logger.info("═══ Phase 2b: Mechanical Gap Detection ═══")
 
         result = Phase2Result()
         result.features = phase_2a_features
@@ -1400,91 +1358,32 @@ class ValidationPipeline:
             self.state.mark_complete("2b")
             return result
 
-        # Build prompt
-        prompt = build_gap_detection_prompt(phase_2a_features, discovery)
-
-        # Invoke the gap detection agent
-        try:
-            claude_result = run_claude(
-                ["-p", "--dangerously-skip-permissions", prompt],
-                cwd=self.project_dir,
-                timeout=300,
-            )
-        except (AgentTimeoutError, ClaudeOutputError) as exc:
-            logger.warning("Phase 2b agent failed (non-fatal): %s", exc)
-            result.status = "AC_GENERATION_COMPLETE"
-            self.state.mark_complete("2b")
-            return result
-
-        # Parse gap output
-        gap_report = parse_gap_output(claude_result.output)
-        if gap_report is None:
-            logger.warning(
-                "Failed to parse gap output (non-fatal). "
-                "Raw output (first 500 chars): %s",
-                claude_result.output[:500],
-            )
-            result.status = "AC_GENERATION_COMPLETE"
-            self.state.mark_complete("2b")
-            return result
-
-        # Merge supplemental criteria into features (respecting 10-per-feature cap)
+        # Run mechanical gap detection
+        gap_report = detect_coverage_gaps(phase_2a_features, discovery)
         result.gap_report = gap_report
-        supplemental = gap_report.get("supplemental_criteria", [])
-        if isinstance(supplemental, list):
-            for supplement in supplemental:
-                if not isinstance(supplement, dict):
-                    continue
-                feat_name = supplement.get("feature", "")
-                new_criteria = supplement.get("criteria", [])
-                if not isinstance(new_criteria, list):
-                    continue
 
-                # Find matching feature or skip
-                matched = False
-                for feat in result.features:
-                    if feat.get("feature") == feat_name:
-                        existing = feat.get("criteria", [])
-                        remaining_cap = 10 - len(existing)
-                        if remaining_cap > 0:
-                            feat["criteria"] = existing + new_criteria[:remaining_cap]
-                        matched = True
-                        break
-
-                # If no matching feature, add as new entry (UNEXPECTED)
-                if not matched and new_criteria:
-                    result.features.append({
-                        "feature": feat_name,
-                        "status": "FOUND",
-                        "criteria": new_criteria[:10],
-                    })
-
-        # Recalculate total
-        result.total_criteria_count = sum(
-            len(f.get("criteria", [])) for f in result.features
+        uncovered = gap_report.get("uncovered_routes", [])
+        likely_broken = gap_report.get("likely_broken", [])
+        logger.info(
+            "Gap detection: %d uncovered routes, %d likely-broken criteria",
+            len(uncovered),
+            len(likely_broken),
         )
 
-        # Write updated criteria with gaps
-        merged_json = json.dumps(result.features, indent=2) + "\n"
-        version = self.doc_registry._next_version("acceptance-criteria-with-gaps")
-        merged_path = (
-            self.log_dir
-            / "phase-2b"
-            / f"acceptance-criteria-with-gaps.v{version}.json"
-        )
+        # Write gap report
+        gap_json = json.dumps(gap_report, indent=2) + "\n"
+        version = self.doc_registry._next_version("gap-report")
+        gap_path = self.log_dir / "phase-2b" / f"gap-report.v{version}.json"
         self.doc_registry.register(
-            doc_id="acceptance-criteria-with-gaps",
+            doc_id="gap-report",
             phase="2b",
-            path=merged_path,
-            content=merged_json,
+            path=gap_path,
+            content=gap_json,
         )
 
         result.status = "AC_GENERATION_COMPLETE"
         self.state.mark_complete("2b")
-        logger.info(
-            "Phase 2b complete: %d total criteria after gap merge",
-            result.total_criteria_count,
-        )
+        logger.info("Phase 2b complete: %d total criteria", result.total_criteria_count)
         return result
 
     def _run_phase_2(self) -> Phase2Result:

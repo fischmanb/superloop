@@ -13,7 +13,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from auto_sdd.lib.claude_wrapper import ClaudeOutputError
 from auto_sdd.scripts.post_campaign_validation import (
     EXIT_ALL_PASS,
     EXIT_INFRA_FAILURE,
@@ -25,13 +24,12 @@ from auto_sdd.scripts.post_campaign_validation import (
     _find_seed_script,
     build_ac_generation_prompt,
     build_discovery_prompt,
-    build_gap_detection_prompt,
+    detect_coverage_gaps,
     detect_dev_command,
     detect_package_manager,
     health_check,
     parse_ac_output,
     parse_discovery_output,
-    parse_gap_output,
     parse_port_from_output,
 )
 
@@ -614,35 +612,76 @@ class TestBuildACGenerationPrompt:
         assert "MISSING" in prompt
         assert "PARTIAL" in prompt
         assert "DRIFTED" in prompt
+        assert "UNEXPECTED" in prompt
         # Mentions the 10-criteria cap
         assert "10" in prompt
         lower = prompt.lower()
         assert "no more than 10" in lower or "max" in lower
 
 
-class TestBuildGapDetectionPrompt:
-    def test_build_gap_detection_prompt_content(self) -> None:
-        phase_2a: list[dict[str, Any]] = [
+class TestDetectCoverageGaps:
+    def test_detects_uncovered_routes(self) -> None:
+        features: list[dict[str, Any]] = [
             {
                 "feature": "Auth",
                 "status": "FOUND",
-                "criteria": [{"id": "AC-001", "description": "Login works"}],
+                "route": "/login",
+                "criteria": [
+                    {
+                        "id": "AC-001",
+                        "description": "Login works",
+                        "targets_present_element": True,
+                        "steps": ["Navigate to /login", "Enter creds"],
+                        "expected_outcome": "Logged in",
+                    }
+                ],
             }
         ]
         discovery: dict[str, Any] = {
-            "routes_found": [{"url": "/login"}, {"url": "/admin"}],
-            "navigation_graph": {"/": ["/login", "/admin"]},
+            "routes_found": [
+                {"url": "/login"},
+                {"url": "/admin"},
+                {"url": "/settings"},
+            ],
+            "navigation_graph": {},
         }
-        prompt = build_gap_detection_prompt(phase_2a, discovery)
+        result = detect_coverage_gaps(features, discovery)
+        assert "/admin" in result["uncovered_routes"]
+        assert "/settings" in result["uncovered_routes"]
+        assert "/login" not in result["uncovered_routes"]
 
-        # Contains the criteria
-        assert "AC-001" in prompt
-        assert "Login works" in prompt
-        # Contains discovery data
-        assert "/admin" in prompt
-        # Mentions UNEXPECTED and LIKELY_BROKEN
-        assert "UNEXPECTED" in prompt
-        assert "LIKELY_BROKEN" in prompt
+    def test_detects_likely_broken(self) -> None:
+        features: list[dict[str, Any]] = [
+            {
+                "feature": "Settings",
+                "status": "MISSING",
+                "criteria": [
+                    {
+                        "id": "AC-002",
+                        "targets_present_element": False,
+                        "steps": ["Navigate to /settings"],
+                        "expected_outcome": "Page loads",
+                    }
+                ],
+            }
+        ]
+        discovery: dict[str, Any] = {
+            "routes_found": [],
+            "navigation_graph": {},
+        }
+        result = detect_coverage_gaps(features, discovery)
+        assert len(result["likely_broken"]) == 1
+        assert result["likely_broken"][0]["criterion_id"] == "AC-002"
+
+    def test_empty_discovery(self) -> None:
+        features: list[dict[str, Any]] = []
+        discovery: dict[str, Any] = {
+            "routes_found": [],
+            "navigation_graph": {},
+        }
+        result = detect_coverage_gaps(features, discovery)
+        assert result["uncovered_routes"] == []
+        assert result["likely_broken"] == []
 
 
 class TestParseACOutput:
@@ -697,36 +736,6 @@ class TestParseACOutput:
         assert result is None
 
 
-class TestParseGapOutput:
-    def test_parse_gap_output_valid(self) -> None:
-        raw = (
-            "```json\n"
-            "{\n"
-            '  "supplemental_criteria": [\n'
-            "    {\n"
-            '      "feature": "UNEXPECTED",\n'
-            '      "criteria": [{"id": "AC-GAP-001"}]\n'
-            "    }\n"
-            "  ],\n"
-            '  "likely_broken": [\n'
-            "    {\n"
-            '      "criterion_id": "AC-003",\n'
-            '      "feature": "Auth",\n'
-            '      "reason": "Element not found"\n'
-            "    }\n"
-            "  ]\n"
-            "}\n"
-            "```\n"
-        )
-        result = parse_gap_output(raw)
-        assert result is not None
-        assert len(result["supplemental_criteria"]) == 1
-        assert len(result["likely_broken"]) == 1
-
-    def test_parse_gap_output_invalid(self) -> None:
-        raw = "This is garbage output with no JSON at all."
-        result = parse_gap_output(raw)
-        assert result is None
 
 
 class TestLoadSpecs:
@@ -786,11 +795,13 @@ class TestPhase2RequiresPhase1:
         mock_run_claude.assert_not_called()
 
 
-class TestPhase2bFailureNonFatal:
+class TestPhase2SingleAgentCall:
     @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
-    def test_phase_2b_failure_non_fatal(
+    def test_phase_2_calls_agent_once(
         self, mock_run_claude: MagicMock, tmp_project: Path,
     ) -> None:
+        """Phase 2 should call run_claude exactly once (2a only).
+        Phase 2b uses mechanical gap detection, not an agent."""
         pipeline = ValidationPipeline(
             project_dir=tmp_project,
             flush_mode="auto",
@@ -808,8 +819,8 @@ class TestPhase2bFailureNonFatal:
         phase1_dir.mkdir(parents=True, exist_ok=True)
         discovery_data = {
             "status": "DISCOVERY_COMPLETE",
-            "routes_found": [{"url": "/"}],
-            "navigation_graph": {"/": []},
+            "routes_found": [{"url": "/"}, {"url": "/about"}],
+            "navigation_graph": {"/": ["/about"]},
             "global_issues": [],
             "unreachable_dead_ends": [],
         }
@@ -837,18 +848,17 @@ class TestPhase2bFailureNonFatal:
 
         mock_2a_result = MagicMock()
         mock_2a_result.output = f"```json\n{valid_ac}\n```"
-
-        # Phase 2b agent raises ClaudeOutputError
-        mock_run_claude.side_effect = [
-            mock_2a_result,
-            ClaudeOutputError("agent failed"),
-        ]
+        mock_run_claude.return_value = mock_2a_result
 
         result = pipeline._run_phase_2()
 
-        # Phase 2a output should be preserved
+        # Phase 2a output preserved
         assert result.status == "AC_GENERATION_COMPLETE"
         assert len(result.features) == 1
         assert result.features[0]["feature"] == "Home"
-        # run_claude should have been called twice (2a + 2b)
-        assert mock_run_claude.call_count == 2
+        # run_claude called exactly ONCE (2a only, not 2b)
+        assert mock_run_claude.call_count == 1
+        # Gap report should exist (mechanical detection ran)
+        assert result.gap_report is not None
+        # /about is uncovered (only / was in criteria)
+        assert "/about" in result.gap_report.get("uncovered_routes", [])
