@@ -1,79 +1,20 @@
-# CONVERSION CHANGELOG (from lib/codebase-summary.sh)
-# - _gcs_append() inlined: bash nested function with closure over `output`,
-#   `total_lines`, `truncated`. In Python, replaced by a _SummaryBuilder class
-#   that encapsulates the same state.
-# - Component search uses pathlib glob instead of `find`. Sort is by string
-#   comparison on relative path (matching bash `find ... | sort`).
-# - Type export extraction uses re instead of grep+awk. The regex faithfully
-#   reproduces the bash pattern: `export (type|interface) <Name>`.
-# - Import graph extraction uses re instead of grep -oE. Same regex pattern.
-# - Learnings section iterates sorted *.md files (bash glob order is
-#   locale-dependent; Python sorted() is deterministic).
-# - project_dir is Path, not str. max_lines is int, not str.
-# - Raises ValueError for missing/non-directory project_dir instead of
-#   returning exit code 1 + stderr message. This follows conventions.md
-#   guidance: "Raise specific exceptions, never bare Exception."
-
 """Generate a concise codebase summary for build agent prompts.
 
+Uses a lightweight Claude agent to analyze the project's file tree and
+produce a structural summary.  Falls back to an empty string on any
+failure so the build loop is never blocked.
+
 Public API:
-    generate_codebase_summary(project_dir, max_lines=200) -> str
+    generate_codebase_summary(project_dir) -> str
 """
 
 from __future__ import annotations
 
 import logging
-import re
+import subprocess
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-
-
-class _SummaryBuilder:
-    """Accumulates output lines, respecting a max_lines cap.
-
-    Mirrors the bash _gcs_append() closure pattern: tracks total lines
-    emitted and stops appending once the cap is hit, inserting a
-    truncation notice instead.
-    """
-
-    def __init__(self, max_lines: int) -> None:
-        self._max_lines = max_lines
-        self._lines: list[str] = []
-        self._total: int = 0
-        self._truncated: bool = False
-
-    def append(self, line: str) -> None:
-        """Append a single line, respecting the max_lines cap."""
-        if self._truncated:
-            return
-        self._total += 1
-        if self._total > self._max_lines:
-            self._truncated = True
-            self._lines.append(f"[Summary truncated at {self._max_lines} lines]")
-            return
-        self._lines.append(line)
-
-    @property
-    def truncated(self) -> bool:
-        return self._truncated
-
-    def build(self) -> str:
-        """Return accumulated output as a single string with trailing newlines."""
-        # Each line gets a trailing newline, matching bash's printf '%s' on
-        # output that was built with newline-terminated concatenation.
-        return "".join(line + "\n" for line in self._lines)
-
-
-# Regex for extracting `export type Name` or `export interface Name`
-_TYPE_EXPORT_RE = re.compile(
-    r"export\s+(?:type|interface)\s+([A-Za-z_]\w*)"
-)
-
-# Regex for extracting local relative imports: from './' or from '../'
-_LOCAL_IMPORT_RE = re.compile(
-    r"""from\s+['"](\.\./[^'"]*|\.\/[^'"]*)['"]\s*"""
-)
 
 
 _EXCLUDED_DIRS: frozenset[str] = frozenset({
@@ -81,10 +22,39 @@ _EXCLUDED_DIRS: frozenset[str] = frozenset({
     "__pycache__", "target", ".build-worktrees", "venv", ".venv",
 })
 
+_FILE_TREE_CAP: int = 500
 
-def _walk_files(project_dir: Path, extensions: tuple[str, ...]) -> list[Path]:
-    """Walk *project_dir* collecting files matching *extensions*, skipping excluded dirs."""
-    results: list[Path] = []
+_AGENT_PROMPT_TEMPLATE: str = """\
+You are a codebase analyst.  Below is the file tree of a software project.
+Produce a structured summary covering:
+
+1. **Key modules / entry points** — the main files that drive the application
+2. **Public types and interfaces** — important data structures, API contracts
+3. **Import / dependency relationships** — how modules connect to each other
+4. **Architectural patterns** — framework usage, layering, notable conventions
+
+Constraints:
+- Output no more than 100 lines.
+- Use compact markdown (##, bullets, short descriptions).
+- Work from the file tree below.  Read only the files you need to understand
+  the structure — do not read every file.
+- Do NOT include language-specific instructions.  Identify the language(s)
+  from the file extensions and adapt accordingly.
+
+## File Tree
+
+```
+{file_tree}
+```
+"""
+
+
+def _generate_file_tree(project_dir: Path) -> str:
+    """Walk *project_dir* and return a newline-separated listing of relative paths.
+
+    Respects ``_EXCLUDED_DIRS`` and caps output at ``_FILE_TREE_CAP`` files.
+    """
+    paths: list[str] = []
     stack: list[Path] = [project_dir]
     while stack:
         current = stack.pop()
@@ -96,235 +66,128 @@ def _walk_files(project_dir: Path, extensions: tuple[str, ...]) -> list[Path]:
             if entry.is_dir():
                 if entry.name not in _EXCLUDED_DIRS:
                     stack.append(entry)
-            elif entry.is_file() and entry.suffix in extensions:
-                results.append(entry)
-    results.sort(key=lambda p: str(p.relative_to(project_dir)))
-    return results
+            elif entry.is_file():
+                if len(paths) >= _FILE_TREE_CAP:
+                    paths.append(f"... (truncated at {_FILE_TREE_CAP} files)")
+                    return "\n".join(paths)
+                paths.append(str(entry.relative_to(project_dir)))
+    paths.sort()
+    return "\n".join(paths)
 
 
-def _find_component_files(project_dir: Path) -> list[Path]:
-    """Find .tsx and .jsx files across the entire project, sorted by relative path."""
-    return _walk_files(project_dir, (".tsx", ".jsx"))
-
-
-def _has_export_default(filepath: Path) -> bool:
-    """Check if a file contains 'export default'."""
+def _get_tree_hash(project_dir: Path) -> str | None:
+    """Return the git tree hash for *project_dir*, or ``None`` if not a git repo."""
     try:
-        content = filepath.read_text(encoding="utf-8", errors="replace")
-        return "export default" in content
-    except OSError:
-        return False
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD^{tree}"],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return None
 
 
-def _build_component_registry(
-    builder: _SummaryBuilder,
-    project_dir: Path,
-    component_files: list[Path],
-) -> None:
-    """Section 1: Component Registry."""
-    component_cap = 50
-
-    builder.append("## Component Registry")
-    builder.append("")
-
-    if not component_files:
-        builder.append("No .tsx/.jsx files found.")
-    else:
-        total_components = len(component_files)
-        displayed = 0
-        for filepath in component_files:
-            if displayed >= component_cap:
-                remaining = total_components - component_cap
-                builder.append(
-                    f"... and {remaining} more components (truncated at {component_cap})"
-                )
-                break
-            relpath = filepath.relative_to(project_dir)
-            has_default = "yes" if _has_export_default(filepath) else "no"
-            builder.append(f"  {relpath}  (export default: {has_default})")
-            displayed += 1
-
-    builder.append("")
+def _cache_dir(project_dir: Path) -> Path:
+    return project_dir / ".auto-sdd-cache"
 
 
-def _find_type_exports(
-    project_dir: Path,
-) -> list[tuple[str, str]]:
-    """Find type/interface exports in .ts and .tsx files across the project.
+def _cache_path(project_dir: Path, tree_hash: str) -> Path:
+    return _cache_dir(project_dir) / f"codebase-summary-{tree_hash}.md"
 
-    Returns list of (relative_path, type_name) tuples.
-    """
-    results: list[tuple[str, str]] = []
-    for filepath in _walk_files(project_dir, (".ts", ".tsx")):
+
+def _read_cache(project_dir: Path, tree_hash: str) -> str | None:
+    """Return cached summary if it exists, otherwise ``None``."""
+    path = _cache_path(project_dir, tree_hash)
+    if path.is_file():
         try:
-            content = filepath.read_text(
-                encoding="utf-8", errors="replace"
-            )
+            return path.read_text(encoding="utf-8")
         except OSError:
-            continue
-        for match in _TYPE_EXPORT_RE.finditer(content):
-            relpath = str(filepath.relative_to(project_dir))
-            results.append((relpath, match.group(1)))
-    return results
+            pass
+    return None
 
 
-def _build_type_exports(
-    builder: _SummaryBuilder,
-    project_dir: Path,
-) -> None:
-    """Section 2: Type Exports."""
-    type_cap = 50
-
-    builder.append("## Type Exports")
-    builder.append("")
-
-    type_entries = _find_type_exports(project_dir)
-
-    if not type_entries:
-        builder.append("No type/interface exports found.")
-    else:
-        total_types = len(type_entries)
-        displayed = 0
-        for relpath, type_name in type_entries:
-            if displayed >= type_cap:
-                remaining = total_types - type_cap
-                builder.append(
-                    f"... and {remaining} more type exports (truncated at {type_cap})"
-                )
-                break
-            builder.append(f"  {relpath}: {type_name}")
-            displayed += 1
-
-    builder.append("")
+def _write_cache(project_dir: Path, tree_hash: str, content: str) -> None:
+    """Write *content* to the cache and ensure a ``.gitignore`` exists."""
+    cache = _cache_dir(project_dir)
+    cache.mkdir(parents=True, exist_ok=True)
+    gitignore = cache / ".gitignore"
+    if not gitignore.exists():
+        gitignore.write_text("*\n")
+    _cache_path(project_dir, tree_hash).write_text(content, encoding="utf-8")
 
 
-def _extract_local_imports(filepath: Path) -> list[str]:
-    """Extract local relative import paths from a file."""
-    try:
-        content = filepath.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return []
-    return _LOCAL_IMPORT_RE.findall(content)
+def _call_agent(project_dir: Path, file_tree: str) -> str:
+    """Invoke a lightweight Claude agent to produce a codebase summary.
+
+    Raises on any failure — caller is responsible for fallback.
+    """
+    from auto_sdd.lib.claude_wrapper import run_claude
+
+    prompt = _AGENT_PROMPT_TEMPLATE.format(file_tree=file_tree)
+    result = run_claude(
+        ["-p", "--dangerously-skip-permissions", prompt],
+        timeout=120,
+    )
+    return result.output
 
 
-def _build_import_graph(
-    builder: _SummaryBuilder,
-    project_dir: Path,
-    component_files: list[Path],
-) -> None:
-    """Section 3: Import Graph (top-level only)."""
-    import_cap = 80
-    import_count = 0
-    has_imports = False
+def _read_recent_learnings(project_dir: Path) -> str:
+    """Read recent learnings from ``.specs/learnings/`` and return as text.
 
-    builder.append("## Import Graph")
-    builder.append("")
-
-    for filepath in component_files:
-        if import_count >= import_cap:
-            builder.append(
-                f"... (import graph truncated at {import_cap} entries)"
-            )
-            break
-
-        relpath = filepath.relative_to(project_dir)
-        imports = _extract_local_imports(filepath)
-
-        for import_path in imports:
-            if import_count >= import_cap:
-                builder.append(
-                    f"... (import graph truncated at {import_cap} entries)"
-                )
-                break
-            builder.append(f"  {relpath} → {import_path}")
-            import_count += 1
-            has_imports = True
-
-        # Break outer loop if inner hit the cap
-        if import_count >= import_cap:
-            break
-
-    if not has_imports:
-        builder.append("No local imports found.")
-
-    builder.append("")
-
-
-def _build_recent_learnings(
-    builder: _SummaryBuilder,
-    project_dir: Path,
-) -> None:
-    """Section 4: Recent Learnings."""
-    learnings_cap = 40
+    Returns an empty string when the directory is missing or contains no
+    non-empty markdown files.
+    """
     learnings_dir = project_dir / ".specs" / "learnings"
-
-    builder.append("## Recent Learnings")
-    builder.append("")
-
     if not learnings_dir.is_dir():
-        builder.append("No learnings directory found.")
-        return
+        return ""
 
-    # Gather content from *.md files (sorted for determinism)
     md_files = sorted(learnings_dir.glob("*.md"))
-    learnings_lines: list[str] = []
-    learnings_found = False
+    lines: list[str] = []
+    learnings_cap = 40
 
     for md_file in md_files:
         if not md_file.is_file():
             continue
-        # Skip empty files
         if md_file.stat().st_size == 0:
             continue
-        learnings_found = True
-        basename = md_file.name
-        learnings_lines.append(f"### {basename}")
         try:
             content = md_file.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        # Split content into lines (preserving empty lines)
-        for line in content.split("\n"):
-            learnings_lines.append(line)
+        lines.append(f"### {md_file.name}")
+        lines.extend(content.split("\n"))
 
-    if not learnings_found:
-        builder.append("No learnings files found.")
-        return
+    if not lines:
+        return ""
 
-    line_count = 0
-    for lline in learnings_lines:
-        if line_count >= learnings_cap:
-            builder.append(
-                f"... (learnings truncated at {learnings_cap} lines)"
-            )
-            break
-        builder.append(lline)
-        line_count += 1
+    capped = lines[:learnings_cap]
+    if len(lines) > learnings_cap:
+        capped.append(f"... (learnings truncated at {learnings_cap} lines)")
+
+    return "\n".join(["## Recent Learnings", "", *capped, ""])
 
 
-def generate_codebase_summary(
-    project_dir: Path,
-    max_lines: int = 200,
-) -> str:
-    """Generate a structured plain-text codebase summary.
+def generate_codebase_summary(project_dir: Path) -> str:
+    """Generate a structured codebase summary using a Claude agent.
 
-    Scans the project directory for components, type exports, import
-    relationships, and learnings. Returns a multi-section summary string
-    suitable for inclusion in build agent prompts.
+    The summary is cached by git tree hash so repeated calls for the
+    same tree state are free.  If the agent call fails for any reason
+    the function returns an empty string — the build loop must never
+    crash because of summary generation.
 
     Args:
         project_dir: Absolute path to the project being scanned.
-        max_lines: Cap on total output lines (default 200).
 
     Returns:
-        Structured plain-text summary with four sections:
-          ## Component Registry
-          ## Type Exports
-          ## Import Graph
-          ## Recent Learnings
+        Structured plain-text summary, or empty string on failure.
 
     Raises:
-        ValueError: If project_dir does not exist or is not a directory.
+        ValueError: If *project_dir* does not exist or is not a directory.
     """
     if not project_dir.exists():
         raise ValueError(
@@ -335,25 +198,41 @@ def generate_codebase_summary(
             f"generate_codebase_summary: not a directory: {project_dir}"
         )
 
-    logger.info("Generating codebase summary for %s (max_lines=%d)", project_dir, max_lines)
+    logger.info("Generating codebase summary for %s", project_dir)
 
-    builder = _SummaryBuilder(max_lines)
+    # 1. Generate file tree
+    file_tree = _generate_file_tree(project_dir)
 
-    # Find component files once (used by sections 1 and 3)
-    component_files = _find_component_files(project_dir)
+    # 2. Check cache
+    tree_hash = _get_tree_hash(project_dir)
+    if tree_hash is not None:
+        cached = _read_cache(project_dir, tree_hash)
+        if cached is not None:
+            logger.info("Cache hit for tree hash %s", tree_hash)
+            learnings = _read_recent_learnings(project_dir)
+            return cached + "\n" + learnings if learnings else cached
 
-    # Section 1: Component Registry
-    _build_component_registry(builder, project_dir, component_files)
+    # 3. Call agent
+    agent_summary = ""
+    try:
+        agent_summary = _call_agent(project_dir, file_tree)
+    except Exception:
+        logger.warning(
+            "Agent call failed; returning empty summary", exc_info=True
+        )
 
-    # Section 2: Type Exports
-    _build_type_exports(builder, project_dir)
+    # 4. Cache result (only if we got a tree hash and non-empty output)
+    if tree_hash is not None and agent_summary:
+        try:
+            _write_cache(project_dir, tree_hash, agent_summary)
+            logger.info("Cached summary for tree hash %s", tree_hash)
+        except OSError:
+            logger.warning("Failed to write cache", exc_info=True)
 
-    # Section 3: Import Graph
-    _build_import_graph(builder, project_dir, component_files)
-
-    # Section 4: Recent Learnings
-    _build_recent_learnings(builder, project_dir)
-
-    result = builder.build()
-    logger.info("Codebase summary generated: %d lines (truncated=%s)", builder._total, builder.truncated)
-    return result
+    # 5. Append learnings
+    learnings = _read_recent_learnings(project_dir)
+    if learnings and agent_summary:
+        return agent_summary + "\n" + learnings
+    if learnings:
+        return learnings
+    return agent_summary

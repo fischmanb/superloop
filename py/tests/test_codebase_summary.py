@@ -1,236 +1,395 @@
 """Tests for auto_sdd.lib.codebase_summary.
 
-Mirrors the bash test suite in tests/test-codebase-summary.sh (23 assertions)
-with equivalent Python coverage using pytest.
+Covers the agent-generated summary pipeline: file tree generation,
+caching, agent invocation (mocked), fallback on failure, and learnings
+integration.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from auto_sdd.lib.codebase_summary import (
-    _find_component_files,
-    _find_type_exports,
+    _FILE_TREE_CAP,
+    _generate_file_tree,
+    _read_recent_learnings,
     generate_codebase_summary,
 )
 
 
-# ── Fixture: create_fixture_project ──────────────────────────────────────────
+# ── Fixtures ────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
-def fixture_project(tmp_path: Path) -> Path:
-    """A temporary project directory matching the bash test fixture.
-
-    Structure:
-      src/components/Button.tsx  (has export default, local import target)
-      src/components/Header.tsx  (has export default, imports ./Button)
-      src/types/index.ts         (export type User, export interface ApiResponse)
-      src/utils/helpers.ts       (export function, NOT a type export)
-      .specs/learnings/general.md
-    """
-    # src/components/Button.tsx
-    components = tmp_path / "src" / "components"
-    components.mkdir(parents=True)
-    (components / "Button.tsx").write_text(
-        "import React from 'react';\n"
-        "\n"
-        "interface ButtonProps {\n"
-        "  label: string;\n"
-        "  onClick: () => void;\n"
-        "}\n"
-        "\n"
-        "export default function Button({ label, onClick }: ButtonProps) {\n"
-        "  return <button onClick={onClick}>{label}</button>;\n"
-        "}\n"
-    )
-
-    # src/components/Header.tsx
-    (components / "Header.tsx").write_text(
-        "import React from 'react';\n"
-        "import Button from './Button';\n"
-        "\n"
-        "export default function Header() {\n"
-        "  return (\n"
-        "    <header>\n"
-        "      <h1>My App</h1>\n"
-        "      <Button label=\"Menu\" onClick={() => {}} />\n"
-        "    </header>\n"
-        "  );\n"
-        "}\n"
-    )
-
-    # src/types/index.ts
-    types_dir = tmp_path / "src" / "types"
-    types_dir.mkdir(parents=True)
-    (types_dir / "index.ts").write_text(
-        "export type User = {\n"
-        "  id: string;\n"
-        "  name: string;\n"
-        "  email: string;\n"
-        "};\n"
-        "\n"
-        "export interface ApiResponse {\n"
-        "  data: unknown;\n"
-        "  status: number;\n"
-        "  message: string;\n"
-        "}\n"
-    )
-
-    # src/utils/helpers.ts
-    utils_dir = tmp_path / "src" / "utils"
-    utils_dir.mkdir(parents=True)
-    (utils_dir / "helpers.ts").write_text(
-        "export function formatDate(date: Date): string {\n"
-        "  return date.toISOString().split('T')[0];\n"
-        "}\n"
-    )
-
-    # .specs/learnings/general.md
-    learnings_dir = tmp_path / ".specs" / "learnings"
-    learnings_dir.mkdir(parents=True)
-    (learnings_dir / "general.md").write_text(
-        "# General Learnings\n"
-        "\n"
-        "- **Pattern**: Use semantic tokens for colors instead of hardcoded hex values.\n"
-        "- **Pattern**: Always validate user input at the boundary.\n"
-    )
-
+def project_with_files(tmp_path: Path) -> Path:
+    """Minimal project with a few files in nested dirs."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("print('hi')\n")
+    (tmp_path / "src" / "utils.py").write_text("def helper(): pass\n")
+    (tmp_path / "README.md").write_text("# Project\n")
     return tmp_path
 
 
-# ── Test: normal project scan ────────────────────────────────────────────────
-# Mirrors bash test_normal_project: 13 assertions
+@pytest.fixture
+def project_with_learnings(tmp_path: Path) -> Path:
+    """Project with .specs/learnings/ populated."""
+    learnings = tmp_path / ".specs" / "learnings"
+    learnings.mkdir(parents=True)
+    (learnings / "general.md").write_text(
+        "# General Learnings\n\n"
+        "- Use semantic tokens for colors.\n"
+    )
+    return tmp_path
 
 
-class TestNormalProject:
-    """Normal project scan — section headers, components, types, imports, learnings."""
+# ── File tree generator ─────────────────────────────────────────────────────
 
-    def test_exits_successfully(self, fixture_project: Path) -> None:
-        """Bash assertion: 'normal project exits 0'."""
-        output = generate_codebase_summary(fixture_project)
-        assert isinstance(output, str), "Expected string output"
 
-    def test_has_component_registry_header(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "## Component Registry" in output, "Missing Component Registry header"
+class TestFileTreeGenerator:
+    """_generate_file_tree: produces correct output, respects exclusions, truncates."""
 
-    def test_has_type_exports_header(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "## Type Exports" in output, "Missing Type Exports header"
+    def test_produces_file_listing(self, project_with_files: Path) -> None:
+        tree = _generate_file_tree(project_with_files)
+        assert "src/main.py" in tree
+        assert "src/utils.py" in tree
+        assert "README.md" in tree
 
-    def test_has_import_graph_header(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "## Import Graph" in output, "Missing Import Graph header"
+    def test_excludes_node_modules(self, tmp_path: Path) -> None:
+        nm = tmp_path / "node_modules" / "pkg"
+        nm.mkdir(parents=True)
+        (nm / "index.js").write_text("")
+        (tmp_path / "app.js").write_text("")
+        tree = _generate_file_tree(tmp_path)
+        assert "app.js" in tree
+        assert "node_modules" not in tree
 
-    def test_has_recent_learnings_header(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "## Recent Learnings" in output, "Missing Recent Learnings header"
+    def test_excludes_git_dir(self, tmp_path: Path) -> None:
+        git = tmp_path / ".git" / "objects"
+        git.mkdir(parents=True)
+        (git / "abc123").write_text("")
+        (tmp_path / "src.py").write_text("")
+        tree = _generate_file_tree(tmp_path)
+        assert "src.py" in tree
+        assert ".git" not in tree
 
-    def test_button_in_component_registry(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "Button.tsx" in output, "Button.tsx not in component registry"
+    def test_excludes_pycache(self, tmp_path: Path) -> None:
+        cache = tmp_path / "__pycache__"
+        cache.mkdir()
+        (cache / "mod.cpython-312.pyc").write_text("")
+        (tmp_path / "mod.py").write_text("")
+        tree = _generate_file_tree(tmp_path)
+        assert "mod.py" in tree
+        assert "__pycache__" not in tree
 
-    def test_header_in_component_registry(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "Header.tsx" in output, "Header.tsx not in component registry"
+    def test_truncates_at_cap(self, tmp_path: Path) -> None:
+        for i in range(_FILE_TREE_CAP + 10):
+            (tmp_path / f"file_{i:04d}.txt").write_text("")
+        tree = _generate_file_tree(tmp_path)
+        assert f"truncated at {_FILE_TREE_CAP} files" in tree
 
-    def test_button_has_export_default(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "Button.tsx  (export default: yes)" in output, (
-            "Button.tsx should show export default: yes"
+    def test_empty_directory(self, tmp_path: Path) -> None:
+        tree = _generate_file_tree(tmp_path)
+        assert tree == ""
+
+
+# ── Cache layer ──────────────────────────────────────────────────────────────
+
+
+class TestCacheLayer:
+    """Cache: hit returns cached content, miss triggers agent call."""
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_cache_hit_skips_agent(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        tree_hash = "abc123def456"
+        mock_hash.return_value = tree_hash
+
+        # Pre-populate cache
+        cache_dir = project_with_files / ".auto-sdd-cache"
+        cache_dir.mkdir()
+        cache_file = cache_dir / f"codebase-summary-{tree_hash}.md"
+        cache_file.write_text("cached summary content")
+
+        result = generate_codebase_summary(project_with_files)
+        assert "cached summary content" in result
+        mock_agent.assert_not_called()
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_cache_miss_calls_agent(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        mock_hash.return_value = "abc123"
+        mock_agent.return_value = "agent generated summary"
+
+        result = generate_codebase_summary(project_with_files)
+        assert "agent generated summary" in result
+        mock_agent.assert_called_once()
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_cache_written_after_agent_call(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        tree_hash = "newhash789"
+        mock_hash.return_value = tree_hash
+        mock_agent.return_value = "fresh summary"
+
+        generate_codebase_summary(project_with_files)
+        cached_file = project_with_files / ".auto-sdd-cache" / f"codebase-summary-{tree_hash}.md"
+        assert cached_file.exists()
+        assert cached_file.read_text() == "fresh summary"
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_cache_gitignore_created(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        mock_hash.return_value = "somehash"
+        mock_agent.return_value = "content"
+
+        generate_codebase_summary(project_with_files)
+        gitignore = project_with_files / ".auto-sdd-cache" / ".gitignore"
+        assert gitignore.exists()
+        assert gitignore.read_text() == "*\n"
+
+
+# ── Cache key changes with tree hash ────────────────────────────────────────
+
+
+class TestCacheKeyChanges:
+    """Cache key changes when tree hash changes."""
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_different_hash_triggers_new_agent_call(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        # Pre-populate cache with old hash
+        cache_dir = project_with_files / ".auto-sdd-cache"
+        cache_dir.mkdir()
+        (cache_dir / "codebase-summary-oldhash.md").write_text("old summary")
+
+        # Return a different hash
+        mock_hash.return_value = "newhash"
+        mock_agent.return_value = "new summary"
+
+        result = generate_codebase_summary(project_with_files)
+        assert "new summary" in result
+        mock_agent.assert_called_once()
+
+
+# ── Agent call ───────────────────────────────────────────────────────────────
+
+
+class TestAgentCall:
+    """Agent call: verify prompt structure and output returned."""
+
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    @patch("auto_sdd.lib.codebase_summary.run_claude", create=True)
+    def test_prompt_contains_file_tree(
+        self,
+        mock_run_claude: MagicMock,
+        mock_hash: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        mock_hash.return_value = None  # skip cache
+
+        mock_result = MagicMock()
+        mock_result.output = "agent output"
+        mock_run_claude.return_value = mock_result
+
+        with patch("auto_sdd.lib.codebase_summary._call_agent") as mock_call:
+            mock_call.return_value = "agent output"
+            result = generate_codebase_summary(project_with_files)
+            assert result == "agent output"
+
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_call_agent_uses_run_claude(
+        self,
+        mock_hash: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        mock_hash.return_value = None
+
+        mock_result = MagicMock()
+        mock_result.output = "structured summary"
+
+        with patch("auto_sdd.lib.claude_wrapper.run_claude", return_value=mock_result):
+            from auto_sdd.lib.codebase_summary import _call_agent
+            output = _call_agent(project_with_files, "file_tree_text")
+            assert output == "structured summary"
+
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_agent_prompt_structure(
+        self,
+        mock_hash: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        """Verify the prompt sent to run_claude contains expected structure."""
+        mock_hash.return_value = None
+
+        mock_result = MagicMock()
+        mock_result.output = "result"
+
+        with patch("auto_sdd.lib.claude_wrapper.run_claude", return_value=mock_result) as mock_rc:
+            from auto_sdd.lib.codebase_summary import _call_agent
+            _call_agent(project_with_files, "src/main.py\nsrc/utils.py")
+
+            args_list = mock_rc.call_args[0][0]
+            assert args_list[0] == "-p"
+            assert args_list[1] == "--dangerously-skip-permissions"
+            prompt = args_list[2]
+            assert "src/main.py" in prompt
+            assert "Key modules" in prompt
+            assert "100 lines" in prompt
+
+
+# ── Fallback on failure ─────────────────────────────────────────────────────
+
+
+class TestFallback:
+    """Fallback: agent failure returns empty string, no crash."""
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_agent_exception_returns_empty(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        mock_hash.return_value = "somehash"
+        mock_agent.side_effect = RuntimeError("agent exploded")
+
+        result = generate_codebase_summary(project_with_files)
+        assert result == ""
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_timeout_returns_empty(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        mock_hash.return_value = "somehash"
+        mock_agent.side_effect = TimeoutError("timed out")
+
+        result = generate_codebase_summary(project_with_files)
+        assert result == ""
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_no_tree_hash_still_works(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_files: Path,
+    ) -> None:
+        """When git tree hash is None (not a git repo), agent is still called."""
+        mock_hash.return_value = None
+        mock_agent.return_value = "summary without cache"
+
+        result = generate_codebase_summary(project_with_files)
+        assert "summary without cache" in result
+        mock_agent.assert_called_once()
+
+
+# ── Learnings integration ────────────────────────────────────────────────────
+
+
+class TestLearningsIntegration:
+    """Learnings are appended to agent-generated summary."""
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_learnings_appended_to_agent_summary(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_learnings: Path,
+    ) -> None:
+        mock_hash.return_value = "hash1"
+        mock_agent.return_value = "agent summary"
+
+        result = generate_codebase_summary(project_with_learnings)
+        assert "agent summary" in result
+        assert "## Recent Learnings" in result
+        assert "semantic tokens" in result
+
+    def test_read_recent_learnings_with_content(
+        self, project_with_learnings: Path
+    ) -> None:
+        text = _read_recent_learnings(project_with_learnings)
+        assert "## Recent Learnings" in text
+        assert "semantic tokens" in text
+
+    def test_read_recent_learnings_empty_dir(self, tmp_path: Path) -> None:
+        text = _read_recent_learnings(tmp_path)
+        assert text == ""
+
+    def test_read_recent_learnings_empty_files(self, tmp_path: Path) -> None:
+        learnings = tmp_path / ".specs" / "learnings"
+        learnings.mkdir(parents=True)
+        (learnings / "empty.md").write_text("")
+        text = _read_recent_learnings(tmp_path)
+        assert text == ""
+
+    def test_read_recent_learnings_truncation(self, tmp_path: Path) -> None:
+        learnings = tmp_path / ".specs" / "learnings"
+        learnings.mkdir(parents=True)
+        # Write enough lines to trigger truncation (cap is 40)
+        content = "\n".join(f"line {i}" for i in range(60))
+        (learnings / "big.md").write_text(content)
+        text = _read_recent_learnings(tmp_path)
+        assert "truncated at 40 lines" in text
+
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_learnings_appended_to_cached_summary(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        project_with_learnings: Path,
+    ) -> None:
+        tree_hash = "cachehash"
+        mock_hash.return_value = tree_hash
+
+        # Pre-populate cache
+        cache_dir = project_with_learnings / ".auto-sdd-cache"
+        cache_dir.mkdir()
+        (cache_dir / f"codebase-summary-{tree_hash}.md").write_text(
+            "cached agent output"
         )
 
-    def test_user_type_in_exports(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "User" in output, "User type not in type exports"
-
-    def test_apiresponse_in_exports(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "ApiResponse" in output, "ApiResponse interface not in type exports"
-
-    def test_header_imports_button(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "Header.tsx" in output, "Header.tsx not found in import graph"
-
-    def test_import_path_present(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "./Button" in output, "import path ./Button not present"
-
-    def test_learnings_content(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project)
-        assert "semantic tokens" in output, "Learnings content missing"
+        result = generate_codebase_summary(project_with_learnings)
+        assert "cached agent output" in result
+        assert "## Recent Learnings" in result
+        mock_agent.assert_not_called()
 
 
-# ── Test: empty project ──────────────────────────────────────────────────────
-# Mirrors bash test_empty_project: 6 assertions
-
-
-class TestEmptyProject:
-    """Empty project (no src/, no .specs/) — still produces all section headers."""
-
-    def test_exits_successfully(self, tmp_path: Path) -> None:
-        """Bash assertion: 'empty project exits 0'."""
-        output = generate_codebase_summary(tmp_path)
-        assert isinstance(output, str), "Expected string output"
-
-    def test_has_component_registry_header(self, tmp_path: Path) -> None:
-        output = generate_codebase_summary(tmp_path)
-        assert "## Component Registry" in output
-
-    def test_has_type_exports_header(self, tmp_path: Path) -> None:
-        output = generate_codebase_summary(tmp_path)
-        assert "## Type Exports" in output
-
-    def test_has_import_graph_header(self, tmp_path: Path) -> None:
-        output = generate_codebase_summary(tmp_path)
-        assert "## Import Graph" in output
-
-    def test_has_recent_learnings_header(self, tmp_path: Path) -> None:
-        output = generate_codebase_summary(tmp_path)
-        assert "## Recent Learnings" in output
-
-    def test_no_components_message(self, tmp_path: Path) -> None:
-        output = generate_codebase_summary(tmp_path)
-        assert "No .tsx/.jsx files found" in output, "Missing no-components message"
-
-    def test_no_learnings_message(self, tmp_path: Path) -> None:
-        output = generate_codebase_summary(tmp_path)
-        assert "No learnings directory found." in output, "Missing no-learnings message"
-
-
-# ── Test: MAX_LINES truncation ───────────────────────────────────────────────
-# Mirrors bash test_max_lines_truncation: 3 assertions
-
-
-class TestMaxLinesTruncation:
-    """MAX_LINES truncation — output is capped, truncation notice appears."""
-
-    def test_exits_successfully(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project, max_lines=20)
-        assert isinstance(output, str), "Expected string output"
-
-    def test_truncation_notice_present(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project, max_lines=20)
-        assert "[Summary truncated at 20 lines]" in output, "Truncation notice missing"
-
-    def test_line_count_within_limit(self, fixture_project: Path) -> None:
-        output = generate_codebase_summary(fixture_project, max_lines=20)
-        # The output has a trailing newline on every line, so splitting on \n
-        # gives lines + one empty string at the end.
-        lines = output.split("\n")
-        # Remove trailing empty string from the final newline
-        if lines and lines[-1] == "":
-            lines = lines[:-1]
-        assert len(lines) <= 21, (
-            f"Line count ({len(lines)}) exceeds MAX_LINES + 1 (21)"
-        )
-
-
-# ── Test: error handling (ValueError) ───────────────────────────────────────
-# Additional tests for Python-specific behavior (replaces bash exit code checks)
+# ── Error handling ───────────────────────────────────────────────────────────
 
 
 class TestErrorHandling:
@@ -248,125 +407,58 @@ class TestErrorHandling:
             generate_codebase_summary(a_file)
 
 
-# ── Test: component cap truncation ──────────────────────────────────────────
+# ── End-to-end integration ───────────────────────────────────────────────────
 
 
-class TestComponentCapTruncation:
-    """Component registry caps at 50 entries."""
+class TestEndToEnd:
+    """Integration: generate_codebase_summary end-to-end with mocked agent."""
 
-    def test_component_cap_message(self, tmp_path: Path) -> None:
-        """When >50 component files exist, truncation message appears."""
-        components_dir = tmp_path / "src" / "components"
-        components_dir.mkdir(parents=True)
-        for i in range(55):
-            (components_dir / f"Comp{i:03d}.tsx").write_text(
-                f"export default function Comp{i:03d}() {{ return null; }}\n"
-            )
-        output = generate_codebase_summary(tmp_path)
-        assert "... and 5 more components (truncated at 50)" in output
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_full_flow(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Full flow: files + learnings + agent call → combined output."""
+        # Set up project files
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "app.py").write_text("print('app')\n")
 
+        # Set up learnings
+        learnings = tmp_path / ".specs" / "learnings"
+        learnings.mkdir(parents=True)
+        (learnings / "general.md").write_text("# Learnings\n\n- Key insight\n")
 
-# ── Test: no local imports ──────────────────────────────────────────────────
+        mock_hash.return_value = "e2ehash"
+        mock_agent.return_value = "## Summary\n\n- app.py is the entry point\n"
 
+        result = generate_codebase_summary(tmp_path)
 
-class TestNoLocalImports:
-    """Import graph shows 'no local imports' when none exist."""
+        # Agent output present
+        assert "## Summary" in result
+        assert "app.py is the entry point" in result
 
-    def test_no_local_imports_message(self, tmp_path: Path) -> None:
-        """Components with only external imports show 'No local imports found.'."""
-        components_dir = tmp_path / "src" / "components"
-        components_dir.mkdir(parents=True)
-        (components_dir / "Solo.tsx").write_text(
-            "import React from 'react';\n"
-            "export default function Solo() { return null; }\n"
-        )
-        output = generate_codebase_summary(tmp_path)
-        assert "No local imports found." in output
+        # Learnings appended
+        assert "## Recent Learnings" in result
+        assert "Key insight" in result
 
+        # Cache was written
+        cache_file = tmp_path / ".auto-sdd-cache" / "codebase-summary-e2ehash.md"
+        assert cache_file.exists()
 
-# ── Test: empty learnings files are skipped ─────────────────────────────────
+    @patch("auto_sdd.lib.codebase_summary._call_agent")
+    @patch("auto_sdd.lib.codebase_summary._get_tree_hash")
+    def test_empty_project_with_agent_failure(
+        self,
+        mock_hash: MagicMock,
+        mock_agent: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Empty project + agent failure → empty string."""
+        mock_hash.return_value = None
+        mock_agent.side_effect = FileNotFoundError("claude not found")
 
-
-class TestEmptyLearningsSkipped:
-    """Empty .md files in learnings dir are skipped."""
-
-    def test_empty_learnings_file_skipped(self, tmp_path: Path) -> None:
-        learnings_dir = tmp_path / ".specs" / "learnings"
-        learnings_dir.mkdir(parents=True)
-        (learnings_dir / "empty.md").write_text("")
-        output = generate_codebase_summary(tmp_path)
-        assert "No learnings files found." in output
-
-    def test_mixed_empty_and_nonempty(self, tmp_path: Path) -> None:
-        """Non-empty files are included even when empty files exist."""
-        learnings_dir = tmp_path / ".specs" / "learnings"
-        learnings_dir.mkdir(parents=True)
-        (learnings_dir / "empty.md").write_text("")
-        (learnings_dir / "real.md").write_text("Real content here.\n")
-        output = generate_codebase_summary(tmp_path)
-        assert "Real content here." in output
-        assert "No learnings files found." not in output
-
-
-# ── Test: no type exports message ───────────────────────────────────────────
-
-
-class TestNoTypeExports:
-    """When no type/interface exports exist, shows fallback message."""
-
-    def test_no_type_exports_message(self, tmp_path: Path) -> None:
-        src_dir = tmp_path / "src"
-        src_dir.mkdir()
-        (src_dir / "index.ts").write_text(
-            "export function hello(): string { return 'hi'; }\n"
-        )
-        output = generate_codebase_summary(tmp_path)
-        assert "No type/interface exports found." in output
-
-
-# ── Test: monorepo / nested layouts ──────────────────────────────────────────
-
-
-class TestMonorepoLayout:
-    """Layout-agnostic scanning finds components and types in nested directories."""
-
-    def test_client_src_components_found(self, tmp_path: Path) -> None:
-        """Components under client/src/ are discovered."""
-        comp_dir = tmp_path / "client" / "src" / "components"
-        comp_dir.mkdir(parents=True)
-        (comp_dir / "Widget.tsx").write_text(
-            "export default function Widget() { return null; }\n"
-        )
-        files = _find_component_files(tmp_path)
-        names = [f.name for f in files]
-        assert "Widget.tsx" in names, "Widget.tsx not found in client/src/"
-
-    def test_server_src_types_found(self, tmp_path: Path) -> None:
-        """Type exports under server/src/ are discovered."""
-        types_dir = tmp_path / "server" / "src" / "types"
-        types_dir.mkdir(parents=True)
-        (types_dir / "models.ts").write_text(
-            "export type Order = {\n  id: string;\n  total: number;\n};\n"
-        )
-        exports = _find_type_exports(tmp_path)
-        type_names = [name for _, name in exports]
-        assert "Order" in type_names, "Order type not found in server/src/"
-
-    def test_nested_layout_with_exclusions(self, tmp_path: Path) -> None:
-        """Components in node_modules are excluded; client/src/ components are included."""
-        # Real component
-        comp_dir = tmp_path / "client" / "src" / "components"
-        comp_dir.mkdir(parents=True)
-        (comp_dir / "Real.tsx").write_text(
-            "export default function Real() { return null; }\n"
-        )
-        # node_modules component (should be excluded)
-        nm_dir = tmp_path / "node_modules" / "pkg" / "src"
-        nm_dir.mkdir(parents=True)
-        (nm_dir / "Fake.tsx").write_text(
-            "export default function Fake() { return null; }\n"
-        )
-        files = _find_component_files(tmp_path)
-        names = [f.name for f in files]
-        assert "Real.tsx" in names, "Real.tsx should be found"
-        assert "Fake.tsx" not in names, "Fake.tsx in node_modules should be excluded"
+        result = generate_codebase_summary(tmp_path)
+        assert result == ""

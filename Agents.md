@@ -1349,6 +1349,24 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 
 **Verification**: All 5 checks pass — Core Learnings block present (1), all 13 L-numbers found, Scope Discipline present (1), block size 256 words (< 450), core.md unchanged (0 diff lines).
 
+### Round 47: Replace regex codebase scanning with agent-generated summaries (2026-03-03)
+
+**What was asked**: Replace all hardcoded regex-based scanning in `codebase_summary.py` (per-language regex patterns for component files, type exports, import graphs) with agent-generated summaries via `run_claude()`. The regex approach doesn't scale — every new language requires new patterns. The agent already understands whatever language the project uses.
+
+**What changed**:
+- `py/auto_sdd/lib/codebase_summary.py`: Removed `_SummaryBuilder` class, `_TYPE_EXPORT_RE`/`_LOCAL_IMPORT_RE` regex constants, `_walk_files()`, `_find_component_files()`, `_has_export_default()`, `_build_component_registry()`, `_find_type_exports()`, `_build_type_exports()`, `_extract_local_imports()`, `_build_import_graph()`, `_build_recent_learnings()`. Added: `_generate_file_tree()` (compact file listing respecting `_EXCLUDED_DIRS`, capped at 500 files), `_get_tree_hash()` (git tree hash for cache key), cache layer (`_read_cache`/`_write_cache` using `.auto-sdd-cache/` with `.gitignore`), `_call_agent()` (invokes `run_claude()` with a language-agnostic structural analysis prompt, 120s timeout), `_read_recent_learnings()` (extracted from old `_build_recent_learnings`), fallback (returns empty string on any agent failure). Public signature simplified from `(project_dir, max_lines=200) -> str` to `(project_dir) -> str`.
+- `py/tests/test_codebase_summary.py`: Complete rewrite — 27 tests across 8 test classes. Covers: file tree generation (6), cache layer (4), cache key changes (1), agent call (3), fallback (3), learnings integration (6), error handling (2), end-to-end integration (2). All tests mock `run_claude()` — no real agent calls.
+
+**What was NOT changed**: `py/auto_sdd/lib/prompt_builder.py` (caller unchanged — already wraps in try/except, calls without `max_lines`), `py/auto_sdd/scripts/overnight_autonomous.py` (caller unchanged), `py/auto_sdd/lib/claude_wrapper.py` (used as-is), learnings integration logic (preserved), `_EXCLUDED_DIRS` (preserved).
+
+**Note**: Supersedes branch `claude/language-aware-summary-kUPAM` (do not merge that branch).
+
+**Verification**:
+- `mypy --strict py/auto_sdd/lib/codebase_summary.py` — Success, no issues
+- `pytest py/tests/test_codebase_summary.py -v` — 27/27 passed
+- `pytest py/tests/ -v` — 595/595 passed (no regressions)
+- `git diff --stat` — only `py/auto_sdd/lib/codebase_summary.py` and `py/tests/test_codebase_summary.py` modified
+
 ---
 ## Questions?
 
