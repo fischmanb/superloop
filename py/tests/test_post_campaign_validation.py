@@ -13,23 +13,29 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from auto_sdd.lib.claude_wrapper import AgentTimeoutError
 from auto_sdd.scripts.post_campaign_validation import (
     EXIT_ALL_PASS,
     EXIT_INFRA_FAILURE,
+    EXIT_PARTIAL,
+    CriterionResult,
     DocumentRegistry,
     Phase1Result,
     Phase2Result,
+    Phase3Result,
     ValidationPipeline,
     ValidationState,
     _find_seed_script,
     build_ac_generation_prompt,
     build_discovery_prompt,
+    build_playwright_prompt,
     detect_coverage_gaps,
     detect_dev_command,
     detect_package_manager,
     health_check,
     parse_ac_output,
     parse_discovery_output,
+    parse_playwright_output,
     parse_port_from_output,
 )
 
@@ -862,3 +868,389 @@ class TestPhase2SingleAgentCall:
         assert result.gap_report is not None
         # /about is uncovered (only / was in criteria)
         assert "/about" in result.gap_report.get("uncovered_routes", [])
+
+
+# ── Phase 3: Playwright Validation tests ──────────────────────────────────
+
+
+class TestBuildPlaywrightPromptWithCredentials:
+    def test_build_playwright_prompt_with_credentials(self) -> None:
+        feature: dict[str, Any] = {
+            "feature": "Auth",
+            "status": "FOUND",
+            "route": "/login",
+            "criteria": [
+                {
+                    "id": "AC-001",
+                    "description": "User can log in",
+                    "steps": ["Navigate to /login", "Enter credentials"],
+                    "expected_outcome": "User is authenticated",
+                },
+                {
+                    "id": "AC-002",
+                    "description": "Login error on bad password",
+                    "steps": ["Navigate to /login", "Enter wrong password"],
+                    "expected_outcome": "Error message shown",
+                },
+            ],
+        }
+        credentials: dict[str, Any] = {
+            "email": "qa@test.local",
+            "password": "s3cret",
+        }
+        prompt = build_playwright_prompt(
+            app_url="http://localhost:3000",
+            feature=feature,
+            credentials=credentials,
+            screenshot_dir="/tmp/shots/auth",
+        )
+        assert "http://localhost:3000" in prompt
+        # Login instructions present
+        assert "qa@test.local" in prompt
+        assert "s3cret" in prompt
+        # Both criterion IDs present
+        assert "AC-001" in prompt
+        assert "AC-002" in prompt
+        # Key output statuses mentioned
+        assert "VALIDATION_PASS" in prompt
+        assert "VALIDATION_FAIL" in prompt
+        assert "VALIDATION_BLOCKED" in prompt
+        # Screenshot dir
+        assert "/tmp/shots/auth" in prompt
+        # Playwright mentioned
+        assert "Playwright" in prompt
+        # Retry policy
+        lower = prompt.lower()
+        assert "retry" in lower or "3" in prompt
+
+
+class TestBuildPlaywrightPromptWithoutCredentials:
+    def test_build_playwright_prompt_without_credentials(self) -> None:
+        feature: dict[str, Any] = {
+            "feature": "Dashboard",
+            "status": "FOUND",
+            "route": "/dashboard",
+            "criteria": [
+                {
+                    "id": "AC-010",
+                    "description": "Dashboard loads",
+                    "steps": ["Navigate to /dashboard"],
+                    "expected_outcome": "Page renders",
+                },
+            ],
+        }
+        prompt = build_playwright_prompt(
+            app_url="http://localhost:5173",
+            feature=feature,
+            credentials=None,
+            screenshot_dir="/tmp/shots/dash",
+        )
+        # No login instructions
+        assert "log in" not in prompt.lower()
+        assert "email" not in prompt.lower()
+        assert "password" not in prompt.lower()
+        # Criteria still present
+        assert "AC-010" in prompt
+        assert "Dashboard loads" in prompt
+
+
+class TestParsePlaywrightOutputValid:
+    def test_parse_playwright_output_valid(self) -> None:
+        raw = (
+            "Testing complete. Results:\n"
+            "```json\n"
+            "{\n"
+            '  "results": [\n'
+            "    {\n"
+            '      "criterion_id": "AC-001",\n'
+            '      "status": "PASS",\n'
+            '      "description": "User can log in",\n'
+            '      "screenshot_path": "",\n'
+            '      "error": ""\n'
+            "    },\n"
+            "    {\n"
+            '      "criterion_id": "AC-002",\n'
+            '      "status": "FAIL",\n'
+            '      "description": "Login error shown",\n'
+            '      "screenshot_path": "/tmp/fail-ac002.png",\n'
+            '      "error": "Expected error message not found"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "```\n"
+        )
+        result = parse_playwright_output(raw)
+        assert result is not None
+        assert len(result) == 2
+        assert result[0]["criterion_id"] == "AC-001"
+        assert result[0]["status"] == "PASS"
+        assert result[1]["criterion_id"] == "AC-002"
+        assert result[1]["status"] == "FAIL"
+        assert result[1]["screenshot_path"] == "/tmp/fail-ac002.png"
+
+
+class TestParsePlaywrightOutputInvalid:
+    def test_parse_playwright_output_invalid(self) -> None:
+        raw = "I tried to test but everything broke. No JSON here."
+        result = parse_playwright_output(raw)
+        assert result is None
+
+
+class TestParsePlaywrightOutputBadStatus:
+    def test_parse_playwright_output_bad_status(self) -> None:
+        raw = json.dumps({
+            "results": [
+                {
+                    "criterion_id": "AC-001",
+                    "status": "UNKNOWN",
+                    "description": "Something",
+                    "screenshot_path": "",
+                    "error": "",
+                }
+            ]
+        })
+        result = parse_playwright_output(raw)
+        assert result is None
+
+
+class TestReadAcceptanceCriteriaFrom2a:
+    def test_read_acceptance_criteria_from_2a(self, tmp_project: Path) -> None:
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Write Phase 2a acceptance criteria to disk
+        phase2a_dir = pipeline.log_dir / "phase-2a"
+        phase2a_dir.mkdir(parents=True, exist_ok=True)
+        criteria_data: list[dict[str, Any]] = [
+            {
+                "feature": "Auth",
+                "status": "FOUND",
+                "route": "/login",
+                "match_notes": "Route exists",
+                "criteria": [
+                    {
+                        "id": "AC-001",
+                        "description": "Login works",
+                        "targets_present_element": True,
+                        "steps": ["Navigate to /login"],
+                        "expected_outcome": "Logged in",
+                    }
+                ],
+                "drift_notes": None,
+            }
+        ]
+        (phase2a_dir / "acceptance-criteria.v1.json").write_text(
+            json.dumps(criteria_data)
+        )
+
+        result = pipeline._read_acceptance_criteria()
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["feature"] == "Auth"
+
+
+class TestPhase3RequiresPhase2:
+    @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
+    def test_phase_3_requires_phase_2(
+        self, mock_run_claude: MagicMock, tmp_project: Path,
+    ) -> None:
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Phase 2a NOT marked complete
+        pipeline.state.mark_complete("0")
+        pipeline.state.mark_complete("1")
+        # Intentionally NOT marking 2a complete
+
+        exit_code = pipeline._run_phase_3()
+        assert exit_code == EXIT_INFRA_FAILURE
+        mock_run_claude.assert_not_called()
+
+
+class TestPhase3Marks3bComplete:
+    @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
+    def test_phase_3_marks_3b_complete(
+        self, mock_run_claude: MagicMock, tmp_project: Path,
+    ) -> None:
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Seed prior phases as complete
+        pipeline.state.mark_complete("0")
+        pipeline.state.mark_complete("1")
+        pipeline.state.mark_complete("2a")
+        pipeline.state.mark_complete("2b")
+
+        # Write Phase 0 runtime report (for app URL)
+        phase0_dir = pipeline.log_dir / "phase-0"
+        phase0_dir.mkdir(parents=True, exist_ok=True)
+        (phase0_dir / "runtime-report.v1.json").write_text(
+            json.dumps({"url": "http://localhost:3000", "status": "RUNTIME_READY"})
+        )
+
+        # Write Phase 2a acceptance criteria
+        phase2a_dir = pipeline.log_dir / "phase-2a"
+        phase2a_dir.mkdir(parents=True, exist_ok=True)
+        criteria_data: list[dict[str, Any]] = [
+            {
+                "feature": "Auth",
+                "status": "FOUND",
+                "route": "/login",
+                "criteria": [
+                    {
+                        "id": "AC-001",
+                        "description": "Login works",
+                        "targets_present_element": True,
+                        "steps": ["Navigate to /login"],
+                        "expected_outcome": "Logged in",
+                    }
+                ],
+            }
+        ]
+        (phase2a_dir / "acceptance-criteria.v1.json").write_text(
+            json.dumps(criteria_data)
+        )
+
+        # Mock run_claude to return valid results
+        valid_results = json.dumps({
+            "results": [
+                {
+                    "criterion_id": "AC-001",
+                    "status": "PASS",
+                    "description": "Login works",
+                    "screenshot_path": "",
+                    "error": "",
+                }
+            ]
+        })
+        mock_result = MagicMock()
+        mock_result.output = f"```json\n{valid_results}\n```"
+        mock_run_claude.return_value = mock_result
+
+        exit_code = pipeline._run_phase_3()
+        assert exit_code == EXIT_ALL_PASS
+        # Both phases marked complete
+        assert pipeline.state.is_complete("3")
+        assert pipeline.state.is_complete("3b")
+
+
+class TestPhase3AgentFailureContinues:
+    @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
+    def test_phase_3_agent_failure_continues(
+        self, mock_run_claude: MagicMock, tmp_project: Path,
+    ) -> None:
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Seed prior phases
+        pipeline.state.mark_complete("0")
+        pipeline.state.mark_complete("1")
+        pipeline.state.mark_complete("2a")
+        pipeline.state.mark_complete("2b")
+
+        # Write Phase 0 runtime report
+        phase0_dir = pipeline.log_dir / "phase-0"
+        phase0_dir.mkdir(parents=True, exist_ok=True)
+        (phase0_dir / "runtime-report.v1.json").write_text(
+            json.dumps({"url": "http://localhost:3000", "status": "RUNTIME_READY"})
+        )
+
+        # Write Phase 2a acceptance criteria with TWO features
+        phase2a_dir = pipeline.log_dir / "phase-2a"
+        phase2a_dir.mkdir(parents=True, exist_ok=True)
+        criteria_data: list[dict[str, Any]] = [
+            {
+                "feature": "Feature A",
+                "status": "FOUND",
+                "route": "/a",
+                "criteria": [
+                    {
+                        "id": "AC-100",
+                        "description": "Feature A works",
+                        "steps": ["Navigate to /a"],
+                        "expected_outcome": "Page loads",
+                    }
+                ],
+            },
+            {
+                "feature": "Feature B",
+                "status": "FOUND",
+                "route": "/b",
+                "criteria": [
+                    {
+                        "id": "AC-200",
+                        "description": "Feature B works",
+                        "steps": ["Navigate to /b"],
+                        "expected_outcome": "Page loads",
+                    }
+                ],
+            },
+        ]
+        (phase2a_dir / "acceptance-criteria.v1.json").write_text(
+            json.dumps(criteria_data)
+        )
+
+        # First feature: agent times out
+        # Second feature: agent succeeds
+        valid_results = json.dumps({
+            "results": [
+                {
+                    "criterion_id": "AC-200",
+                    "status": "PASS",
+                    "description": "Feature B works",
+                    "screenshot_path": "",
+                    "error": "",
+                }
+            ]
+        })
+        mock_success = MagicMock()
+        mock_success.output = f"```json\n{valid_results}\n```"
+        mock_run_claude.side_effect = [
+            AgentTimeoutError("Agent timed out after 300s"),
+            mock_success,
+        ]
+
+        exit_code = pipeline._run_phase_3()
+        assert exit_code == EXIT_ALL_PASS
+
+        # Verify: first feature's criteria should be BLOCKED
+        assert len(pipeline.state.completed_phases) >= 2
+        # Check the state has both "3" and "3b"
+        assert pipeline.state.is_complete("3")
+        assert pipeline.state.is_complete("3b")
+
+        # Read the validation results from disk
+        phase3_dir = pipeline.log_dir / "phase-3"
+        report_files = list(phase3_dir.glob("validation-results.v*.json"))
+        assert len(report_files) == 1
+        report = json.loads(report_files[0].read_text())
+
+        # Feature A: all criteria BLOCKED
+        feature_a = report["feature_results"][0]
+        assert feature_a["feature"] == "Feature A"
+        assert feature_a["criteria_results"][0]["status"] == "BLOCKED"
+        assert "Agent failure" in feature_a["criteria_results"][0]["error"]
+
+        # Feature B: real results
+        feature_b = report["feature_results"][1]
+        assert feature_b["feature"] == "Feature B"
+        assert feature_b["criteria_results"][0]["status"] == "PASS"
+
+        # Pipeline continued (both features processed)
+        assert mock_run_claude.call_count == 2

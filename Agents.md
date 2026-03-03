@@ -1517,6 +1517,30 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - Note: py/.venv not present in environment — mypy/pytest could not be run via venv. Syntax and functional correctness verified with ast.parse() and inline smoke tests.
 
 ---
+
+### Round — Phase 3: Playwright Validation (Milestone 4)
+
+**Asked**: Implement Phase 3 (Playwright Validation) in the post-campaign validation pipeline. Add CriterionResult, Phase3Result classes; build_playwright_prompt, parse_playwright_output functions; _read_acceptance_criteria, _run_phase_3 methods; update run() to call Phase 3 instead of stub. Phase 3b absorbed (UNEXPECTED features already have criteria from 2a). Add 9 tests.
+
+**Changed**:
+- `py/auto_sdd/scripts/post_campaign_validation.py`: Added CriterionResult class (per-criterion PASS/FAIL/BLOCKED result), Phase3Result class, build_playwright_prompt (per-feature agent prompt with login, criteria, retry policy, screenshot dir), parse_playwright_output (JSON extraction + validation), _read_acceptance_criteria (reads Phase 2 output), _run_phase_3 (sequential per-feature agent invocations, 300s timeout, handles AgentTimeoutError/ClaudeOutputError gracefully, marks 3+3b complete). Updated run() to call _run_phase_3 instead of stubs for phases 3/3b. Updated module docstring.
+- `py/tests/test_post_campaign_validation.py`: 9 new tests — prompt construction with/without credentials, output parsing (valid/invalid/bad status), _read_acceptance_criteria from disk, phase dep enforcement, 3b completion marking, agent failure resilience with continuation to next feature.
+
+**NOT changed**:
+- No changes to phases 0, 1, 2a, 2b
+- No changes to CLI, DocumentRegistry, ValidationState, Phase0/1/2 classes
+- Phases 4a, 4b, 5 remain stubs
+- No new files created
+- No dependency changes
+
+**Verification results**:
+- mypy --strict on implementation: Success, no issues
+- mypy --strict --ignore-missing-imports on tests: Success, no issues
+- pytest on test file: 69 passed (60 existing + 9 new)
+- Full test suite (704 tests): All passed, 0 regressions
+- git diff --stat: Only 2 files modified (py/auto_sdd/scripts/post_campaign_validation.py, py/tests/test_post_campaign_validation.py)
+
+---
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.

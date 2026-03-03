@@ -1,8 +1,9 @@
-"""Post-campaign validation orchestrator with Phase 0–2b.
+"""Post-campaign validation orchestrator with Phases 0–3.
 
 Boots a target project, validates it can start, discovers routes (Phase 1),
-generates acceptance criteria from specs (Phase 2a), and runs gap detection
-(Phase 2b).  Phases 3–5 are stubs pending future milestones.
+generates acceptance criteria from specs (Phase 2a), runs gap detection
+(Phase 2b), and validates acceptance criteria via Playwright (Phase 3).
+Phases 4a–5 are stubs pending future milestones.
 
 Usage:
     python -m auto_sdd.scripts.post_campaign_validation
@@ -479,6 +480,51 @@ class Phase2Result:
         }
 
 
+class CriterionResult:
+    """Result of validating a single acceptance criterion."""
+
+    def __init__(self) -> None:
+        self.criterion_id: str = ""
+        self.status: str = "BLOCKED"
+        self.description: str = ""
+        self.screenshot_path: str = ""
+        self.error: str = ""
+        self.retries: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "criterion_id": self.criterion_id,
+            "status": self.status,
+            "description": self.description,
+            "screenshot_path": self.screenshot_path,
+            "error": self.error,
+            "retries": self.retries,
+        }
+
+
+class Phase3Result:
+    """Structured result of Phase 3 (Playwright Validation)."""
+
+    def __init__(self) -> None:
+        self.status: str = "VALIDATION_FAILED"
+        self.feature_results: list[dict[str, Any]] = []
+        self.total_pass: int = 0
+        self.total_fail: int = 0
+        self.total_blocked: int = 0
+        self.error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "feature_results": self.feature_results,
+            "total_pass": self.total_pass,
+            "total_fail": self.total_fail,
+            "total_blocked": self.total_blocked,
+            "error": self.error,
+            "timestamp": _now_iso(),
+        }
+
+
 # ── Phase 1 helpers ──────────────────────────────────────────────────────────
 
 
@@ -796,6 +842,149 @@ def parse_ac_output(raw_output: str) -> list[dict[str, Any]] | None:
     return parsed
 
 
+# ── Phase 3 helpers ──────────────────────────────────────────────────────
+
+_VALID_PLAYWRIGHT_STATUSES = {"PASS", "FAIL", "BLOCKED"}
+
+
+def build_playwright_prompt(
+    app_url: str,
+    feature: dict[str, Any],
+    credentials: dict[str, Any] | None,
+    screenshot_dir: str,
+) -> str:
+    """Build the agent prompt for Phase 3: Playwright Validation.
+
+    Instructs the agent to test ONE feature's acceptance criteria using
+    Playwright against the running app.
+    """
+    login_block = ""
+    if credentials:
+        email = credentials.get("email", "")
+        password = credentials.get("password", "")
+        login_block = (
+            f"\n\nBefore testing, log in to the application:\n"
+            f"  Email: {email}\n"
+            f"  Password: {password}\n"
+            f"Complete the login flow and verify you are authenticated "
+            f"before proceeding to test criteria.\n"
+        )
+
+    feature_name = feature.get("feature", "Unknown")
+    criteria = feature.get("criteria", [])
+    criteria_block = ""
+    for criterion in criteria:
+        if isinstance(criterion, dict):
+            cid = criterion.get("id", "???")
+            desc = criterion.get("description", "")
+            steps = criterion.get("steps", [])
+            expected = criterion.get("expected_outcome", "")
+            steps_text = "\n".join(f"      {i+1}. {s}" for i, s in enumerate(steps))
+            criteria_block += (
+                f"\n  - **{cid}**: {desc}\n"
+                f"    Steps:\n{steps_text}\n"
+                f"    Expected: {expected}\n"
+            )
+
+    return (
+        f"You are a QA validation agent. Test the feature \"{feature_name}\" "
+        f"against the running application at {app_url} using Playwright."
+        f"{login_block}"
+        f"\n\n## Acceptance Criteria to Test\n"
+        f"{criteria_block}"
+        f"\n## Instructions\n\n"
+        f"For each criterion above:\n"
+        f"1. Navigate to the appropriate route.\n"
+        f"2. Follow the steps exactly as described.\n"
+        f"3. Check whether the expected outcome is met.\n"
+        f"4. Report the result as VALIDATION_PASS, VALIDATION_FAIL, or "
+        f"VALIDATION_BLOCKED.\n"
+        f"5. On failure or block, take a screenshot and save it to: "
+        f"{screenshot_dir}\n\n"
+        f"**Retry policy:** If a criterion fails due to a transient issue "
+        f"(element not loaded yet, page still rendering, click didn't land), "
+        f"retry up to max 3 times before marking it as failed.\n\n"
+        f"**Infrastructure failure:** If Playwright itself crashes or becomes "
+        f"unresponsive, report INFRA_FAILURE for all remaining criteria and "
+        f"stop testing.\n\n"
+        f"Output your results as a single JSON object fenced with ``` markers, "
+        f"using this exact schema:\n"
+        f"```json\n"
+        f'{{\n'
+        f'  "results": [\n'
+        f'    {{\n'
+        f'      "criterion_id": "AC-001",\n'
+        f'      "status": "PASS",\n'
+        f'      "description": "What was tested",\n'
+        f'      "screenshot_path": "",\n'
+        f'      "error": ""\n'
+        f'    }}\n'
+        f'  ]\n'
+        f'}}\n'
+        f"```\n"
+    )
+
+
+def parse_playwright_output(raw_output: str) -> list[dict[str, Any]] | None:
+    """Extract and validate Playwright validation results from agent output.
+
+    Looks for a fenced JSON code block first, then tries inline JSON.
+    Returns the list of per-criterion results, or None if parsing or
+    validation fails.
+    """
+    # Try fenced code block first
+    fence_pattern = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.DOTALL)
+    match = fence_pattern.search(raw_output)
+    candidate = match.group(1).strip() if match else None
+
+    parsed: dict[str, Any] | None = None
+
+    if candidate:
+        try:
+            obj = json.loads(candidate)
+            if isinstance(obj, dict):
+                parsed = obj
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Fallback: try to find a JSON object in the raw output
+    if parsed is None:
+        brace_start = raw_output.find("{")
+        if brace_start != -1:
+            depth = 0
+            for i in range(brace_start, len(raw_output)):
+                if raw_output[i] == "{":
+                    depth += 1
+                elif raw_output[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            obj = json.loads(raw_output[brace_start : i + 1])
+                            if isinstance(obj, dict):
+                                parsed = obj
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                        break
+
+    if parsed is None:
+        return None
+
+    # Must have a "results" key with a list
+    results = parsed.get("results")
+    if not isinstance(results, list):
+        return None
+
+    # Validate each result entry
+    for item in results:
+        if not isinstance(item, dict):
+            return None
+        if not isinstance(item.get("criterion_id"), str):
+            return None
+        status = item.get("status")
+        if not isinstance(status, str) or status not in _VALID_PLAYWRIGHT_STATUSES:
+            return None
+
+    return results
 
 
 def run_phase_0(
@@ -1430,6 +1619,201 @@ class ValidationPipeline:
 
         return self._run_phase_2b(phase_2a_features)
 
+    def _read_acceptance_criteria(self) -> list[dict[str, Any]] | None:
+        """Read the latest acceptance criteria from Phase 2 output.
+
+        Checks phase-2b dir first (has gap report alongside), falls back
+        to phase-2a dir for acceptance-criteria.v*.json.
+        """
+        for subdir in ("phase-2b", "phase-2a"):
+            phase_dir = self.log_dir / subdir
+            if not phase_dir.exists():
+                continue
+            for p in sorted(
+                phase_dir.glob("acceptance-criteria.v*.json"),
+                reverse=True,
+            ):
+                data = _read_json(p)
+                if isinstance(data, list):
+                    return data
+        return None
+
+    def _run_phase_3(self) -> int:
+        """Execute Phase 3: Playwright Validation.
+
+        Tests each feature's acceptance criteria against the running app
+        using one agent invocation per feature (sequential).
+        Phase 3b is absorbed — UNEXPECTED features already have criteria
+        in the Phase 2 output.
+        """
+        phase = "3"
+        if self.resume and self.state.is_complete(phase):
+            logger.info("Phase 3 already complete — skipping (resume mode)")
+            return EXIT_ALL_PASS
+
+        logger.info("═══ Phase 3: Playwright Validation ═══")
+
+        # Phase 2a must have completed — we need acceptance criteria
+        if not self.state.is_complete("2a"):
+            logger.error("Phase 3 requires Phase 2a to be complete")
+            return EXIT_INFRA_FAILURE
+
+        # Read acceptance criteria
+        features = self._read_acceptance_criteria()
+        if features is None:
+            logger.error("Could not read acceptance criteria from Phase 2")
+            return EXIT_INFRA_FAILURE
+
+        # Read app URL from Phase 0 runtime report
+        report_dir = self.log_dir / "phase-0"
+        app_url: str | None = None
+        if report_dir.exists():
+            for p in sorted(
+                report_dir.glob("runtime-report.v*.json"), reverse=True,
+            ):
+                data = _read_json(p)
+                if isinstance(data, dict) and data.get("url"):
+                    app_url = str(data["url"])
+                    break
+
+        if not app_url:
+            logger.error("Could not find app URL from Phase 0 runtime report")
+            return EXIT_INFRA_FAILURE
+
+        # Load credentials if available
+        creds_path = self.project_dir / ".sdd-state" / "qa-credentials.json"
+        credentials: dict[str, Any] | None = None
+        if creds_path.exists():
+            credentials = _read_json(creds_path)
+            if not isinstance(credentials, dict):
+                credentials = None
+
+        # Iterate over each feature sequentially
+        phase3_result = Phase3Result()
+        any_ran = False
+
+        for feature in features:
+            feature_name = str(feature.get("feature", "unknown"))
+            sanitized_name = re.sub(r"[^a-zA-Z0-9_-]", "_", feature_name).lower()
+            screenshot_dir = self.log_dir / "phase-3" / sanitized_name
+            screenshot_dir.mkdir(parents=True, exist_ok=True)
+
+            criteria = feature.get("criteria", [])
+
+            prompt = build_playwright_prompt(
+                app_url, feature, credentials, str(screenshot_dir),
+            )
+
+            # Call agent with 5 minute timeout per feature
+            try:
+                claude_result = run_claude(
+                    ["-p", "--dangerously-skip-permissions", prompt],
+                    cwd=self.project_dir,
+                    timeout=300,
+                )
+            except (AgentTimeoutError, ClaudeOutputError) as exc:
+                logger.error(
+                    "Phase 3 agent failed for feature '%s': %s",
+                    feature_name, exc,
+                )
+                # Record all criteria as BLOCKED
+                blocked_results: list[dict[str, Any]] = []
+                for criterion in criteria:
+                    if isinstance(criterion, dict):
+                        cr = CriterionResult()
+                        cr.criterion_id = str(criterion.get("id", ""))
+                        cr.status = "BLOCKED"
+                        cr.description = str(criterion.get("description", ""))
+                        cr.error = f"Agent failure: {exc}"
+                        blocked_results.append(cr.to_dict())
+                phase3_result.feature_results.append({
+                    "feature": feature_name,
+                    "criteria_results": blocked_results,
+                })
+                phase3_result.total_blocked += len(blocked_results)
+                continue
+
+            # Parse output
+            parsed = parse_playwright_output(claude_result.output)
+            if parsed is None:
+                logger.error(
+                    "Failed to parse Playwright output for feature '%s'. "
+                    "Raw (first 500 chars): %s",
+                    feature_name,
+                    claude_result.output[:500],
+                )
+                # Record all criteria as BLOCKED
+                blocked_results = []
+                for criterion in criteria:
+                    if isinstance(criterion, dict):
+                        cr = CriterionResult()
+                        cr.criterion_id = str(criterion.get("id", ""))
+                        cr.status = "BLOCKED"
+                        cr.description = str(criterion.get("description", ""))
+                        cr.error = "Failed to parse agent output"
+                        blocked_results.append(cr.to_dict())
+                phase3_result.feature_results.append({
+                    "feature": feature_name,
+                    "criteria_results": blocked_results,
+                })
+                phase3_result.total_blocked += len(blocked_results)
+                continue
+
+            # Collect results
+            any_ran = True
+            feature_criterion_results: list[dict[str, Any]] = []
+            for item in parsed:
+                cr = CriterionResult()
+                cr.criterion_id = str(item.get("criterion_id", ""))
+                cr.status = str(item.get("status", "BLOCKED"))
+                cr.description = str(item.get("description", ""))
+                cr.screenshot_path = str(item.get("screenshot_path", ""))
+                cr.error = str(item.get("error", ""))
+                feature_criterion_results.append(cr.to_dict())
+                if cr.status == "PASS":
+                    phase3_result.total_pass += 1
+                elif cr.status == "FAIL":
+                    phase3_result.total_fail += 1
+                else:
+                    phase3_result.total_blocked += 1
+
+            phase3_result.feature_results.append({
+                "feature": feature_name,
+                "criteria_results": feature_criterion_results,
+            })
+
+        # Write validation report
+        if any_ran:
+            phase3_result.status = "VALIDATION_COMPLETE"
+        else:
+            phase3_result.status = "VALIDATION_FAILED"
+
+        report_json = json.dumps(phase3_result.to_dict(), indent=2) + "\n"
+        version = self.doc_registry._next_version("validation-results")
+        report_path = (
+            self.log_dir / "phase-3" / f"validation-results.v{version}.json"
+        )
+        self.doc_registry.register(
+            doc_id="validation-results",
+            phase="3",
+            path=report_path,
+            content=report_json,
+        )
+
+        # Mark both 3 and 3b complete (3b is absorbed)
+        self.state.mark_complete("3")
+        self.state.mark_complete("3b")
+
+        logger.info(
+            "Phase 3 complete: %s (pass=%d fail=%d blocked=%d)",
+            phase3_result.status,
+            phase3_result.total_pass,
+            phase3_result.total_fail,
+            phase3_result.total_blocked,
+        )
+
+        return EXIT_ALL_PASS if any_ran else EXIT_PARTIAL
+
     def _run_phase_stub(self, phase: str) -> int:
         """Stub for phases 1–5: raises NotImplementedError."""
         phase_names: dict[str, str] = {
@@ -1476,8 +1860,13 @@ class ValidationPipeline:
             logger.error("Phase 2 FAILED: %s", phase2_result.error)
             return EXIT_PARTIAL
 
-        # Phases 3–5 (stubs)
-        for phase in PHASE_ORDER[4:]:
+        # Phase 3 (Playwright Validation — also marks 3b complete)
+        exit_code = self._run_phase_3()
+        if exit_code != EXIT_ALL_PASS:
+            return exit_code
+
+        # Phases 4a–5 (stubs)
+        for phase in PHASE_ORDER[6:]:
             if self.resume and self.state.is_complete(phase):
                 logger.info("Phase %s already complete — skipping", phase)
                 continue
