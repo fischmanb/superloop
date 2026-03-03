@@ -126,16 +126,38 @@ def _is_test_file(filepath: str) -> bool:
     return "test" in filepath or "spec" in filepath or "__tests__" in filepath
 
 
+_TYPE_PATTERNS: list[re.Pattern[str]] = [
+    # TypeScript/JS: export type Foo, export interface Foo
+    re.compile(r"export\s+(?:type|interface)\s+(\w+)"),
+    # Python: class Foo, Foo = TypedDict(, Foo = NamedTuple(
+    re.compile(r"^[+]?\s*class\s+(\w+)"),
+    re.compile(r"^[+]?\s*(\w+)\s*=\s*TypedDict\("),
+    re.compile(r"^[+]?\s*(\w+)\s*=\s*NamedTuple\("),
+    # Rust: pub struct Foo, pub enum Foo, pub trait Foo
+    re.compile(r"pub\s+(?:struct|enum|trait)\s+(\w+)"),
+    # Go: type Foo struct, type Foo interface
+    re.compile(r"\btype\s+(\w+)\s+(?:struct|interface)\b"),
+]
+
+
 def _extract_type_names(diff_content: str) -> list[str]:
-    """Extract exported type/interface names from added lines in a diff."""
+    """Extract exported type/interface names from added lines in a diff.
+
+    Detects type-like definitions across multiple languages:
+    - TypeScript/JS: ``export type Foo``, ``export interface Foo``
+    - Python: ``class Foo``, ``Foo = TypedDict(``, ``Foo = NamedTuple(``
+    - Rust: ``pub struct Foo``, ``pub enum Foo``, ``pub trait Foo``
+    - Go: ``type Foo struct``, ``type Foo interface``
+    """
     names: list[str] = []
-    pattern = re.compile(r"export\s+(?:type|interface)\s+(\w+)")
     for line in diff_content.splitlines():
         if not line.startswith("+"):
             continue
-        match = pattern.search(line)
-        if match:
-            names.append(match.group(1))
+        for pattern in _TYPE_PATTERNS:
+            match = pattern.search(line)
+            if match:
+                names.append(match.group(1))
+                break  # one match per line is sufficient
     # Deduplicate while preserving order
     seen: set[str] = set()
     unique: list[str] = []
@@ -264,19 +286,29 @@ def run_mechanical_eval(
     new_type_names = _extract_type_names(diff_content)
     new_type_exports = len(new_type_names)
 
-    # Check for redeclarations
+    # Check for redeclarations across multiple languages
     redeclared: list[str] = []
     if new_type_exports > 0 and not is_first_commit:
+        # Combined grep pattern covering TS, Python, Rust, and Go type defs
+        redecl_pattern = (
+            r"export \(type\|interface\) {name}"
+            r"\|class {name}"
+            r"\|pub \(struct\|enum\|trait\) {name}"
+            r"\|type {name} \(struct\|interface\)"
+        )
+        redecl_globs = [
+            "*.ts", "*.tsx", "*.js", "*.jsx",
+            "*.py", "*.rs", "*.go",
+        ]
         for type_name in new_type_names:
             grep_result = _run_git(
                 [
                     "grep",
                     "-l",
-                    f"export \\(type\\|interface\\) {type_name}",
+                    redecl_pattern.replace("{name}", type_name),
                     f"{commit_hash}^",
                     "--",
-                    "*.ts",
-                    "*.tsx",
+                    *redecl_globs,
                 ],
                 project_dir,
                 check=False,
@@ -289,14 +321,18 @@ def run_mechanical_eval(
             if len(existing_files) > 0:
                 redeclared.append(type_name)
 
-    # Count import statements added
+    # Count import statements added (Python, TS/JS, Rust, Go)
     import_count = 0
     if diff_content:
         for line in diff_content.splitlines():
-            if line.startswith("+") and "import " in line:
-                # Exclude diff header lines like "+++ b/..."
-                if not line.startswith("+++"):
-                    import_count += 1
+            if not line.startswith("+") or line.startswith("+++"):
+                continue
+            # Python/TS/JS: "import " anywhere in added line
+            if "import " in line:
+                import_count += 1
+            # Rust: "use " at the start of the content (after the + prefix)
+            elif re.match(r"^\+\s*use\s+", line):
+                import_count += 1
 
     diff_stats: dict[str, int | str | bool | list[str]] = {
         "commit": commit_hash,

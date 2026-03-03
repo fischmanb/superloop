@@ -421,6 +421,9 @@ def check_dead_exports(project_dir: Path) -> DeadExportResult:
         r"pub\s+(?:fn|struct|enum|type|trait|const|static|mod)\s+"
         r"([A-Za-z_][A-Za-z0-9_]*)"
     )
+    go_export_re = re.compile(
+        r"^(?:func|type|var|const)\s+([A-Z][A-Za-z0-9_]*)"
+    )
 
     generic_names = {
         "default", "index", "main", "test", "setup", "config", "app", "App", "mod",
@@ -449,6 +452,13 @@ def check_dead_exports(project_dir: Path) -> DeadExportResult:
         if f.suffix == ".rs":
             for m in rust_pub_re.finditer(content):
                 exports.append((f, m.group(1)))
+
+        # Go: uppercase-initial top-level func/type/var/const
+        if f.suffix == ".go":
+            for line in content.splitlines():
+                gm = go_export_re.match(line)
+                if gm:
+                    exports.append((f, gm.group(1)))
 
     # Check each exported symbol for references in other files
     dead: list[str] = []

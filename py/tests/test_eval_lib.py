@@ -15,6 +15,7 @@ from auto_sdd.lib.eval_lib import (
     parse_eval_signal,
     run_mechanical_eval,
     write_eval_result,
+    _extract_type_names,
     _sanitize_feature_name,
 )
 
@@ -622,3 +623,95 @@ class TestGenerateEvalPromptNoOptionalFiles:
         prompt = generate_eval_prompt(repo, commit)
         assert "EVAL_COMPLETE" in prompt
         assert commit in prompt
+
+
+# ── Test: _extract_type_names — multi-language ───────────────────────────────
+
+
+class TestExtractTypeNamesMultiLanguage:
+    """Test type extraction across TypeScript, Python, Rust, and Go."""
+
+    def test_ts_export_type(self) -> None:
+        diff = "+export type UserResponse = { id: string };\n"
+        assert "UserResponse" in _extract_type_names(diff)
+
+    def test_ts_export_interface(self) -> None:
+        diff = "+export interface ApiConfig {\n"
+        assert "ApiConfig" in _extract_type_names(diff)
+
+    def test_python_class(self) -> None:
+        diff = "+class MyModel:\n+    pass\n"
+        assert "MyModel" in _extract_type_names(diff)
+
+    def test_python_typeddict(self) -> None:
+        diff = "+UserDict = TypedDict('UserDict', {'name': str})\n"
+        assert "UserDict" in _extract_type_names(diff)
+
+    def test_python_namedtuple(self) -> None:
+        diff = "+Point = NamedTuple('Point', [('x', int), ('y', int)])\n"
+        assert "Point" in _extract_type_names(diff)
+
+    def test_rust_pub_struct(self) -> None:
+        diff = "+pub struct Config {\n"
+        assert "Config" in _extract_type_names(diff)
+
+    def test_rust_pub_enum(self) -> None:
+        diff = "+pub enum Status {\n"
+        assert "Status" in _extract_type_names(diff)
+
+    def test_rust_pub_trait(self) -> None:
+        diff = "+pub trait Serialize {\n"
+        assert "Serialize" in _extract_type_names(diff)
+
+    def test_go_type_struct(self) -> None:
+        diff = "+type Config struct {\n"
+        assert "Config" in _extract_type_names(diff)
+
+    def test_go_type_interface(self) -> None:
+        diff = "+type Handler interface {\n"
+        assert "Handler" in _extract_type_names(diff)
+
+    def test_non_added_lines_ignored(self) -> None:
+        diff = " class NotAdded:\n-class Removed:\n"
+        assert _extract_type_names(diff) == []
+
+    def test_deduplicates(self) -> None:
+        diff = "+class Foo:\n+class Foo:\n"
+        assert _extract_type_names(diff) == ["Foo"]
+
+
+# ── Test: import count — multi-language ──────────────────────────────────────
+
+
+class TestImportCountMultiLanguage:
+    """Test import counting for Rust use and Go import statements."""
+
+    @pytest.fixture()
+    def _repo(self, tmp_path: Path) -> Path:
+        repo = tmp_path / "import_repo"
+        repo.mkdir()
+        _init_repo(repo)
+        (repo / "dummy.txt").write_text("init\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "init")
+        return repo
+
+    def test_rust_use_counted(self, _repo: Path) -> None:
+        (_repo / "main.rs").write_text("use std::io;\nuse std::fmt;\n\nfn main() {}\n")
+        _git(_repo, "add", "-A")
+        _git(_repo, "commit", "-q", "-m", "feat: add rust file")
+        commit = _git(_repo, "rev-parse", "HEAD")
+        result = run_mechanical_eval(_repo, commit)
+        # 2 use statements
+        assert result.diff_stats["import_count"] >= 2
+
+    def test_go_import_counted(self, _repo: Path) -> None:
+        (_repo / "main.go").write_text(
+            'package main\n\nimport "fmt"\n\nfunc main() { fmt.Println("hi") }\n'
+        )
+        _git(_repo, "add", "-A")
+        _git(_repo, "commit", "-q", "-m", "feat: add go file")
+        commit = _git(_repo, "rev-parse", "HEAD")
+        result = run_mechanical_eval(_repo, commit)
+        # import "fmt" contains "import " so it's counted
+        assert result.diff_stats["import_count"] >= 1

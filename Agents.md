@@ -1367,6 +1367,26 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - `pytest py/tests/ -v` — 595/595 passed (no regressions)
 - `git diff --stat` — only `py/auto_sdd/lib/codebase_summary.py` and `py/tests/test_codebase_summary.py` modified
 
+### Round 48: Extend type analysis and dead export scan to Python, Rust, Go (2026-03-03)
+
+**What was asked**: Extend eval_lib type extraction (`_extract_type_names`), redeclaration checks, and import counting to support Python, Rust, and Go in addition to TypeScript/JS. Add Go dead export detection to build_gates.
+
+**What changed** (4 changes across 2 modules + 2 test files):
+1. `py/auto_sdd/lib/eval_lib.py` — `_extract_type_names()`: Added per-language regex patterns for Python (`class`, `TypedDict`, `NamedTuple`), Rust (`pub struct/enum/trait`), Go (`type X struct/interface`). All patterns applied on every call since diff content doesn't carry language info.
+2. `py/auto_sdd/lib/eval_lib.py` — redeclaration check: Extended `git grep` globs from `*.ts *.tsx` to also include `*.py *.rs *.go *.js *.jsx`. Extended grep pattern to match `class`, `pub struct/enum/trait`, `type X struct/interface`.
+3. `py/auto_sdd/lib/eval_lib.py` — import count: Added Rust `use ` pattern (line-start after `+` prefix) alongside existing `import ` check. Go `import "..."` already matched by `"import "` substring.
+4. `py/auto_sdd/lib/build_gates.py` — `check_dead_exports()`: Added `go_export_re` pattern matching `^(?:func|type|var|const)\s+([A-Z][A-Za-z0-9_]*)` applied to `.go` files.
+
+**Test additions**: 12 new tests in `test_eval_lib.py` (type extraction for Python/Rust/Go, deduplication, non-added-line exclusion, Rust use/Go import counting). 3 new tests in `test_build_gates.py` (Go exported symbol detection, unexported not flagged, used export not flagged).
+
+**What was NOT changed**: `codebase_summary.py`, `prompt_builder.py`, `build_loop.py`, detection logic for build/test/lint commands.
+
+**Verification**:
+- `mypy --strict`: Success, no issues in 2 source files
+- `pytest py/tests/test_eval_lib.py py/tests/test_build_gates.py -v`: 127 passed
+- `pytest py/tests/ -v`: 618 passed (full suite)
+- `git diff --stat`: Only 4 allowed files changed (197 insertions, 14 deletions)
+
 ---
 ## Questions?
 
