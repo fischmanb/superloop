@@ -424,6 +424,8 @@ class BuildLoop:
         self.eval_sidecar_pid: int | None = None
         self.mistake_tracker = MistakeTracker()
         self.script_start: int = int(time.time())
+        self._loop_limit: int = 0
+        self._current_strategy: str = ""
 
         # ── Acquire lock ─────────────────────────────────────────────────
         lock_dir = Path(tempfile.gettempdir())
@@ -595,11 +597,13 @@ class BuildLoop:
             self.loop_timings.append(
                 f"✓ {feature_name}: {_format_duration(duration)}"
             )
-            logger.info(
-                "✓ Feature %d built: %s (%s)",
-                self.loop_built,
-                feature_name,
-                _format_duration(duration),
+            self._print_progress(
+                self._loop_limit,
+                feature_name=feature_name,
+                phase=f"✓ BUILT in {_format_duration(duration)}",
+                strategy=self._current_strategy,
+                model=model,
+                branch=branch,
             )
         else:
             self.loop_failed += 1
@@ -607,9 +611,13 @@ class BuildLoop:
             self.loop_timings.append(
                 f"✗ {feature_name}: {_format_duration(duration)}"
             )
-            logger.error(
-                "Feature failed: %s (%s)", feature_name,
-                _format_duration(duration),
+            self._print_progress(
+                self._loop_limit,
+                feature_name=feature_name,
+                phase=f"✗ FAILED after {_format_duration(duration)}",
+                strategy=self._current_strategy,
+                model=model,
+                branch=branch,
             )
 
         # Queue sidecar feedback
@@ -649,6 +657,8 @@ class BuildLoop:
         current_worktree_path: Path | None = None
 
         loop_limit = min(len(features), self.max_features)
+        self._loop_limit = loop_limit
+        self._current_strategy = strategy
 
         for idx in range(loop_limit):
             feature = features[idx]
@@ -669,20 +679,16 @@ class BuildLoop:
             self.build_config.test_cmd = self.test_cmd
 
             feature_start = int(time.time())
-            elapsed = feature_start - self.script_start
 
-            logger.info("")
-            logger.info(
-                "[%s] Build #%d: %s (%d/%d, built: %d, "
-                "failed: %d) | elapsed: %s",
-                strategy,
-                feature.id,
-                feature.name,
-                idx + 1,
+            self._print_progress(
                 loop_limit,
-                self.loop_built,
-                self.loop_failed,
-                _format_duration(elapsed),
+                feature_name=feature.name,
+                phase="starting build",
+                attempt=1,
+                max_attempts=self.max_retries + 1,
+                model=self.build_model or self.agent_model or "default",
+                branch=current_feature_branch or "(pending setup)",
+                strategy=strategy,
             )
 
             # ── Branch setup ─────────────────────────────────────────────
@@ -775,6 +781,16 @@ class BuildLoop:
                     model = self.retry_model or self.build_model or self.agent_model or None
 
                 # Invoke agent
+                self._print_progress(
+                    loop_limit,
+                    feature_name=feature.name,
+                    phase="invoking agent" if attempt == 0 else f"retry #{attempt} — invoking agent",
+                    attempt=attempt + 1,
+                    max_attempts=self.max_retries + 1,
+                    model=model or "default",
+                    branch=current_feature_branch,
+                    strategy=strategy,
+                )
                 cmd_args = ["-p", "--dangerously-skip-permissions"]
                 if model:
                     cmd_args.extend(["--model", model])
@@ -827,6 +843,16 @@ class BuildLoop:
                         break
 
                     # Verify: HEAD moved, clean tree, build passes, tests pass
+                    self._print_progress(
+                        loop_limit,
+                        feature_name=feature_name or feature.name,
+                        phase="post-build gates",
+                        attempt=attempt + 1,
+                        max_attempts=self.max_retries + 1,
+                        model=model or "default",
+                        branch=current_feature_branch,
+                        strategy=strategy,
+                    )
                     if self._run_post_build_gates(
                         build_result, feature_name or feature.name,
                         branch_start_commit=branch_start_commit,
@@ -1140,15 +1166,18 @@ class BuildLoop:
         Converts bash lines ~1980-2180.
         """
         self.drift_pairs = []
+        self._loop_limit = len(chained_names)
+        self._current_strategy = "independent"
 
         for fn in chained_names:
             feature_start = int(time.time())
-            elapsed = feature_start - self.script_start
 
-            logger.info(
-                "[independent] Building: %s | elapsed: %s",
-                fn,
-                _format_duration(elapsed),
+            self._print_progress(
+                len(chained_names),
+                feature_name=fn,
+                phase="starting independent build",
+                model=self.build_model or self.agent_model or "default",
+                strategy="independent",
             )
 
             # Create worktree
@@ -1209,6 +1238,15 @@ class BuildLoop:
             if model:
                 cmd_args.extend(["--model", model])
             cmd_args.append(prompt)
+
+            self._print_progress(
+                len(chained_names),
+                feature_name=fn,
+                phase="invoking agent",
+                model=model or "default",
+                branch=branch_name,
+                strategy="independent",
+            )
 
             try:
                 result = run_claude(
@@ -1539,6 +1577,47 @@ class BuildLoop:
             )
         elif strategy == "sequential":
             cleanup_branch_sequential()
+
+    def _print_progress(
+        self,
+        total_features: int,
+        *,
+        feature_name: str = "",
+        phase: str = "",
+        attempt: int = 0,
+        max_attempts: int = 0,
+        model: str = "",
+        branch: str = "",
+        strategy: str = "",
+    ) -> None:
+        """Print a delineated progress block visible in verbose output."""
+        elapsed = _format_duration(int(time.time()) - self.script_start)
+        bar = "=" * 70
+
+        lines = [
+            "",
+            bar,
+            f"  BUILD PROGRESS | {self.loop_built}/{total_features} built"
+            f" | {self.loop_failed} failed | elapsed: {elapsed}",
+        ]
+        if feature_name:
+            attempt_str = ""
+            if max_attempts > 1:
+                attempt_str = f" (attempt {attempt}/{max_attempts})"
+            lines.append(f"  Feature: {feature_name}{attempt_str}")
+        if phase:
+            lines.append(f"  Phase: {phase}")
+        if model:
+            lines.append(f"  Model: {model}")
+        if strategy:
+            lines.append(f"  Strategy: {strategy}")
+        if branch:
+            lines.append(f"  Branch: {branch}")
+        lines.append(bar)
+        lines.append("")
+
+        for line in lines:
+            logger.info(line)
 
     def _print_timings(self) -> None:
         """Print per-feature timing report."""
