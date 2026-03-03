@@ -20,25 +20,30 @@ from auto_sdd.scripts.post_campaign_validation import (
     EXIT_PARTIAL,
     CriterionResult,
     DocumentRegistry,
+    FixResult,
     Phase1Result,
     Phase2Result,
     Phase3Result,
     Phase4aResult,
     Phase4bResult,
+    Phase5Result,
     ValidationPipeline,
     ValidationState,
     _find_seed_script,
     build_ac_generation_prompt,
     build_discovery_prompt,
     build_failure_catalog,
+    build_fix_prompt,
     build_playwright_prompt,
     build_rca_prompt,
+    build_revalidation_prompt,
     detect_coverage_gaps,
     detect_dev_command,
     detect_package_manager,
     health_check,
     parse_ac_output,
     parse_discovery_output,
+    parse_fix_output,
     parse_playwright_output,
     parse_port_from_output,
     parse_rca_output,
@@ -1908,3 +1913,305 @@ class TestPhase4bSkipsOnEmptyCatalog:
         mock_run_claude.assert_not_called()
         # Phase marked complete
         assert pipeline.state.is_complete("4b")
+
+
+# ── Phase 5 tests ────────────────────────────────────────────────────────────
+
+
+class TestBuildFixPromptContent:
+    def test_build_fix_prompt_content(self) -> None:
+        """build_fix_prompt includes root cause, fix desc, files, failures."""
+        root_cause: dict[str, Any] = {
+            "id": "RC-001",
+            "priority": 1,
+            "root_cause": "Missing color tokens in tailwind config",
+            "confidence": "high",
+            "affected_failures": ["FAIL-001", "FAIL-002"],
+            "affected_features": ["Dashboard", "Settings"],
+            "likely_files": ["tailwind.config.ts", "src/styles/globals.css"],
+            "fix_description": "Add missing color tokens to tailwind config",
+        }
+        failure_entries: list[dict[str, Any]] = [
+            {
+                "id": "FAIL-001",
+                "criterion_id": "AC-001",
+                "feature": "Dashboard",
+                "result": "FAIL",
+                "description": "Background color not applied",
+                "expected": "Blue background",
+                "actual": "White background",
+            },
+            {
+                "id": "FAIL-002",
+                "criterion_id": "AC-005",
+                "feature": "Settings",
+                "result": "FAIL",
+                "description": "Header missing",
+                "expected": "Settings header visible",
+                "actual": "No header found",
+            },
+        ]
+        prompt = build_fix_prompt(root_cause, failure_entries, "/tmp/project")
+        # Root cause description
+        assert "Missing color tokens" in prompt
+        # Fix description
+        assert "Add missing color tokens" in prompt
+        # Likely files
+        assert "tailwind.config.ts" in prompt
+        assert "src/styles/globals.css" in prompt
+        # Failure details
+        assert "FAIL-001" in prompt
+        assert "Blue background" in prompt
+        assert "White background" in prompt
+        # Scope limit
+        assert "4 files" in prompt
+        # Escalation mention
+        assert "NEEDS_ESCALATION" in prompt
+        # Must NOT instruct to commit
+        assert "Do NOT commit" in prompt
+
+
+class TestBuildRevalidationPromptContent:
+    def test_build_revalidation_prompt_content(self) -> None:
+        """build_revalidation_prompt includes criteria IDs, Playwright, URL."""
+        criteria: list[dict[str, Any]] = [
+            {
+                "id": "AC-001",
+                "description": "Dashboard loads",
+                "steps": ["Navigate to /dashboard"],
+                "expected_outcome": "Dashboard visible",
+            },
+            {
+                "id": "AC-005",
+                "description": "Settings page loads",
+                "steps": ["Navigate to /settings"],
+                "expected_outcome": "Settings visible",
+            },
+        ]
+        creds: dict[str, Any] = {"email": "test@example.com", "password": "pass123"}
+        prompt = build_revalidation_prompt(
+            "http://localhost:3000",
+            criteria,
+            creds,
+            "/tmp/screenshots",
+        )
+        assert "AC-001" in prompt
+        assert "AC-005" in prompt
+        assert "Playwright" in prompt
+        assert "http://localhost:3000" in prompt
+        assert "test@example.com" in prompt
+
+
+class TestParseFixOutput:
+    def test_parse_fix_output_valid(self) -> None:
+        """Fenced JSON with status FIXED parses correctly."""
+        raw = (
+            'Some preamble text\n'
+            '```json\n'
+            '{"status": "FIXED", "files_modified": ["src/app.ts", "src/utils.ts"],'
+            ' "description": "Fixed the issue"}\n'
+            '```\n'
+        )
+        result = parse_fix_output(raw)
+        assert result is not None
+        assert result["status"] == "FIXED"
+        assert result["files_modified"] == ["src/app.ts", "src/utils.ts"]
+
+    def test_parse_fix_output_escalation(self) -> None:
+        """JSON with status NEEDS_ESCALATION parses correctly."""
+        raw = '```json\n{"status": "NEEDS_ESCALATION", "files_modified": [], "description": "Too complex"}\n```'
+        result = parse_fix_output(raw)
+        assert result is not None
+        assert result["status"] == "NEEDS_ESCALATION"
+
+    def test_parse_fix_output_invalid(self) -> None:
+        """Garbage input returns None."""
+        assert parse_fix_output("this is not json at all") is None
+
+    def test_parse_fix_output_bad_status(self) -> None:
+        """JSON with invalid status returns None."""
+        raw = '```json\n{"status": "UNKNOWN", "files_modified": []}\n```'
+        assert parse_fix_output(raw) is None
+
+
+class TestPhase5RequiresPhase4b:
+    def test_phase_5_requires_phase_4b(self, tmp_project: Path) -> None:
+        """Phase 4b not completed — _run_phase_5 returns error without
+        calling run_claude."""
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Mark phases 0–4a complete but NOT 4b
+        for p in ("0", "1", "2a", "2b", "3", "3b", "4a"):
+            pipeline.state.mark_complete(p)
+
+        result = pipeline._run_phase_5()
+        assert result.status == "FIXES_PARTIAL"
+        assert "Phase 4b" in result.error
+
+
+class TestPhase5NoFixesNeeded:
+    @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
+    def test_phase_5_no_fixes_needed(
+        self, mock_run_claude: MagicMock, tmp_project: Path,
+    ) -> None:
+        """RCA_SKIPPED status — Phase 5 returns NO_FIXES_NEEDED without
+        calling run_claude."""
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Mark prior phases complete including 4b
+        for p in ("0", "1", "2a", "2b", "3", "3b", "4a", "4b"):
+            pipeline.state.mark_complete(p)
+
+        # Write RCA report with RCA_SKIPPED status
+        phase4b_dir = pipeline.log_dir / "phase-4b"
+        phase4b_dir.mkdir(parents=True, exist_ok=True)
+        rca_data: dict[str, Any] = {
+            "status": "RCA_SKIPPED",
+            "root_causes": [],
+            "ungrouped_failures": [],
+            "stats": {},
+        }
+        (phase4b_dir / "rca-report.v1.json").write_text(json.dumps(rca_data))
+
+        result = pipeline._run_phase_5()
+        assert result.status == "NO_FIXES_NEEDED"
+        mock_run_claude.assert_not_called()
+        assert pipeline.state.is_complete("5")
+
+
+class TestPhase5SkipsLowConfidence:
+    @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
+    def test_phase_5_skips_low_confidence(
+        self, mock_run_claude: MagicMock, tmp_project: Path,
+    ) -> None:
+        """Low confidence root cause — FixResult status is SKIPPED,
+        run_claude not called."""
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Mark prior phases complete
+        for p in ("0", "1", "2a", "2b", "3", "3b", "4a", "4b"):
+            pipeline.state.mark_complete(p)
+
+        # Write RCA report with one low-confidence root cause
+        phase4b_dir = pipeline.log_dir / "phase-4b"
+        phase4b_dir.mkdir(parents=True, exist_ok=True)
+        rca_data: dict[str, Any] = {
+            "root_causes": [
+                {
+                    "id": "RC-001",
+                    "priority": 1,
+                    "root_cause": "Possible layout issue",
+                    "confidence": "low",
+                    "affected_failures": ["FAIL-001"],
+                    "affected_features": ["Dashboard"],
+                    "likely_files": ["src/layout.ts"],
+                    "fix_description": "Maybe fix the layout",
+                },
+            ],
+            "ungrouped_failures": [],
+            "stats": {"root_cause_count": 1},
+        }
+        (phase4b_dir / "rca-report.v1.json").write_text(json.dumps(rca_data))
+
+        # Write empty failure catalog (needed by the lookup)
+        phase4a_dir = pipeline.log_dir / "phase-4a"
+        phase4a_dir.mkdir(parents=True, exist_ok=True)
+        catalog: dict[str, Any] = {"catalog": [], "stats": {}}
+        (phase4a_dir / "failure-catalog.v1.json").write_text(json.dumps(catalog))
+
+        result = pipeline._run_phase_5()
+        assert result.total_skipped == 1
+        assert len(result.fix_results) == 1
+        assert result.fix_results[0]["status"] == "SKIPPED"
+        mock_run_claude.assert_not_called()
+
+
+class TestPhase5EscalationRecorded:
+    @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
+    def test_phase_5_escalation_recorded(
+        self, mock_run_claude: MagicMock, tmp_project: Path,
+    ) -> None:
+        """Agent returns NEEDS_ESCALATION — FixResult status is
+        NEEDS_ESCALATION."""
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        # Mark prior phases complete
+        for p in ("0", "1", "2a", "2b", "3", "3b", "4a", "4b"):
+            pipeline.state.mark_complete(p)
+
+        # Write RCA report with one high-confidence root cause
+        phase4b_dir = pipeline.log_dir / "phase-4b"
+        phase4b_dir.mkdir(parents=True, exist_ok=True)
+        rca_data: dict[str, Any] = {
+            "root_causes": [
+                {
+                    "id": "RC-001",
+                    "priority": 1,
+                    "root_cause": "Complex routing issue",
+                    "confidence": "high",
+                    "affected_failures": ["FAIL-001"],
+                    "affected_features": ["Navigation"],
+                    "likely_files": ["src/router.ts"],
+                    "fix_description": "Fix the router",
+                },
+            ],
+            "ungrouped_failures": [],
+            "stats": {"root_cause_count": 1},
+        }
+        (phase4b_dir / "rca-report.v1.json").write_text(json.dumps(rca_data))
+
+        # Write failure catalog
+        phase4a_dir = pipeline.log_dir / "phase-4a"
+        phase4a_dir.mkdir(parents=True, exist_ok=True)
+        catalog: dict[str, Any] = {
+            "catalog": [
+                {
+                    "id": "FAIL-001",
+                    "criterion_id": "AC-001",
+                    "feature": "Navigation",
+                    "result": "FAIL",
+                    "description": "Nav broken",
+                    "expected": "Links work",
+                    "actual": "404 error",
+                },
+            ],
+            "stats": {"total_criteria": 1, "failed": 1},
+        }
+        (phase4a_dir / "failure-catalog.v1.json").write_text(json.dumps(catalog))
+
+        # Mock run_claude to return NEEDS_ESCALATION
+        mock_result = MagicMock()
+        mock_result.output = (
+            '```json\n'
+            '{"status": "NEEDS_ESCALATION", "files_modified": [], '
+            '"description": "Too complex to fix automatically"}\n'
+            '```'
+        )
+        mock_run_claude.return_value = mock_result
+
+        result = pipeline._run_phase_5()
+        assert result.total_escalated == 1
+        assert len(result.fix_results) == 1
+        assert result.fix_results[0]["status"] == "NEEDS_ESCALATION"
+        # Agent was called exactly once (no retry for escalation)
+        mock_run_claude.assert_called_once()

@@ -1569,6 +1569,31 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - Full test suite (721 tests): All passed, 0 regressions
 - git diff --stat: Only 2 Python files modified (+ Agents.md)
 
+### Round N: Phase 5 — Fix Agents (branch: claude/review-hard-constraints-i3Rpb)
+
+**What was asked**: Implement Phase 5 (Fix Agents) for post-campaign validation. Per-root-cause fix loop with build gates, re-validation, commit/revert handling.
+
+**What changed**:
+- `py/auto_sdd/scripts/post_campaign_validation.py`:
+  - Added `FixResult` class (per-fix outcome: FIXED/FIX_FAILED/NEEDS_ESCALATION/MANUAL_INTERVENTION_REQUIRED/SKIPPED)
+  - Added `Phase5Result` class (aggregate: FIXES_COMPLETE/FIXES_PARTIAL/NO_FIXES_NEEDED)
+  - Added `build_fix_prompt()` — presents root cause + failure entries + likely files to fix agent
+  - Added `parse_fix_output()` — extracts fix agent JSON (FIXED/NEEDS_ESCALATION + files_modified)
+  - Added `build_revalidation_prompt()` — slimmed-down Playwright prompt for re-testing affected criteria
+  - Added `_read_rca_report()` method — reads latest rca-report.v*.json from Phase 4b output
+  - Added `_run_phase_5()` method — sequential fix loop: skip low-confidence, fix agent → build gates → commit → re-validate → revert if failing. Max 2 attempts per root cause.
+  - Updated `run()` method — replaced Phase 5 stub with `_run_phase_5()` call
+  - Updated module docstring to reflect Phases 0–5
+- `py/tests/test_post_campaign_validation.py`:
+  - Added 10 new tests: build_fix_prompt content, build_revalidation_prompt content, parse_fix_output (valid/escalation/invalid/bad_status), phase 5 requires phase 4b, no fixes needed, skips low confidence, escalation recorded
+
+**What was NOT changed**: No new files created. No changes to any other Python modules. No package manager commands run.
+
+**Verification results**:
+- mypy --strict: 0 errors on both implementation and test files
+- pytest: 96/96 passed (test_post_campaign_validation.py), 131/131 passed (combined with test_claude_wrapper.py)
+- git diff --stat: Only 2 Python files modified (+ Agents.md)
+
 ---
 ## Questions?
 

@@ -1,11 +1,11 @@
-"""Post-campaign validation orchestrator with Phases 0–4b.
+"""Post-campaign validation orchestrator with Phases 0–5.
 
 Boots a target project, validates it can start, discovers routes (Phase 1),
 generates acceptance criteria from specs (Phase 2a), runs gap detection
 (Phase 2b), validates acceptance criteria via Playwright (Phase 3),
-builds a failure catalog from results (Phase 4a), and runs agent-based
-root cause analysis on the catalog (Phase 4b).
-Phase 5 is a stub pending future milestones.
+builds a failure catalog from results (Phase 4a), runs agent-based
+root cause analysis on the catalog (Phase 4b), and dispatches per-root-cause
+fix agents with build gates and re-validation (Phase 5).
 
 Usage:
     python -m auto_sdd.scripts.post_campaign_validation
@@ -562,6 +562,53 @@ class Phase4bResult:
             "root_causes": self.root_causes,
             "ungrouped_failures": self.ungrouped_failures,
             "stats": self.stats,
+            "error": self.error,
+            "timestamp": _now_iso(),
+        }
+
+
+class FixResult:
+    """Result of a single root cause fix attempt."""
+
+    def __init__(self) -> None:
+        self.root_cause_id: str = ""
+        self.status: str = "FIX_FAILED"
+        self.files_modified: list[str] = []
+        self.attempt: int = 0
+        self.error: str = ""
+        self.revalidation_results: list[dict[str, Any]] = []
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "root_cause_id": self.root_cause_id,
+            "status": self.status,
+            "files_modified": self.files_modified,
+            "attempt": self.attempt,
+            "error": self.error,
+            "revalidation_results": self.revalidation_results,
+        }
+
+
+class Phase5Result:
+    """Structured result of Phase 5 (Fix Agents)."""
+
+    def __init__(self) -> None:
+        self.status: str = "FIXES_PARTIAL"
+        self.fix_results: list[dict[str, Any]] = []
+        self.total_fixed: int = 0
+        self.total_failed: int = 0
+        self.total_skipped: int = 0
+        self.total_escalated: int = 0
+        self.error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "fix_results": self.fix_results,
+            "total_fixed": self.total_fixed,
+            "total_failed": self.total_failed,
+            "total_skipped": self.total_skipped,
+            "total_escalated": self.total_escalated,
             "error": self.error,
             "timestamp": _now_iso(),
         }
@@ -1357,6 +1404,208 @@ def parse_rca_output(raw_output: str) -> dict[str, Any] | None:
             return None
 
     return parsed
+
+
+# ── Phase 5 helpers ─────────────────────────────────────────────────────
+
+_VALID_FIX_STATUSES = {"FIXED", "NEEDS_ESCALATION"}
+
+
+def build_fix_prompt(
+    root_cause: dict[str, Any],
+    failure_entries: list[dict[str, Any]],
+    project_dir: str,
+) -> str:
+    """Build the agent prompt for a Phase 5 fix agent.
+
+    Presents one root cause with its affected failures and instructs
+    the agent to fix the specific issue.
+    """
+    rc_desc = root_cause.get("root_cause", "")
+    fix_desc = root_cause.get("fix_description", "")
+    affected_features = root_cause.get("affected_features", [])
+    likely_files = root_cause.get("likely_files", [])
+
+    features_block = ", ".join(str(f) for f in affected_features) if affected_features else "(none)"
+    files_block = "\n".join(f"  - {f}" for f in likely_files) if likely_files else "  (none)"
+
+    failure_lines: list[str] = []
+    for entry in failure_entries:
+        failure_lines.append(
+            f"  - {entry.get('id', '?')}: [{entry.get('result', '?')}] "
+            f"feature=\"{entry.get('feature', '?')}\"\n"
+            f"    description: {entry.get('description', '')}\n"
+            f"    expected: {entry.get('expected', '')}\n"
+            f"    actual: {entry.get('actual', '')}"
+        )
+    failures_block = "\n".join(failure_lines) if failure_lines else "  (none)"
+
+    return (
+        "You are a fix agent. Your job is to fix a specific issue identified "
+        "by root cause analysis.\n"
+        "\n"
+        "## Root Cause\n"
+        f"\n{rc_desc}\n"
+        "\n"
+        "## Affected Features\n"
+        f"\n{features_block}\n"
+        "\n"
+        "## Fix Description\n"
+        f"\n{fix_desc}\n"
+        "\n"
+        "## Likely Files\n"
+        f"\n{files_block}\n"
+        "\n"
+        "## Failure Details\n"
+        f"\n{failures_block}\n"
+        "\n"
+        "## Instructions\n"
+        "\n"
+        "Fix this specific issue. You may read and modify ONLY the likely "
+        "files listed above, plus any files they directly import. Do NOT "
+        "explore the entire codebase.\n"
+        "\n"
+        "After fixing, run the project's build and test commands to verify "
+        "your fix doesn't break anything.\n"
+        "\n"
+        "If the fix requires changes to more than 4 files, STOP and report "
+        "NEEDS_ESCALATION with an explanation.\n"
+        "\n"
+        "If you cannot determine the fix from the information provided, "
+        "report NEEDS_ESCALATION.\n"
+        "\n"
+        "Do NOT commit any changes. The pipeline handles commits.\n"
+        "\n"
+        "Output your result as a JSON object fenced with ``` markers:\n"
+        "```json\n"
+        "{\n"
+        '  "status": "FIXED",\n'
+        '  "files_modified": ["path/to/file.ts"],\n'
+        '  "description": "what was changed"\n'
+        "}\n"
+        "```\n"
+    )
+
+
+def parse_fix_output(raw_output: str) -> dict[str, Any] | None:
+    """Extract and validate fix agent JSON from agent output.
+
+    Looks for a fenced JSON code block first, then tries inline JSON.
+    Returns None if parsing or validation fails.
+    """
+    fence_pattern = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.DOTALL)
+    match = fence_pattern.search(raw_output)
+    candidate = match.group(1).strip() if match else None
+
+    parsed: dict[str, Any] | None = None
+
+    if candidate:
+        try:
+            obj = json.loads(candidate)
+            if isinstance(obj, dict):
+                parsed = obj
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    if parsed is None:
+        brace_start = raw_output.find("{")
+        if brace_start != -1:
+            depth = 0
+            for i in range(brace_start, len(raw_output)):
+                if raw_output[i] == "{":
+                    depth += 1
+                elif raw_output[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            obj = json.loads(raw_output[brace_start : i + 1])
+                            if isinstance(obj, dict):
+                                parsed = obj
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                        break
+
+    if parsed is None:
+        return None
+
+    status = parsed.get("status")
+    if not isinstance(status, str) or status not in _VALID_FIX_STATUSES:
+        return None
+
+    files_modified = parsed.get("files_modified")
+    if not isinstance(files_modified, list):
+        return None
+
+    return parsed
+
+
+def build_revalidation_prompt(
+    app_url: str,
+    criteria: list[dict[str, Any]],
+    credentials: dict[str, Any] | None,
+    screenshot_dir: str,
+) -> str:
+    """Build the agent prompt for Phase 5 re-validation.
+
+    A slimmed-down version of build_playwright_prompt that tests only
+    specific criteria affected by a fix.
+    """
+    login_block = ""
+    if credentials:
+        email = credentials.get("email", "")
+        password = credentials.get("password", "")
+        login_block = (
+            f"\n\nBefore testing, log in to the application:\n"
+            f"  Email: {email}\n"
+            f"  Password: {password}\n"
+            f"Complete the login flow and verify you are authenticated "
+            f"before proceeding to test criteria.\n"
+        )
+
+    criteria_block = ""
+    for criterion in criteria:
+        if isinstance(criterion, dict):
+            cid = criterion.get("id", "???")
+            desc = criterion.get("description", "")
+            steps = criterion.get("steps", [])
+            expected = criterion.get("expected_outcome", "")
+            steps_text = "\n".join(f"      {i+1}. {s}" for i, s in enumerate(steps))
+            criteria_block += (
+                f"\n  - **{cid}**: {desc}\n"
+                f"    Steps:\n{steps_text}\n"
+                f"    Expected: {expected}\n"
+            )
+
+    return (
+        f"You are a QA re-validation agent. Test the following specific "
+        f"acceptance criteria against the running application at {app_url} "
+        f"using Playwright."
+        f"{login_block}"
+        f"\n\n## Criteria to Re-test\n"
+        f"{criteria_block}"
+        f"\n## Instructions\n\n"
+        f"For each criterion above:\n"
+        f"1. Navigate to the appropriate route.\n"
+        f"2. Follow the steps exactly as described.\n"
+        f"3. Check whether the expected outcome is met.\n"
+        f"4. Report the result as PASS, FAIL, or BLOCKED.\n"
+        f"5. On failure or block, take a screenshot and save it to: "
+        f"{screenshot_dir}\n\n"
+        f"Output your results as a single JSON object fenced with ``` markers:\n"
+        f"```json\n"
+        f'{{\n'
+        f'  "results": [\n'
+        f'    {{\n'
+        f'      "criterion_id": "AC-001",\n'
+        f'      "status": "PASS",\n'
+        f'      "description": "What was tested",\n'
+        f'      "screenshot_path": "",\n'
+        f'      "error": ""\n'
+        f'    }}\n'
+        f'  ]\n'
+        f'}}\n'
+        f"```\n"
+    )
 
 
 def run_phase_0(
@@ -2434,23 +2683,368 @@ class ValidationPipeline:
         result.stats = rca_stats
         return result
 
-    def _run_phase_stub(self, phase: str) -> int:
-        """Stub for phases 1–5: raises NotImplementedError."""
-        phase_names: dict[str, str] = {
-            "1": "Discovery Agent",
-            "2a": "Spec-Based AC Writer",
-            "2b": "Gap Detection AC Writer",
-            "3": "Playwright Validation",
-            "3b": "Gap Tests",
-            "4a": "Failure Catalog",
-            "4b": "Root Cause Analysis",
-            "5": "Fix Agents",
-        }
-        name = phase_names.get(phase, f"Phase {phase}")
-        raise NotImplementedError(
-            f"Phase {phase} ({name}) is not yet implemented. "
-            f"See WIP/post-campaign-validation.md for the full spec."
+    def _read_rca_report(self) -> dict[str, Any] | None:
+        """Read the latest rca-report.v*.json from Phase 4b output."""
+        phase4b_dir = self.log_dir / "phase-4b"
+        if not phase4b_dir.exists():
+            return None
+        for p in sorted(
+            phase4b_dir.glob("rca-report.v*.json"), reverse=True,
+        ):
+            data = _read_json(p)
+            if isinstance(data, dict):
+                return data
+        return None
+
+    def _run_phase_5(self) -> Phase5Result:
+        """Execute Phase 5: Fix Agents.
+
+        Takes each root cause from Phase 4b, dispatches a fix agent,
+        runs build gates, re-validates affected criteria via Playwright,
+        and commits on success or reverts on failure.
+        """
+        phase = "5"
+        result = Phase5Result()
+
+        if self.resume and self.state.is_complete(phase):
+            logger.info("Phase 5 already complete — skipping (resume mode)")
+            result.status = "FIXES_COMPLETE"
+            return result
+
+        logger.info("═══ Phase 5: Fix Agents ═══")
+
+        # Phase 4b must have completed
+        if not self.state.is_complete("4b"):
+            result.error = "Phase 5 requires Phase 4b to be complete"
+            result.status = "FIXES_PARTIAL"
+            logger.error(result.error)
+            return result
+
+        # Read RCA report
+        rca_data = self._read_rca_report()
+        if rca_data is None:
+            result.error = "Could not read RCA report from Phase 4b"
+            result.status = "FIXES_PARTIAL"
+            logger.error(result.error)
+            return result
+
+        # Early exit: RCA skipped or no root causes
+        rca_status = rca_data.get("status", "")
+        root_causes = rca_data.get("root_causes", [])
+        if rca_status == "RCA_SKIPPED" or not root_causes:
+            logger.info("No root causes to fix.")
+            self.state.mark_complete(phase)
+            result.status = "NO_FIXES_NEEDED"
+            return result
+
+        # Read failure catalog for failure entries lookup
+        catalog_data = self._read_failure_catalog()
+        failure_lookup: dict[str, dict[str, Any]] = {}
+        if catalog_data is not None:
+            for entry in catalog_data.get("catalog", []):
+                if isinstance(entry, dict):
+                    fid = str(entry.get("id", ""))
+                    if fid:
+                        failure_lookup[fid] = entry
+
+        # Read acceptance criteria for criterion details during revalidation
+        all_criteria = self._read_acceptance_criteria()
+        criterion_lookup: dict[str, dict[str, Any]] = {}
+        if all_criteria is not None:
+            for feat in all_criteria:
+                for criterion in feat.get("criteria", []):
+                    if isinstance(criterion, dict):
+                        cid = str(criterion.get("id", ""))
+                        if cid:
+                            criterion_lookup[cid] = criterion
+
+        # Read app URL from Phase 0 runtime report
+        report_dir = self.log_dir / "phase-0"
+        app_url: str | None = None
+        if report_dir.exists():
+            for p in sorted(
+                report_dir.glob("runtime-report.v*.json"), reverse=True,
+            ):
+                data = _read_json(p)
+                if isinstance(data, dict) and data.get("url"):
+                    app_url = str(data["url"])
+                    break
+
+        # Load credentials
+        creds_path = self.project_dir / ".sdd-state" / "qa-credentials.json"
+        credentials: dict[str, Any] | None = None
+        if creds_path.exists():
+            credentials = _read_json(creds_path)
+            if not isinstance(credentials, dict):
+                credentials = None
+
+        # Sort root causes by priority (ascending — priority 1 first)
+        sorted_rcs = sorted(
+            root_causes,
+            key=lambda rc: rc.get("priority", 999),
         )
+
+        for rc in sorted_rcs:
+            rc_id = str(rc.get("id", "unknown"))
+            confidence = str(rc.get("confidence", ""))
+
+            # Skip low confidence root causes
+            if confidence == "low":
+                fr = FixResult()
+                fr.root_cause_id = rc_id
+                fr.status = "SKIPPED"
+                fr.error = "Low confidence — manual review required"
+                result.fix_results.append(fr.to_dict())
+                result.total_skipped += 1
+                logger.info(
+                    "Skipping root cause %s: low confidence", rc_id,
+                )
+                continue
+
+            # Collect failure entries for this root cause
+            affected_failures = rc.get("affected_failures", [])
+            failure_entries = [
+                failure_lookup[fid]
+                for fid in affected_failures
+                if fid in failure_lookup
+            ]
+
+            # Build fix prompt
+            prompt = build_fix_prompt(rc, failure_entries, str(self.project_dir))
+
+            # Attempt up to 2 times
+            max_attempts = 2
+            fix_recorded = False
+
+            for attempt in range(1, max_attempts + 1):
+                fr = FixResult()
+                fr.root_cause_id = rc_id
+                fr.attempt = attempt
+
+                try:
+                    claude_result = run_claude(
+                        ["-p", "--dangerously-skip-permissions", prompt],
+                        cwd=self.project_dir,
+                        timeout=600,
+                    )
+                except (AgentTimeoutError, ClaudeOutputError) as exc:
+                    logger.error(
+                        "Fix agent failed for %s (attempt %d): %s",
+                        rc_id, attempt, exc,
+                    )
+                    if attempt < max_attempts:
+                        continue
+                    fr.status = "MANUAL_INTERVENTION_REQUIRED"
+                    fr.error = f"Agent failure after {max_attempts} attempts: {exc}"
+                    result.fix_results.append(fr.to_dict())
+                    result.total_failed += 1
+                    fix_recorded = True
+                    break
+
+                # Parse output
+                parsed = parse_fix_output(claude_result.output)
+                if parsed is None:
+                    logger.error(
+                        "Failed to parse fix output for %s (attempt %d)",
+                        rc_id, attempt,
+                    )
+                    if attempt < max_attempts:
+                        continue
+                    fr.status = "MANUAL_INTERVENTION_REQUIRED"
+                    fr.error = f"Output parsing failed after {max_attempts} attempts"
+                    result.fix_results.append(fr.to_dict())
+                    result.total_failed += 1
+                    fix_recorded = True
+                    break
+
+                agent_status = str(parsed.get("status", ""))
+                files_modified = parsed.get("files_modified", [])
+                fr.files_modified = [str(f) for f in files_modified]
+
+                # Agent reports NEEDS_ESCALATION
+                if agent_status == "NEEDS_ESCALATION":
+                    fr.status = "NEEDS_ESCALATION"
+                    fr.error = str(parsed.get("description", ""))
+                    result.fix_results.append(fr.to_dict())
+                    result.total_escalated += 1
+                    fix_recorded = True
+                    break
+
+                # Agent reports FIXED
+                if agent_status == "FIXED":
+                    # Check scope: max 4 files
+                    if len(files_modified) > 4:
+                        fr.status = "NEEDS_ESCALATION"
+                        fr.error = (
+                            f"Scope exceeded: {len(files_modified)} files modified "
+                            f"(max 4)"
+                        )
+                        result.fix_results.append(fr.to_dict())
+                        result.total_escalated += 1
+                        fix_recorded = True
+                        break
+
+                    # Run build gates
+                    pm = detect_package_manager(self.project_dir)
+                    try:
+                        gate_result = subprocess.run(
+                            [pm, "run", "build"],
+                            cwd=str(self.project_dir),
+                            capture_output=True,
+                            text=True,
+                            timeout=120,
+                        )
+                        gates_passed = gate_result.returncode == 0
+                    except (subprocess.TimeoutExpired, OSError) as exc:
+                        logger.error("Build gates failed: %s", exc)
+                        gates_passed = False
+
+                    if not gates_passed:
+                        # Revert working directory changes
+                        subprocess.run(
+                            ["git", "checkout", "--", "."],
+                            cwd=str(self.project_dir),
+                            capture_output=True,
+                            timeout=30,
+                        )
+                        fr.status = "FIX_FAILED"
+                        fr.error = "Build gates failed after fix"
+                        result.fix_results.append(fr.to_dict())
+                        result.total_failed += 1
+                        fix_recorded = True
+                        break
+
+                    # Gates passed — commit
+                    fix_desc = str(parsed.get("description", rc_id))
+                    subprocess.run(
+                        ["git", "add", "-A"],
+                        cwd=str(self.project_dir),
+                        capture_output=True,
+                        timeout=30,
+                    )
+                    subprocess.run(
+                        [
+                            "git", "commit", "-m",
+                            f"fix(post-validation): {fix_desc}",
+                        ],
+                        cwd=str(self.project_dir),
+                        capture_output=True,
+                        timeout=30,
+                    )
+
+                    # Re-validate affected criteria
+                    if app_url:
+                        affected_criterion_ids: set[str] = set()
+                        for fid in affected_failures:
+                            entry = failure_lookup.get(fid, {})
+                            cid = str(entry.get("criterion_id", ""))
+                            if cid:
+                                affected_criterion_ids.add(cid)
+
+                        criteria_to_revalidate = [
+                            criterion_lookup[cid]
+                            for cid in affected_criterion_ids
+                            if cid in criterion_lookup
+                        ]
+
+                        if criteria_to_revalidate:
+                            screenshot_dir = (
+                                self.log_dir / "phase-5" / f"revalidation-{rc_id}"
+                            )
+                            screenshot_dir.mkdir(parents=True, exist_ok=True)
+
+                            reval_prompt = build_revalidation_prompt(
+                                app_url,
+                                criteria_to_revalidate,
+                                credentials,
+                                str(screenshot_dir),
+                            )
+
+                            try:
+                                reval_result = run_claude(
+                                    [
+                                        "-p",
+                                        "--dangerously-skip-permissions",
+                                        reval_prompt,
+                                    ],
+                                    cwd=self.project_dir,
+                                    timeout=300,
+                                )
+                                reval_parsed = parse_playwright_output(
+                                    reval_result.output,
+                                )
+                            except (AgentTimeoutError, ClaudeOutputError):
+                                reval_parsed = None
+
+                            if reval_parsed is not None:
+                                fr.revalidation_results = reval_parsed
+                                all_pass = all(
+                                    str(r.get("status", "")) == "PASS"
+                                    for r in reval_parsed
+                                )
+                                if not all_pass:
+                                    # Revert the commit
+                                    subprocess.run(
+                                        ["git", "revert", "HEAD", "--no-edit"],
+                                        cwd=str(self.project_dir),
+                                        capture_output=True,
+                                        timeout=30,
+                                    )
+                                    fr.status = "FIX_FAILED"
+                                    fr.error = "Re-validation failed for some criteria"
+                                    result.fix_results.append(fr.to_dict())
+                                    result.total_failed += 1
+                                    fix_recorded = True
+                                    break
+
+                    # All good — mark as FIXED
+                    fr.status = "FIXED"
+                    result.fix_results.append(fr.to_dict())
+                    result.total_fixed += 1
+                    fix_recorded = True
+                    break
+
+            if not fix_recorded:
+                # Should not happen, but safety net
+                fr = FixResult()
+                fr.root_cause_id = rc_id
+                fr.status = "FIX_FAILED"
+                fr.error = "No fix result recorded"
+                result.fix_results.append(fr.to_dict())
+                result.total_failed += 1
+
+        # Write fix report
+        if result.total_failed == 0 and result.total_escalated == 0:
+            result.status = "FIXES_COMPLETE"
+        elif result.total_fixed > 0:
+            result.status = "FIXES_PARTIAL"
+        else:
+            result.status = "FIXES_PARTIAL"
+
+        report_json = json.dumps(result.to_dict(), indent=2) + "\n"
+        version = self.doc_registry._next_version("fix-report")
+        report_path = (
+            self.log_dir / "phase-5" / f"fix-report.v{version}.json"
+        )
+        self.doc_registry.register(
+            doc_id="fix-report",
+            phase="5",
+            path=report_path,
+            content=report_json,
+        )
+
+        self.state.mark_complete(phase)
+
+        logger.info(
+            "Phase 5 complete: %s (fixed=%d failed=%d skipped=%d escalated=%d)",
+            result.status,
+            result.total_fixed,
+            result.total_failed,
+            result.total_skipped,
+            result.total_escalated,
+        )
+
+        return result
 
     def run(self) -> int:
         """Execute the full validation pipeline. Returns an exit code."""
@@ -2499,16 +3093,16 @@ class ValidationPipeline:
                 phase4b_result.error,
             )
 
-        # Phase 5 (stub)
-        for phase in PHASE_ORDER[8:]:
-            if self.resume and self.state.is_complete(phase):
-                logger.info("Phase %s already complete — skipping", phase)
-                continue
-            try:
-                self._run_phase_stub(phase)
-            except NotImplementedError as exc:
-                logger.info("Stopping: %s", exc)
-                return EXIT_ALL_PASS
+        # Phase 5 (Fix Agents)
+        phase5_result = self._run_phase_5()
+        logger.info(
+            "Phase 5 result: %s (fixed=%d failed=%d skipped=%d escalated=%d)",
+            phase5_result.status,
+            phase5_result.total_fixed,
+            phase5_result.total_failed,
+            phase5_result.total_skipped,
+            phase5_result.total_escalated,
+        )
 
         return EXIT_ALL_PASS
 
