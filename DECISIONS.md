@@ -455,3 +455,11 @@
 **Decision:** Add a `_print_progress()` method to BuildLoop that emits clearly delineated `======` blocks at 5 phase transitions per feature: start, agent invocation, post-build gates, success, and failure. Each block shows features built/total, failures, elapsed time, current feature, phase, model, strategy, and branch.
 **Why:** Terminal output during builds had become too verbose to scan. Agent output, subprocess noise, gate checks, and logging all ran together with no visual anchors. Finding the current build status required scrolling through hundreds of lines. The `======` delineation and consistent field layout make progress blocks instantly findable — both visually when watching output and via grep (`grep "BUILD PROGRESS"`) when reviewing logs after the fact.
 **Rejected:** External progress file polled by a separate viewer (overengineered for the problem — the terminal is the primary interface), reducing existing logging verbosity (loses diagnostic value when debugging failures), a TUI/ncurses dashboard (dependency and complexity far beyond the need).
+
+---
+
+## 2026-03-03 — Phase 2b: mechanical gap detection replaces second agent call
+
+**Decision:** Replace Phase 2b's agent-based gap detection (which invoked `run_claude` with a separate prompt) with pure Python set operations (`detect_coverage_gaps()`). Merge UNEXPECTED element detection into the Phase 2a prompt so a single agent call handles all AC generation including unexpected elements.
+**Why:** The 2b agent received the exact same discovery inventory that 2a already had. Gap detection — "which routes have no criteria" and "which criteria target absent elements" — is a mechanical set comparison, not a reasoning task. Two agent calls meant two CLI startups, two full context loads, and 300-600s timeout windows. The mechanical version runs in microseconds with higher reliability (no parsing failures, no agent hallucination on structural comparison).
+**Rejected:** Keeping the second agent call with a shorter timeout (still slower and less reliable than set operations), deferring the refactor as tech debt (Brian flagged pipeline speed as a concern worth resolving now), making 2b fully optional/skippable (the gap report has value, just not as an agent task).

@@ -1005,3 +1005,5 @@ Raw captures from checkpoint scans. New entries land here as `- (YYYY-MM-DD) tex
 - (2026-03-03) Brian's correction style: short, precise, expects single-correction adherence. Having to repeat "you have agent(S) do it per prompt-engineering-guide.md" twice signals a process gap, not ambiguity in the instruction.
 - (2026-03-03) "prompt better" is a directive meaning "you now understand the architecture, rewrite the prompt to match" — not an invitation for further discussion or clarification.
 
+- (2026-03-03) Brian treats agent calls as expensive operations requiring justification. When Phase 2 used two agent calls, his first reaction was questioning speed, not correctness. Pipeline optimization means minimizing agent invocations, not just getting correct output.
+- (2026-03-03) Brian prefers fixing performance problems when they surface rather than noting them as tech debt. "I want to resolve as much of the slow issues as we can" — immediate refactor over backlog entry.

@@ -35,7 +35,12 @@ Ordered by efficiency gain per complexity added:
    - Gap: no learnings extraction, no cross-feature pattern analysis, no decision evaluation, no "what worked and why" synthesis. EVAL_NOTES is a one-line string, not structured.
    - Target: full learning loop — extract actionable patterns from build outcomes, synthesize across features, feed structured insights (not just mistake flags) back into prompts. Campaign summary should produce findings, not just counts.
    - Blocked on: migration completion + at least one real Python build campaign for data.
-5. **auto-QA (post-campaign validation pipeline)** — Multi-agent pipeline: boot app, Playwright browse, generate ACs from specs, test, catalog failures, RCA, fix through build gates. Seven phases (0-5, Phase 4 split into 4a+4b). Spec: `WIP/post-campaign-validation.md` (v0.3). *Spec complete, implementation not started. Will be implemented in Python post-conversion.*
+5. **auto-QA (post-campaign validation pipeline)** — Multi-agent pipeline: boot app, Playwright browse, generate ACs from specs, test, catalog failures, RCA, fix through build gates. Seven phases (0-5, Phase 4 split into 4a+4b). Spec: `WIP/post-campaign-validation.md` (v0.3).
+   - **Phase 0 DONE**: Runtime bootstrap (package manager detection, production build gate, dev server start, health check, auth bootstrap). 41 tests. Merged at `b7feb18`.
+   - **Phase 1 DONE**: Discovery Agent (Playwright-based blind browse, structured inventory of routes/elements/nav graph). 8 new tests. Merged at `874cbd0`.
+   - **Phase 2a+2b DONE**: AC generation (spec-based criteria writer with FOUND/MISSING/PARTIAL/DRIFTED/UNEXPECTED classification) + mechanical gap detection (pure Python set operations, replaces second agent call). 11 new tests. Merged at `ca3d6f1`. Refactored at `df1d588` to eliminate second agent call.
+   - **Phase 3 NEXT**: Playwright validation — execute acceptance criteria as automated tests.
+   - Implementation in `py/auto_sdd/scripts/post_campaign_validation.py` (60 tests, mypy --strict clean).
 5. **Local model integration** — Replace cloud API with local LM Studio on Mac Studio. Reference: `archive/local-llm-pipeline/`. *Not started.*
 6. **Adaptive routing / parallelism** — Only if data from 1–3 justifies complexity. *Deprioritized.*
 
