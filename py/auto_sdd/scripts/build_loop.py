@@ -40,6 +40,8 @@ import os
 import re
 import signal
 import subprocess
+import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -421,7 +423,7 @@ class BuildLoop:
         self.script_start: int = int(time.time())
 
         # ── Acquire lock ─────────────────────────────────────────────────
-        lock_dir = Path("/tmp")
+        lock_dir = Path(tempfile.gettempdir())
         safe_name = str(self.project_dir).replace("/", "_").replace(
             " ", "_"
         )
@@ -1363,11 +1365,18 @@ class BuildLoop:
         sidecar_script = (
             self.project_dir / "scripts" / "eval-sidecar.sh"
         )
-        if not sidecar_script.is_file():
-            logger.warning(
-                "Eval sidecar script not found: %s", sidecar_script
+
+        # Determine launch command: prefer bash script, fall back to Python module
+        if sidecar_script.is_file():
+            sidecar_cmd = ["bash", str(sidecar_script)]
+        else:
+            logger.info(
+                "Bash sidecar not found (%s), trying Python module fallback",
+                sidecar_script,
             )
-            return
+            sidecar_cmd = [
+                sys.executable, "-m", "auto_sdd.scripts.eval_sidecar",
+            ]
 
         logger.info("Starting eval sidecar...")
         sidecar_log = self.logs_dir / "eval-sidecar.log"
@@ -1383,7 +1392,7 @@ class BuildLoop:
         try:
             with open(sidecar_log, "a") as log_fd:
                 proc = subprocess.Popen(
-                    ["bash", str(sidecar_script)],
+                    sidecar_cmd,
                     stdout=log_fd,
                     stderr=log_fd,
                     env=env,

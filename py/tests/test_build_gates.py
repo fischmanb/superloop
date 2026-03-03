@@ -337,3 +337,13 @@ class TestRunCmdSafe:
         result = run_cmd_safe("echo hello", tmp_path)
         assert result.returncode == 0
         assert "hello" in result.stdout
+
+    @patch("auto_sdd.lib.build_gates.subprocess.run")
+    def test_uses_sh_not_bash(self, mock_run: object, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+        assert isinstance(mock_run, MagicMock)
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        run_cmd_safe("echo test", tmp_path)
+        call_args = mock_run.call_args[0][0]
+        assert call_args[0] == "sh", f"Expected 'sh' but got '{call_args[0]}'"
+        assert call_args[1] == "-c"

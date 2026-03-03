@@ -815,10 +815,20 @@ class TestEvalSidecar:
         runner._start_eval_sidecar()
         assert runner.eval_sidecar_pid is None
 
-    def test_start_missing_script(self, tmp_path: Path) -> None:
+    @patch("subprocess.Popen")
+    def test_start_missing_script_falls_back_to_python(
+        self, mock_popen: MagicMock, tmp_path: Path
+    ) -> None:
         runner = _make_runner(tmp_path, eval_sidecar=True)
+        mock_proc = MagicMock()
+        mock_proc.pid = 99999
+        mock_popen.return_value = mock_proc
+
         runner._start_eval_sidecar()
-        assert runner.eval_sidecar_pid is None
+        # With fallback, sidecar should still start via Python module
+        assert runner.eval_sidecar_pid == 99999
+        call_args = mock_popen.call_args[0][0]
+        assert "-m" in call_args
 
     @patch("subprocess.Popen")
     def test_start_stores_pid(
@@ -836,6 +846,24 @@ class TestEvalSidecar:
 
         runner._start_eval_sidecar()
         assert runner.eval_sidecar_pid == 12345
+
+    @patch("subprocess.Popen")
+    def test_python_module_fallback_when_no_bash_script(
+        self, mock_popen: MagicMock, tmp_path: Path
+    ) -> None:
+        runner = _make_runner(tmp_path, eval_sidecar=True)
+        # Do NOT create scripts/eval-sidecar.sh — trigger fallback
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 54321
+        mock_popen.return_value = mock_proc
+
+        runner._start_eval_sidecar()
+        assert runner.eval_sidecar_pid == 54321
+        # Verify the fallback command uses Python module, not bash
+        call_args = mock_popen.call_args[0][0]
+        assert "-m" in call_args
+        assert "auto_sdd.scripts.eval_sidecar" in call_args
 
     def test_stop_noop_when_no_pid(self, tmp_path: Path) -> None:
         runner = _make_runner(tmp_path)

@@ -1349,6 +1349,21 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 
 **Verification**: All 5 checks pass — Core Learnings block present (1), all 13 L-numbers found, Scope Discipline present (1), block size 256 words (< 450), core.md unchanged (0 diff lines).
 
+### Round 47: Infrastructure portability — 7 hardening fixes from project-agnostic audit (2026-03-03)
+
+**What was asked**: Infrastructure hardening — 7 portability fixes from project-agnostic audit (Findings #17, #19, #20, #22, #25, #26, #28).
+
+**What changed**:
+- `py/auto_sdd/scripts/build_loop.py`: Fix 1 — replaced `Path("/tmp")` with `Path(tempfile.gettempdir())` for lock dir. Fix 2 — `start_eval_sidecar` now falls back to `python -m auto_sdd.scripts.eval_sidecar` when bash script not found.
+- `py/auto_sdd/scripts/overnight_autonomous.py`: Fix 3 — replaced `/tmp` with `tempfile.gettempdir()` for lock file. Fix 4 — `_start_eval_sidecar` same Python module fallback as Fix 2. Fix 5 — prompt replaced `./scripts/generate-mapping.sh` with `python -m auto_sdd.scripts.generate_mapping`.
+- `py/auto_sdd/scripts/nightly_review.py`: Fix 6 — added `main_branch` config parameter (default `"main"`) and interpolated into prompt template instead of hardcoded `git push origin main`.
+- `py/auto_sdd/lib/build_gates.py`: Fix 7 — `run_cmd_safe` now uses `["sh", "-c", cmd]` instead of `["bash", "-c", cmd]` for POSIX compatibility.
+- Test files updated: new tests for sidecar fallback (build_loop + overnight), configurable branch (nightly_review), sh verification (build_gates). Existing `test_start_missing_script` updated to reflect fallback behavior. Template format test updated with new `main_branch` placeholder.
+
+**What was NOT changed**: No logic changes to build loop flow, detection, eval, or drift checking. No changes to prompt content beyond the specific string replacements. No changes to branch strategy, retry logic, or signal parsing.
+
+**Verification**: mypy --strict passes on all 4 source files. 205 targeted tests pass. 608 full suite tests pass. git diff --stat shows only 8 allowed files.
+
 ---
 ## Questions?
 

@@ -48,6 +48,8 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -299,7 +301,7 @@ class OvernightRunner:
 
         # Lock
         lock_name = str(self.project_dir).replace("/", "_").replace(" ", "_")
-        self.lock_file = Path(f"/tmp/sdd-overnight-{lock_name}.lock")
+        self.lock_file = Path(tempfile.gettempdir()) / f"sdd-overnight-{lock_name}.lock"
 
         # State
         self.state_dir = self.project_dir / ".sdd-state"
@@ -1135,11 +1137,18 @@ class OvernightRunner:
             return
 
         sidecar_script = self.project_dir / "scripts" / "eval-sidecar.sh"
-        if not sidecar_script.is_file():
-            logger.warning(
-                "Eval sidecar script not found: %s", sidecar_script
+
+        # Determine launch command: prefer bash script, fall back to Python module
+        if sidecar_script.is_file():
+            sidecar_cmd = ["bash", str(sidecar_script)]
+        else:
+            logger.info(
+                "Bash sidecar not found (%s), trying Python module fallback",
+                sidecar_script,
             )
-            return
+            sidecar_cmd = [
+                sys.executable, "-m", "auto_sdd.scripts.eval_sidecar",
+            ]
 
         logger.info("Starting eval sidecar...")
         log_path = self.project_dir / "logs" / "eval-sidecar.log"
@@ -1153,7 +1162,7 @@ class OvernightRunner:
         try:
             with open(log_path, "a") as log_f:
                 proc = subprocess.Popen(
-                    ["bash", str(sidecar_script)],
+                    sidecar_cmd,
                     stdout=log_f,
                     stderr=log_f,
                     env=env,
@@ -1237,7 +1246,7 @@ class OvernightRunner:
             f"3. Run /spec-first {feature_name} --full to build it (includes /compound)\n"
             "4. Update roadmap to mark it ✅ completed\n"
             "5. Sync Jira status if configured\n"
-            "6. Regenerate mapping: run ./scripts/generate-mapping.sh\n"
+            "6. Regenerate mapping: run python -m auto_sdd.scripts.generate_mapping\n"
             "7. Commit all changes with a descriptive message\n"
             "8. If build fails, output: BUILD_FAILED: {reason}\n"
             f"{codebase_section}"

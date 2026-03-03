@@ -43,6 +43,7 @@ class NightlyReviewConfig:
 
     project_dir: Path
     hours_back: int = 24
+    main_branch: str = "main"
 
 
 # ── Agent prompt template ─────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ INSTRUCTIONS:
 6. COMMIT all changes:
    git add .specs/ CLAUDE.md
    git commit -m 'compound: nightly review {today_date}'
-   git push origin main
+   git push origin {main_branch}
 
 7. REPORT what was captured:
    - Number of learnings extracted
@@ -124,6 +125,7 @@ class NightlyReviewer:
         self.config = config
         self.project_dir = config.project_dir
         self.hours_back = config.hours_back
+        self.main_branch = config.main_branch
 
     def run(self) -> None:
         """Execute: sync -> gather -> extract -> verify -> report."""
@@ -280,6 +282,7 @@ class NightlyReviewer:
             changed_files=files,
             recent_prs=prs or "(none)",
             today_date=today,
+            main_branch=self.main_branch,
         )
 
         try:
@@ -381,9 +384,12 @@ def main() -> None:
 
     hours_back = int(os.environ.get("HOURS_BACK", "24"))
 
+    main_branch = os.environ.get("MAIN_BRANCH", "main")
+
     config = NightlyReviewConfig(
         project_dir=project_dir,
         hours_back=hours_back,
+        main_branch=main_branch,
     )
 
     reviewer = NightlyReviewer(config)

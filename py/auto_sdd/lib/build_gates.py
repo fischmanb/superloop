@@ -273,7 +273,7 @@ def run_cmd_safe(
         CompletedProcess with stdout/stderr captured.
     """
     return subprocess.run(
-        ["bash", "-c", cmd],
+        ["sh", "-c", cmd],
         capture_output=True,
         text=True,
         cwd=str(project_dir),

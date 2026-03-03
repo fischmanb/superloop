@@ -531,6 +531,7 @@ class TestPromptTemplate:
             changed_files="file.ts",
             recent_prs="PR: test",
             today_date="2026-03-02",
+            main_branch="main",
         )
         assert "abc feat" in result
         assert "24" in result
@@ -539,3 +540,38 @@ class TestPromptTemplate:
         assert "CATEGORIZE" in EXTRACTION_PROMPT_TEMPLATE
         assert "COMMIT all changes" in EXTRACTION_PROMPT_TEMPLATE
         assert "compound: nightly review" in EXTRACTION_PROMPT_TEMPLATE
+
+    def test_template_uses_main_branch_placeholder(self) -> None:
+        assert "{main_branch}" in EXTRACTION_PROMPT_TEMPLATE
+
+
+# ── Configurable main_branch tests ────────────────────────────────────────
+
+
+class TestConfigurableMainBranch:
+    """Tests for configurable main_branch parameter (Finding #19)."""
+
+    def test_default_main_branch(self, tmp_path: Path) -> None:
+        config = NightlyReviewConfig(project_dir=tmp_path)
+        assert config.main_branch == "main"
+
+    def test_custom_main_branch(self, tmp_path: Path) -> None:
+        config = NightlyReviewConfig(
+            project_dir=tmp_path, main_branch="develop"
+        )
+        assert config.main_branch == "develop"
+
+    @patch("auto_sdd.scripts.nightly_review.run_claude")
+    def test_prompt_uses_configured_branch(
+        self, mock_claude: MagicMock, tmp_path: Path
+    ) -> None:
+        reviewer = _make_reviewer(tmp_path, main_branch="develop")
+        mock_result = MagicMock()
+        mock_result.exit_code = 0
+        mock_claude.return_value = mock_result
+
+        reviewer._run_extraction("commits", "files", "prs")
+
+        prompt = mock_claude.call_args[0][0][-1]
+        assert "git push origin develop" in prompt
+        assert "git push origin main" not in prompt

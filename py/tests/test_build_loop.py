@@ -763,6 +763,26 @@ class TestSidecarLifecycle:
         assert mock_kill.called
         assert loop.eval_sidecar_pid is None
 
+    def test_python_module_fallback_when_no_bash_script(
+        self, tmp_path: Path
+    ) -> None:
+        loop = _make_loop(tmp_path)
+
+        # Do NOT create scripts/eval-sidecar.sh — trigger fallback
+        os.environ["EVAL_SIDECAR"] = "true"
+
+        with patch("subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.pid = 54321
+            mock_popen.return_value = mock_proc
+            loop.start_eval_sidecar()
+
+        assert loop.eval_sidecar_pid == 54321
+        # Verify the fallback command uses Python module, not bash
+        call_args = mock_popen.call_args[0][0]
+        assert "-m" in call_args
+        assert "auto_sdd.scripts.eval_sidecar" in call_args
+
     def test_stop_noop_when_no_pid(self, tmp_path: Path) -> None:
         loop = _make_loop(tmp_path)
         loop.eval_sidecar_pid = None
