@@ -1,8 +1,8 @@
-"""Post-campaign validation orchestrator with Phase 0 (Runtime Bootstrap).
+"""Post-campaign validation orchestrator with Phase 0–2b.
 
-Boots a target project, validates it can start, detects runtime issues, and
-orchestrates multi-phase validation.  Phases 1–5 are stubs pending future
-milestones.
+Boots a target project, validates it can start, discovers routes (Phase 1),
+generates acceptance criteria from specs (Phase 2a), and runs gap detection
+(Phase 2b).  Phases 3–5 are stubs pending future milestones.
 
 Usage:
     python -m auto_sdd.scripts.post_campaign_validation
@@ -458,6 +458,27 @@ class Phase1Result:
         }
 
 
+class Phase2Result:
+    """Structured result of Phase 2 (AC Generation + Gap Detection)."""
+
+    def __init__(self) -> None:
+        self.status: str = "AC_GENERATION_FAILED"
+        self.features: list[dict[str, Any]] = []
+        self.gap_report: dict[str, Any] | None = None
+        self.total_criteria_count: int = 0
+        self.error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "features": self.features,
+            "gap_report": self.gap_report,
+            "total_criteria_count": self.total_criteria_count,
+            "error": self.error,
+            "timestamp": _now_iso(),
+        }
+
+
 # ── Phase 1 helpers ──────────────────────────────────────────────────────────
 
 
@@ -569,6 +590,251 @@ def parse_discovery_output(raw_output: str) -> dict[str, Any] | None:
     if "routes_found" not in parsed or not isinstance(parsed["routes_found"], list):
         return None
     if "navigation_graph" not in parsed or not isinstance(parsed["navigation_graph"], dict):
+        return None
+
+    return parsed
+
+
+# ── Phase 2 helpers ──────────────────────────────────────────────────────────
+
+_VALID_STATUSES = {"FOUND", "MISSING", "PARTIAL", "DRIFTED"}
+
+
+def build_ac_generation_prompt(
+    roadmap_content: str,
+    feature_specs: dict[str, str],
+    discovery_inventory: dict[str, Any],
+) -> str:
+    """Build the agent prompt for Phase 2a: Spec-Based AC Writer.
+
+    Instructs the agent to compare specs against discovery inventory,
+    classify each feature, and generate Playwright-testable acceptance criteria.
+    """
+    specs_block = ""
+    for name, content in feature_specs.items():
+        specs_block += f"\n--- {name} ---\n{content}\n"
+
+    discovery_json = json.dumps(discovery_inventory, indent=2)
+
+    return (
+        "You are a QA acceptance-criteria writer. Your job is to compare "
+        "feature specifications against a discovery inventory (what actually "
+        "exists in the running application) and produce testable acceptance "
+        "criteria.\n\n"
+        "## Roadmap\n\n"
+        f"{roadmap_content}\n\n"
+        "## Feature Specifications\n"
+        f"{specs_block}\n\n"
+        "## Discovery Inventory (from Phase 1)\n\n"
+        f"```json\n{discovery_json}\n```\n\n"
+        "## Instructions\n\n"
+        "For each feature in the roadmap that is marked as built, compare "
+        "its spec against the discovery inventory. Classify the match using "
+        "exactly one of these statuses:\n\n"
+        "- **FOUND**: Feature's route and primary UI elements exist in "
+        "discovery and match spec expectations.\n"
+        "- **MISSING**: Feature is in the roadmap/specs but has no "
+        "corresponding route or UI elements in discovery.\n"
+        "- **PARTIAL**: Route exists but only some spec'd behaviors/elements "
+        "are present.\n"
+        "- **DRIFTED**: Feature exists in discovery but doesn't match spec "
+        "(different route, different UI pattern, renamed elements).\n\n"
+        "For each feature, write concrete Playwright-testable acceptance "
+        "criteria. No more than 10 criteria per feature. Each criterion must "
+        "be verifiable through browser interaction alone — no file system "
+        "access, no code inspection.\n\n"
+        "For FOUND and PARTIAL features, ground criteria in actual discovered "
+        "routes/elements. For MISSING features, write criteria based on spec "
+        "alone. For DRIFTED features, write criteria per the spec's intent "
+        "and include a drift_notes field.\n\n"
+        "Output a JSON array (fenced with ``` markers) of feature objects "
+        "using this exact schema:\n"
+        "```json\n"
+        "[\n"
+        "  {\n"
+        '    "feature": "Feature Name",\n'
+        '    "status": "FOUND|MISSING|PARTIAL|DRIFTED",\n'
+        '    "route": "/path",\n'
+        '    "match_notes": "description of match quality",\n'
+        '    "criteria": [\n'
+        "      {\n"
+        '        "id": "AC-001",\n'
+        '        "description": "What is being tested",\n'
+        '        "targets_present_element": true,\n'
+        '        "steps": ["step 1", "step 2"],\n'
+        '        "expected_outcome": "What should happen"\n'
+        "      }\n"
+        "    ],\n"
+        '    "drift_notes": null\n'
+        "  }\n"
+        "]\n"
+        "```\n"
+    )
+
+
+def build_gap_detection_prompt(
+    phase_2a_output: list[dict[str, Any]],
+    discovery_inventory: dict[str, Any],
+) -> str:
+    """Build the agent prompt for Phase 2b: Gap Detection AC Writer.
+
+    Instructs the agent to find routes/elements in discovery not covered by
+    any criterion (UNEXPECTED) and criteria referencing absent elements
+    (LIKELY_BROKEN).
+    """
+    criteria_json = json.dumps(phase_2a_output, indent=2)
+    discovery_json = json.dumps(discovery_inventory, indent=2)
+
+    return (
+        "You are a QA gap-detection agent. Review existing acceptance "
+        "criteria against a discovery inventory to find coverage gaps.\n\n"
+        "## Phase 2a Acceptance Criteria\n\n"
+        f"```json\n{criteria_json}\n```\n\n"
+        "## Discovery Inventory\n\n"
+        f"```json\n{discovery_json}\n```\n\n"
+        "## Instructions\n\n"
+        "1. Find routes or interactive elements in the discovery inventory "
+        "that are NOT covered by any acceptance criterion. Mark these as "
+        "UNEXPECTED and write supplemental criteria for them.\n"
+        "2. Find criteria that reference UI elements NOT found in the "
+        "discovery inventory. Flag these as LIKELY_BROKEN.\n"
+        "3. Total acceptance criteria per feature must not exceed 10 "
+        "(including the existing Phase 2a criteria).\n\n"
+        "Output a JSON object (fenced with ``` markers) with this schema:\n"
+        "```json\n"
+        "{\n"
+        '  "supplemental_criteria": [\n'
+        "    {\n"
+        '      "feature": "Feature Name or UNEXPECTED",\n'
+        '      "criteria": [\n'
+        "        {\n"
+        '          "id": "AC-GAP-001",\n'
+        '          "description": "...",\n'
+        '          "targets_present_element": true,\n'
+        '          "steps": ["..."],\n'
+        '          "expected_outcome": "..."\n'
+        "        }\n"
+        "      ]\n"
+        "    }\n"
+        "  ],\n"
+        '  "likely_broken": [\n'
+        "    {\n"
+        '      "criterion_id": "AC-003",\n'
+        '      "feature": "Feature Name",\n'
+        '      "reason": "Element not found in discovery"\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "```\n"
+    )
+
+
+def parse_ac_output(raw_output: str) -> list[dict[str, Any]] | None:
+    """Extract and validate the AC JSON array from agent output.
+
+    Looks for a fenced JSON code block first, then tries to find an inline
+    JSON array.  Validates each feature dict has the required fields.
+    Returns None if parsing or validation fails.
+    """
+    # Try fenced code block first
+    fence_pattern = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.DOTALL)
+    match = fence_pattern.search(raw_output)
+    candidate = match.group(1).strip() if match else None
+
+    parsed: list[dict[str, Any]] | None = None
+
+    if candidate:
+        try:
+            obj = json.loads(candidate)
+            if isinstance(obj, list):
+                parsed = obj
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Fallback: try to find a JSON array in the raw output
+    if parsed is None:
+        bracket_start = raw_output.find("[")
+        if bracket_start != -1:
+            depth = 0
+            for i in range(bracket_start, len(raw_output)):
+                if raw_output[i] == "[":
+                    depth += 1
+                elif raw_output[i] == "]":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            obj = json.loads(raw_output[bracket_start : i + 1])
+                            if isinstance(obj, list):
+                                parsed = obj
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                        break
+
+    if parsed is None:
+        return None
+
+    # Validate each feature dict
+    for item in parsed:
+        if not isinstance(item, dict):
+            return None
+        if not isinstance(item.get("feature"), str):
+            return None
+        status = item.get("status")
+        if not isinstance(status, str) or status not in _VALID_STATUSES:
+            return None
+        if not isinstance(item.get("criteria"), list):
+            return None
+
+    return parsed
+
+
+def parse_gap_output(raw_output: str) -> dict[str, Any] | None:
+    """Extract and validate the gap report JSON from agent output.
+
+    Should contain 'supplemental_criteria' (list) and 'likely_broken' (list).
+    Returns None if parsing fails.
+    """
+    # Try fenced code block first
+    fence_pattern = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.DOTALL)
+    match = fence_pattern.search(raw_output)
+    candidate = match.group(1).strip() if match else None
+
+    parsed: dict[str, Any] | None = None
+
+    if candidate:
+        try:
+            obj = json.loads(candidate)
+            if isinstance(obj, dict):
+                parsed = obj
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Fallback: try to find a JSON object in the raw output
+    if parsed is None:
+        brace_start = raw_output.find("{")
+        if brace_start != -1:
+            depth = 0
+            for i in range(brace_start, len(raw_output)):
+                if raw_output[i] == "{":
+                    depth += 1
+                elif raw_output[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            obj = json.loads(raw_output[brace_start : i + 1])
+                            if isinstance(obj, dict):
+                                parsed = obj
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                        break
+
+    if parsed is None:
+        return None
+
+    # Validate required keys
+    if not isinstance(parsed.get("supplemental_criteria"), list):
+        return None
+    if not isinstance(parsed.get("likely_broken"), list):
         return None
 
     return parsed
@@ -1008,6 +1274,263 @@ class ValidationPipeline:
             content=report_json,
         )
 
+    def _load_specs(self) -> tuple[str, dict[str, str]]:
+        """Load roadmap and feature specs from .specs/ directory.
+
+        Returns (roadmap_content, feature_specs) where feature_specs maps
+        filename to content.  Returns empty values if files don't exist.
+        """
+        roadmap_path = self.project_dir / ".specs" / "roadmap.md"
+        roadmap_content = ""
+        if roadmap_path.exists():
+            roadmap_content = roadmap_path.read_text()
+
+        feature_specs: dict[str, str] = {}
+        features_dir = self.project_dir / ".specs" / "features"
+        if features_dir.is_dir():
+            for p in sorted(features_dir.rglob("*")):
+                if p.is_file() and (
+                    p.name.endswith(".feature.md") or p.name.endswith(".md")
+                ):
+                    feature_specs[p.name] = p.read_text()
+
+        return roadmap_content, feature_specs
+
+    def _read_discovery_inventory(self) -> dict[str, Any] | None:
+        """Read the latest discovery inventory from Phase 1 output."""
+        phase1_dir = self.log_dir / "phase-1"
+        if not phase1_dir.exists():
+            return None
+        for p in sorted(phase1_dir.glob("discovery-inventory.v*.json"), reverse=True):
+            data = _read_json(p)
+            if isinstance(data, dict):
+                return data
+        return None
+
+    def _run_phase_2a(self) -> list[dict[str, Any]] | None:
+        """Execute Phase 2a: Spec-Based AC Writer.
+
+        Returns the parsed features list for Phase 2b, or None on failure.
+        """
+        logger.info("═══ Phase 2a: Spec-Based AC Writer ═══")
+
+        # Phase 1 must have completed — we need the discovery inventory
+        if not self.state.is_complete("1"):
+            logger.error("Phase 2a requires Phase 1 to be complete")
+            return None
+
+        # Read discovery inventory
+        discovery = self._read_discovery_inventory()
+        if discovery is None:
+            logger.error("Could not read discovery inventory from Phase 1")
+            return None
+
+        # Load specs
+        roadmap_content, feature_specs = self._load_specs()
+
+        # Build prompt
+        prompt = build_ac_generation_prompt(
+            roadmap_content, feature_specs, discovery,
+        )
+
+        # Invoke the AC generation agent
+        try:
+            claude_result = run_claude(
+                ["-p", "--dangerously-skip-permissions", prompt],
+                cwd=self.project_dir,
+                timeout=600,
+            )
+        except (AgentTimeoutError, ClaudeOutputError) as exc:
+            logger.error("Phase 2a agent failed: %s", exc)
+            return None
+
+        # Parse the output
+        features = parse_ac_output(claude_result.output)
+        if features is None:
+            logger.error(
+                "Failed to parse AC output from agent. "
+                "Raw output (first 500 chars): %s",
+                claude_result.output[:500],
+            )
+            return None
+
+        # Write acceptance criteria
+        ac_json = json.dumps(features, indent=2) + "\n"
+        version = self.doc_registry._next_version("acceptance-criteria")
+        ac_path = (
+            self.log_dir / "phase-2a" / f"acceptance-criteria.v{version}.json"
+        )
+        self.doc_registry.register(
+            doc_id="acceptance-criteria",
+            phase="2a",
+            path=ac_path,
+            content=ac_json,
+        )
+
+        self.state.mark_complete("2a")
+        total = sum(len(f.get("criteria", [])) for f in features)
+        logger.info(
+            "Phase 2a complete: %d features, %d total criteria",
+            len(features),
+            total,
+        )
+        return features
+
+    def _run_phase_2b(
+        self, phase_2a_features: list[dict[str, Any]],
+    ) -> Phase2Result:
+        """Execute Phase 2b: Gap Detection AC Writer.
+
+        Takes Phase 2a output and produces supplemental criteria + gap report.
+        Phase 2b failure is non-fatal — the Phase 2a output is preserved.
+        """
+        logger.info("═══ Phase 2b: Gap Detection AC Writer ═══")
+
+        result = Phase2Result()
+        result.features = phase_2a_features
+        result.total_criteria_count = sum(
+            len(f.get("criteria", [])) for f in phase_2a_features
+        )
+
+        # Read discovery inventory
+        discovery = self._read_discovery_inventory()
+        if discovery is None:
+            logger.warning("Could not read discovery inventory for gap detection")
+            result.status = "AC_GENERATION_COMPLETE"
+            self.state.mark_complete("2b")
+            return result
+
+        # Build prompt
+        prompt = build_gap_detection_prompt(phase_2a_features, discovery)
+
+        # Invoke the gap detection agent
+        try:
+            claude_result = run_claude(
+                ["-p", "--dangerously-skip-permissions", prompt],
+                cwd=self.project_dir,
+                timeout=300,
+            )
+        except (AgentTimeoutError, ClaudeOutputError) as exc:
+            logger.warning("Phase 2b agent failed (non-fatal): %s", exc)
+            result.status = "AC_GENERATION_COMPLETE"
+            self.state.mark_complete("2b")
+            return result
+
+        # Parse gap output
+        gap_report = parse_gap_output(claude_result.output)
+        if gap_report is None:
+            logger.warning(
+                "Failed to parse gap output (non-fatal). "
+                "Raw output (first 500 chars): %s",
+                claude_result.output[:500],
+            )
+            result.status = "AC_GENERATION_COMPLETE"
+            self.state.mark_complete("2b")
+            return result
+
+        # Merge supplemental criteria into features (respecting 10-per-feature cap)
+        result.gap_report = gap_report
+        supplemental = gap_report.get("supplemental_criteria", [])
+        if isinstance(supplemental, list):
+            for supplement in supplemental:
+                if not isinstance(supplement, dict):
+                    continue
+                feat_name = supplement.get("feature", "")
+                new_criteria = supplement.get("criteria", [])
+                if not isinstance(new_criteria, list):
+                    continue
+
+                # Find matching feature or skip
+                matched = False
+                for feat in result.features:
+                    if feat.get("feature") == feat_name:
+                        existing = feat.get("criteria", [])
+                        remaining_cap = 10 - len(existing)
+                        if remaining_cap > 0:
+                            feat["criteria"] = existing + new_criteria[:remaining_cap]
+                        matched = True
+                        break
+
+                # If no matching feature, add as new entry (UNEXPECTED)
+                if not matched and new_criteria:
+                    result.features.append({
+                        "feature": feat_name,
+                        "status": "FOUND",
+                        "criteria": new_criteria[:10],
+                    })
+
+        # Recalculate total
+        result.total_criteria_count = sum(
+            len(f.get("criteria", [])) for f in result.features
+        )
+
+        # Write updated criteria with gaps
+        merged_json = json.dumps(result.features, indent=2) + "\n"
+        version = self.doc_registry._next_version("acceptance-criteria-with-gaps")
+        merged_path = (
+            self.log_dir
+            / "phase-2b"
+            / f"acceptance-criteria-with-gaps.v{version}.json"
+        )
+        self.doc_registry.register(
+            doc_id="acceptance-criteria-with-gaps",
+            phase="2b",
+            path=merged_path,
+            content=merged_json,
+        )
+
+        result.status = "AC_GENERATION_COMPLETE"
+        self.state.mark_complete("2b")
+        logger.info(
+            "Phase 2b complete: %d total criteria after gap merge",
+            result.total_criteria_count,
+        )
+        return result
+
+    def _run_phase_2(self) -> Phase2Result:
+        """Orchestrate Phase 2a + 2b.
+
+        Handles the resume case: if 2a is complete but 2b is not,
+        read 2a output from disk and run only 2b.
+        """
+        result = Phase2Result()
+
+        phase_2a_features: list[dict[str, Any]] | None = None
+
+        if self.resume and self.state.is_complete("2a"):
+            logger.info("Phase 2a already complete — loading from disk (resume mode)")
+            # Read the most recent 2a output from disk
+            phase_2a_dir = self.log_dir / "phase-2a"
+            if phase_2a_dir.exists():
+                for p in sorted(
+                    phase_2a_dir.glob("acceptance-criteria.v*.json"),
+                    reverse=True,
+                ):
+                    data = _read_json(p)
+                    if isinstance(data, list):
+                        phase_2a_features = data
+                        break
+            if phase_2a_features is None:
+                logger.error("Could not load Phase 2a output from disk for resume")
+                result.error = "Phase 2a output not found on disk"
+                return result
+        else:
+            phase_2a_features = self._run_phase_2a()
+            if phase_2a_features is None:
+                result.error = "Phase 2a failed"
+                return result
+
+        if self.resume and self.state.is_complete("2b"):
+            logger.info("Phase 2b already complete — skipping (resume mode)")
+            result.status = "AC_GENERATION_COMPLETE"
+            result.features = phase_2a_features
+            result.total_criteria_count = sum(
+                len(f.get("criteria", [])) for f in phase_2a_features
+            )
+            return result
+
+        return self._run_phase_2b(phase_2a_features)
+
     def _run_phase_stub(self, phase: str) -> int:
         """Stub for phases 1–5: raises NotImplementedError."""
         phase_names: dict[str, str] = {
@@ -1048,8 +1571,14 @@ class ValidationPipeline:
         if exit_code != EXIT_ALL_PASS:
             return exit_code
 
-        # Phases 2a–5 (stubs)
-        for phase in PHASE_ORDER[2:]:
+        # Phase 2 (AC Generation + Gap Detection)
+        phase2_result = self._run_phase_2()
+        if phase2_result.status == "AC_GENERATION_FAILED":
+            logger.error("Phase 2 FAILED: %s", phase2_result.error)
+            return EXIT_PARTIAL
+
+        # Phases 3–5 (stubs)
+        for phase in PHASE_ORDER[4:]:
             if self.resume and self.state.is_complete(phase):
                 logger.info("Phase %s already complete — skipping", phase)
                 continue

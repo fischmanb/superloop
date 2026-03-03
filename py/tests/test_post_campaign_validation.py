@@ -8,23 +8,30 @@ import atexit
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from auto_sdd.lib.claude_wrapper import ClaudeOutputError
 from auto_sdd.scripts.post_campaign_validation import (
     EXIT_ALL_PASS,
     EXIT_INFRA_FAILURE,
     DocumentRegistry,
     Phase1Result,
+    Phase2Result,
     ValidationPipeline,
     ValidationState,
     _find_seed_script,
+    build_ac_generation_prompt,
     build_discovery_prompt,
+    build_gap_detection_prompt,
     detect_dev_command,
     detect_package_manager,
     health_check,
+    parse_ac_output,
     parse_discovery_output,
+    parse_gap_output,
     parse_port_from_output,
 )
 
@@ -579,3 +586,269 @@ class TestPhase1RequiresPhase0:
         exit_code = pipeline._run_phase_1()
         assert exit_code == EXIT_INFRA_FAILURE
         mock_run_claude.assert_not_called()
+
+
+# ── Phase 2: AC Generation tests ─────────────────────────────────────────────
+
+
+class TestBuildACGenerationPrompt:
+    def test_build_ac_generation_prompt_content(self) -> None:
+        roadmap = "| 1 | Auth | clone-app | - | M | - | ✅ |"
+        specs = {"auth.feature.md": "Feature: Auth\nScenario: Login"}
+        discovery: dict[str, Any] = {
+            "routes_found": [{"url": "/login"}],
+            "navigation_graph": {"/": ["/login"]},
+        }
+        prompt = build_ac_generation_prompt(roadmap, specs, discovery)
+
+        # Contains the roadmap content
+        assert "Auth" in prompt
+        assert "clone-app" in prompt
+        # Contains the spec content
+        assert "Feature: Auth" in prompt
+        assert "Scenario: Login" in prompt
+        # Contains discovery data
+        assert "/login" in prompt
+        # Mentions all classification statuses
+        assert "FOUND" in prompt
+        assert "MISSING" in prompt
+        assert "PARTIAL" in prompt
+        assert "DRIFTED" in prompt
+        # Mentions the 10-criteria cap
+        assert "10" in prompt
+        lower = prompt.lower()
+        assert "no more than 10" in lower or "max" in lower
+
+
+class TestBuildGapDetectionPrompt:
+    def test_build_gap_detection_prompt_content(self) -> None:
+        phase_2a: list[dict[str, Any]] = [
+            {
+                "feature": "Auth",
+                "status": "FOUND",
+                "criteria": [{"id": "AC-001", "description": "Login works"}],
+            }
+        ]
+        discovery: dict[str, Any] = {
+            "routes_found": [{"url": "/login"}, {"url": "/admin"}],
+            "navigation_graph": {"/": ["/login", "/admin"]},
+        }
+        prompt = build_gap_detection_prompt(phase_2a, discovery)
+
+        # Contains the criteria
+        assert "AC-001" in prompt
+        assert "Login works" in prompt
+        # Contains discovery data
+        assert "/admin" in prompt
+        # Mentions UNEXPECTED and LIKELY_BROKEN
+        assert "UNEXPECTED" in prompt
+        assert "LIKELY_BROKEN" in prompt
+
+
+class TestParseACOutput:
+    def test_parse_ac_output_valid(self) -> None:
+        raw = (
+            "Here are the acceptance criteria:\n"
+            "```json\n"
+            "[\n"
+            "  {\n"
+            '    "feature": "Auth",\n'
+            '    "status": "FOUND",\n'
+            '    "route": "/login",\n'
+            '    "match_notes": "Route exists",\n'
+            '    "criteria": [\n'
+            "      {\n"
+            '        "id": "AC-001",\n'
+            '        "description": "User can log in",\n'
+            '        "targets_present_element": true,\n'
+            '        "steps": ["Navigate to /login", "Enter credentials"],\n'
+            '        "expected_outcome": "User is logged in"\n'
+            "      }\n"
+            "    ],\n"
+            '    "drift_notes": null\n'
+            "  }\n"
+            "]\n"
+            "```\n"
+        )
+        result = parse_ac_output(raw)
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["feature"] == "Auth"
+        assert result[0]["status"] == "FOUND"
+        assert len(result[0]["criteria"]) == 1
+        assert result[0]["criteria"][0]["id"] == "AC-001"
+
+    def test_parse_ac_output_invalid_status(self) -> None:
+        raw = json.dumps([{
+            "feature": "Auth",
+            "status": "INVALID_STATUS",
+            "criteria": [{"id": "AC-001"}],
+        }])
+        result = parse_ac_output(raw)
+        assert result is None
+
+    def test_parse_ac_output_missing_criteria(self) -> None:
+        raw = json.dumps([{
+            "feature": "Auth",
+            "status": "FOUND",
+            # no "criteria" key
+        }])
+        result = parse_ac_output(raw)
+        assert result is None
+
+
+class TestParseGapOutput:
+    def test_parse_gap_output_valid(self) -> None:
+        raw = (
+            "```json\n"
+            "{\n"
+            '  "supplemental_criteria": [\n'
+            "    {\n"
+            '      "feature": "UNEXPECTED",\n'
+            '      "criteria": [{"id": "AC-GAP-001"}]\n'
+            "    }\n"
+            "  ],\n"
+            '  "likely_broken": [\n'
+            "    {\n"
+            '      "criterion_id": "AC-003",\n'
+            '      "feature": "Auth",\n'
+            '      "reason": "Element not found"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "```\n"
+        )
+        result = parse_gap_output(raw)
+        assert result is not None
+        assert len(result["supplemental_criteria"]) == 1
+        assert len(result["likely_broken"]) == 1
+
+    def test_parse_gap_output_invalid(self) -> None:
+        raw = "This is garbage output with no JSON at all."
+        result = parse_gap_output(raw)
+        assert result is None
+
+
+class TestLoadSpecs:
+    def test_load_specs_empty_project(self, tmp_path: Path) -> None:
+        """No .specs directory at all."""
+        pipeline = ValidationPipeline(
+            project_dir=tmp_path,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        roadmap, specs = pipeline._load_specs()
+        assert roadmap == ""
+        assert specs == {}
+
+    def test_load_specs_with_roadmap_and_features(self, tmp_path: Path) -> None:
+        """Roadmap and feature specs are read correctly."""
+        specs_dir = tmp_path / ".specs"
+        specs_dir.mkdir()
+        (specs_dir / "roadmap.md").write_text("# Roadmap\n| 1 | Auth |")
+
+        features_dir = specs_dir / "features"
+        features_dir.mkdir()
+        (features_dir / "auth.feature.md").write_text(
+            "Feature: Auth\nScenario: Login"
+        )
+
+        pipeline = ValidationPipeline(
+            project_dir=tmp_path,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+        atexit.unregister(pipeline._cleanup)
+
+        roadmap, specs = pipeline._load_specs()
+        assert "# Roadmap" in roadmap
+        assert "auth.feature.md" in specs
+        assert "Feature: Auth" in specs["auth.feature.md"]
+
+
+class TestPhase2RequiresPhase1:
+    @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
+    def test_phase_2_requires_phase_1(
+        self, mock_run_claude: MagicMock, tmp_project: Path,
+    ) -> None:
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+
+        atexit.unregister(pipeline._cleanup)
+        # Phase 1 was NOT marked complete
+        result = pipeline._run_phase_2()
+        assert result.status == "AC_GENERATION_FAILED"
+        mock_run_claude.assert_not_called()
+
+
+class TestPhase2bFailureNonFatal:
+    @patch("auto_sdd.scripts.post_campaign_validation.run_claude")
+    def test_phase_2b_failure_non_fatal(
+        self, mock_run_claude: MagicMock, tmp_project: Path,
+    ) -> None:
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+
+        atexit.unregister(pipeline._cleanup)
+
+        # Seed Phase 1 as complete with a discovery inventory on disk
+        pipeline.state.mark_complete("0")
+        pipeline.state.mark_complete("1")
+
+        # Write a discovery inventory so Phase 2a can read it
+        phase1_dir = pipeline.log_dir / "phase-1"
+        phase1_dir.mkdir(parents=True, exist_ok=True)
+        discovery_data = {
+            "status": "DISCOVERY_COMPLETE",
+            "routes_found": [{"url": "/"}],
+            "navigation_graph": {"/": []},
+            "global_issues": [],
+            "unreachable_dead_ends": [],
+        }
+        (phase1_dir / "discovery-inventory.v1.json").write_text(
+            json.dumps(discovery_data)
+        )
+
+        # Phase 2a agent returns valid AC output
+        valid_ac = json.dumps([{
+            "feature": "Home",
+            "status": "FOUND",
+            "route": "/",
+            "match_notes": "Route exists",
+            "criteria": [
+                {
+                    "id": "AC-001",
+                    "description": "Home page loads",
+                    "targets_present_element": True,
+                    "steps": ["Navigate to /"],
+                    "expected_outcome": "Page loads",
+                }
+            ],
+            "drift_notes": None,
+        }])
+
+        mock_2a_result = MagicMock()
+        mock_2a_result.output = f"```json\n{valid_ac}\n```"
+
+        # Phase 2b agent raises ClaudeOutputError
+        mock_run_claude.side_effect = [
+            mock_2a_result,
+            ClaudeOutputError("agent failed"),
+        ]
+
+        result = pipeline._run_phase_2()
+
+        # Phase 2a output should be preserved
+        assert result.status == "AC_GENERATION_COMPLETE"
+        assert len(result.features) == 1
+        assert result.features[0]["feature"] == "Home"
+        # run_claude should have been called twice (2a + 2b)
+        assert mock_run_claude.call_count == 2

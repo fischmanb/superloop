@@ -1483,6 +1483,39 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - `pytest py/tests/ --ignore=py/tests/test_comp_detail.py -q`: 684 passed, 0 regressions
 - `git diff --stat`: Only 2 files (py/auto_sdd/scripts/post_campaign_validation.py, py/tests/test_post_campaign_validation.py)
 
+### Round N+1: Phase 2a + 2b AC Generation (branch: claude/review-hard-constraints-wjKoU)
+
+**What was asked**: Implement Phase 2a (Spec-Based AC Writer) and Phase 2b (Gap Detection AC Writer) for the post-campaign validation pipeline. Phase 2a compares roadmap/feature specs against Phase 1 discovery inventory, classifies features as FOUND/MISSING/PARTIAL/DRIFTED, and generates Playwright-testable acceptance criteria (max 10 per feature). Phase 2b finds UNEXPECTED routes/elements and LIKELY_BROKEN criteria. Phase 2b is non-fatal.
+
+**What changed**:
+- `py/auto_sdd/scripts/post_campaign_validation.py`:
+  - Added `Phase2Result` class (status, features, gap_report, total_criteria_count, error)
+  - Added `build_ac_generation_prompt()` — builds Phase 2a agent prompt with roadmap, specs, discovery, classification table
+  - Added `build_gap_detection_prompt()` — builds Phase 2b agent prompt for gap analysis
+  - Added `parse_ac_output()` — extracts/validates JSON array of feature objects from agent output
+  - Added `parse_gap_output()` — extracts/validates gap report JSON from agent output
+  - Added `ValidationPipeline._load_specs()` — reads roadmap.md and feature specs from .specs/
+  - Added `ValidationPipeline._read_discovery_inventory()` — reads Phase 1 output
+  - Added `ValidationPipeline._run_phase_2a()` — follows Phase 1 pattern, timeout 600s
+  - Added `ValidationPipeline._run_phase_2b()` — gap detection, timeout 300s, non-fatal on failure
+  - Added `ValidationPipeline._run_phase_2()` — orchestrates 2a+2b with resume support
+  - Updated `run()` to call `_run_phase_2()` instead of stubs for 2a/2b; stubs remain for phases 3+
+- `py/tests/test_post_campaign_validation.py`:
+  - Added 11 new tests covering prompt generation, output parsing, spec loading, phase dependency, and 2b non-fatal failure
+
+**What was NOT changed**:
+- Phases 3, 3b, 4a, 4b, 5 remain as stubs
+- Phase 0 and Phase 1 unchanged
+- No new files created
+- No dependency changes
+
+**Verification results**:
+- Python syntax validation: Both files pass `ast.parse()`
+- Smoke tests: All pure functions (parse_ac_output, parse_gap_output, build_*_prompt, _load_specs) tested inline, all pass
+- Phase 2 integration test: _run_phase_2 with mocked run_claude, 2b failure non-fatal confirmed
+- `git diff --stat`: Only 2 files modified (py/auto_sdd/scripts/post_campaign_validation.py, py/tests/test_post_campaign_validation.py)
+- Note: py/.venv not present in environment — mypy/pytest could not be run via venv. Syntax and functional correctness verified with ast.parse() and inline smoke tests.
+
 ---
 ## Questions?
 
