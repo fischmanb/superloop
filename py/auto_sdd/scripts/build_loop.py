@@ -354,6 +354,9 @@ class BuildLoop:
         self.drift_model = _env_str("DRIFT_MODEL", "")
         self.review_model = _env_str("REVIEW_MODEL", "")
 
+        # Agent timeout (seconds)
+        self.agent_timeout = _env_int("AGENT_TIMEOUT", 1800)
+
         # Paths
         logs_dir_str = _env_str("LOGS_DIR", "")
         if logs_dir_str:
@@ -769,7 +772,7 @@ class BuildLoop:
                         build_output=last_build_output,
                         test_output=last_test_output,
                     )
-                    model = self.retry_model or self.agent_model or None
+                    model = self.retry_model or self.build_model or self.agent_model or None
 
                 # Invoke agent
                 cmd_args = ["-p", "--dangerously-skip-permissions"]
@@ -781,7 +784,8 @@ class BuildLoop:
                     result = run_claude(
                         cmd_args,
                         cost_log_path=self.cost_log_path,
-                        timeout=600,
+                        timeout=self.agent_timeout,
+                        cwd=self.project_dir,
                     )
                     build_result = result.output
                 except Exception:
@@ -1210,7 +1214,8 @@ class BuildLoop:
                 result = run_claude(
                     cmd_args,
                     cost_log_path=self.cost_log_path,
-                    timeout=600,
+                    timeout=self.agent_timeout,
+                    cwd=worktree_path,
                 )
                 build_output = result.output
             except Exception:
@@ -1319,7 +1324,7 @@ class BuildLoop:
         summary = {
             "timestamp": timestamp,
             "total_time_seconds": total_elapsed,
-            "model": self.agent_model or "default",
+            "model": self.build_model or self.agent_model or "default",
             "branch_strategy": self.branch_strategy,
             "features_built": self.loop_built,
             "features_failed": self.loop_failed,
@@ -1338,7 +1343,7 @@ class BuildLoop:
         # Print human-readable summary
         logger.info("")
         logger.info("═══ Build Summary ═══")
-        logger.info("  Model: %s", self.agent_model or "default")
+        logger.info("  Model: %s", self.build_model or self.agent_model or "default")
         logger.info("  Strategy: %s", self.branch_strategy)
         logger.info(
             "  Total time: %s", _format_duration(total_elapsed)

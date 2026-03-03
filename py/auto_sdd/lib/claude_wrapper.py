@@ -157,6 +157,7 @@ def run_claude(
     *,
     cost_log_path: Path | None = None,
     timeout: int = 600,
+    cwd: Path | str | None = None,
 ) -> ClaudeResult:
     """Invoke the ``claude`` CLI, extract the result, and optionally log cost.
 
@@ -167,6 +168,8 @@ def run_claude(
         args: CLI arguments (e.g., ``["-p", "--dangerously-skip-permissions", prompt]``).
         cost_log_path: Path to JSONL cost log.  ``None`` disables logging.
         timeout: Seconds before the subprocess is killed.  Default 10 minutes.
+        cwd: Working directory for the subprocess.  ``None`` inherits the
+            current process's working directory.
 
     Returns:
         :class:`ClaudeResult` with parsed output and cost metadata.
@@ -192,6 +195,7 @@ def run_claude(
             text=True,
             timeout=timeout,
             env=env,
+            cwd=cwd,
         )
     except subprocess.TimeoutExpired as exc:
         logger.error("Claude timed out after %ds", timeout)

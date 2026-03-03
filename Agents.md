@@ -1402,6 +1402,30 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 
 **Verification**: mypy --strict passes on all 4 source files. 205 targeted tests pass. 608 full suite tests pass. git diff --stat shows only 8 allowed files.
 
+### Round 50: Build loop invocation fixes (cwd, model fallback, timeout) (2026-03-03)
+
+**What was asked**: Fix 4 bugs found during a 3-feature campaign against cre-lease-tracker. All 3 features failed due to agent invocation plumbing issues.
+
+**What changed**:
+- `py/auto_sdd/lib/claude_wrapper.py`: Bug A — added optional `cwd` parameter to `run_claude()`, passed through to `subprocess.run`. Agents now run in the target project directory instead of inheriting the Python process's CWD.
+- `py/auto_sdd/scripts/build_loop.py`:
+  - Bug A — both `run_claude` call sites (main build loop and independent pass) now pass the project directory as `cwd`.
+  - Bug B — retry model fallback chain changed from `self.retry_model or self.agent_model or None` to `self.retry_model or self.build_model or self.agent_model or None`, so BUILD_MODEL is used when RETRY_MODEL is unset.
+  - Bug C — build summary model field changed from `self.agent_model or "default"` to `self.build_model or self.agent_model or "default"` in both the JSON summary dict and the log output.
+  - Bug D — added `AGENT_TIMEOUT` env var (default 1800s) read in `__init__`. Both `run_claude` call sites use `self.agent_timeout` instead of hardcoded 600.
+
+**What was NOT changed**: No changes to prompt building, drift checking, branch management, signal parsing, post-build gates, or any other build loop logic. No new files created. No tests modified.
+
+**Verification**:
+- `grep -n cwd claude_wrapper.py`: Shows cwd in function signature (line 160), docstring (line 171), and subprocess.run call (line 198)
+- `grep -n 'retry_model or' build_loop.py`: Shows `self.build_model` in the retry fallback chain (line 775)
+- `grep -n 'timeout=600' build_loop.py`: Zero matches (all replaced with `self.agent_timeout`)
+- `grep -n agent_timeout build_loop.py`: Shows `__init__` assignment (line 358) + both call sites (lines 787, 1217)
+- `mypy --strict`: Success, no issues in 2 source files
+- `pytest tests/ -x -q`: 619 passed
+- `git diff --stat`: Only 2 Python files + Agents.md changed
+- Note: Verification step 3 (`grep 'agent_model or "default"'`) returns 2 matches because the new correct pattern (`self.build_model or self.agent_model or "default"`) contains the search substring. The old standalone `self.agent_model or "default"` pattern is gone — `build_model or` now precedes it in both locations.
+
 ---
 ## Questions?
 
