@@ -252,6 +252,50 @@ class TestCheckDeadExports:
         dead_syms = [e.split(": ")[1] for e in result.dead_exports if ": " in e]
         assert "sharedFn" not in dead_syms
 
+    def test_go_exported_symbol_detected(self, tmp_path: Path) -> None:
+        """Go uppercase-initial func/type is detected as an export."""
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "handler.go").write_text(
+            "package handlers\n\n"
+            "func HandleRequest() {}\n"
+            "type Config struct {}\n"
+        )
+        (src / "other.go").write_text("package handlers\n\nfunc init() {}\n")
+        result = check_dead_exports(tmp_path)
+        dead_syms = [e.split(": ")[1] for e in result.dead_exports if ": " in e]
+        assert "HandleRequest" in dead_syms
+        assert "Config" in dead_syms
+
+    def test_go_unexported_symbol_not_flagged(self, tmp_path: Path) -> None:
+        """Go lowercase-initial symbols are not exports and should not appear."""
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "internal.go").write_text(
+            "package internal\n\n"
+            "func helperFunc() {}\n"
+            "type config struct {}\n"
+        )
+        (src / "other.go").write_text("package internal\n")
+        result = check_dead_exports(tmp_path)
+        dead_syms = [e.split(": ")[1] for e in result.dead_exports if ": " in e]
+        assert "helperFunc" not in dead_syms
+        assert "config" not in dead_syms
+
+    def test_go_used_export_not_flagged(self, tmp_path: Path) -> None:
+        """Go exported symbol referenced in another file is not dead."""
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "types.go").write_text(
+            "package models\n\ntype UserModel struct { Name string }\n"
+        )
+        (src / "service.go").write_text(
+            "package models\n\nvar u UserModel\n"
+        )
+        result = check_dead_exports(tmp_path)
+        dead_syms = [e.split(": ")[1] for e in result.dead_exports if ": " in e]
+        assert "UserModel" not in dead_syms
+
 
 # ── should_run_step ──────────────────────────────────────────────────────────
 
