@@ -35,6 +35,8 @@ This project uses a spec-driven development workflow. Follow these rules in all 
 
 **L-00175:** Prefer mechanical Python over agent invocation for structural comparison. Agents for judgment (classification, RCA), code for structure (set operations, catalog construction). If you can write the function without an LLM, you should.
 
+**L-00178:** 300-line rule. If your solution to any single problem would produce 300+ lines (prompt content, constraint files, injected context, config), stop and ask: does a build tool, linter, test, or existing gate already enforce this? Enumerate at least two mechanical alternatives. Proceed with the 300+ line approach only if no mechanical alternative exists. Log your reasoning. This is not blocking — it's a mandatory thinking step.
+
 ---
 
 ## Response & Prompt Scope Discipline (L-00143)
