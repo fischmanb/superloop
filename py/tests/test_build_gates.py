@@ -69,14 +69,17 @@ class TestDetectBuildCheck:
     def test_nextjs_config_js(self, tmp_path: Path) -> None:
         (tmp_path / "next.config.js").touch()
         (tmp_path / "tsconfig.json").touch()
+        (tmp_path / "package.json").write_text('{"scripts": {"build": "next build"}}')
         assert detect_build_check(tmp_path) == "npm run build"
 
     def test_nextjs_config_mjs(self, tmp_path: Path) -> None:
         (tmp_path / "next.config.mjs").touch()
+        (tmp_path / "package.json").write_text('{"scripts": {"build": "next build"}}')
         assert detect_build_check(tmp_path) == "npm run build"
 
     def test_nextjs_config_ts(self, tmp_path: Path) -> None:
         (tmp_path / "next.config.ts").touch()
+        (tmp_path / "package.json").write_text('{"scripts": {"build": "next build"}}')
         assert detect_build_check(tmp_path) == "npm run build"
 
     def test_nextjs_beats_tsconfig(self, tmp_path: Path) -> None:
@@ -84,9 +87,18 @@ class TestDetectBuildCheck:
         (tmp_path / "next.config.js").touch()
         (tmp_path / "tsconfig.json").touch()
         (tmp_path / "tsconfig.build.json").touch()
+        (tmp_path / "package.json").write_text('{"scripts": {"build": "next build"}}')
         result = detect_build_check(tmp_path)
         assert result == "npm run build"
         assert "tsc" not in result
+
+    def test_nextjs_without_build_script_falls_through(self, tmp_path: Path) -> None:
+        """Next.js config present but no build script → falls to tsconfig."""
+        (tmp_path / "next.config.js").touch()
+        (tmp_path / "tsconfig.json").touch()
+        (tmp_path / "package.json").write_text('{"scripts": {"dev": "next dev"}}')
+        result = detect_build_check(tmp_path)
+        assert "tsc --noEmit" in result
 
 
 # ── detect_test_check ────────────────────────────────────────────────────────

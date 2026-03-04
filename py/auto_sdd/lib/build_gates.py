@@ -82,7 +82,13 @@ def detect_build_check(
         "next.config.cjs",
     ]
     if any((project_dir / cfg).exists() for cfg in nextjs_configs):
-        return "npm run build"
+        pkg = project_dir / "package.json"
+        if pkg.exists():
+            try:
+                if '"build"' in pkg.read_text():
+                    return "npm run build"
+            except OSError:
+                pass
 
     # TypeScript
     if (project_dir / "tsconfig.build.json").exists():
