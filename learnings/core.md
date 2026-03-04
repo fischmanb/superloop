@@ -129,3 +129,9 @@ Checkpoint step 4 must actively scan: agent completions (validate/contradict exi
 ## L-00175 — Prefer mechanical validation over agent invocation for structural comparison
 **Source:** `architectural-rationale.md`
 **Why core:** Without this, a fresh session will default to dispatching an agent for every pipeline phase, including tasks that are pure data comparison. The distinction — agents for judgment, Python for structure — cuts phase execution time from minutes to milliseconds, eliminates parsing failure risk, and reduces API cost to zero for those phases. Applied in Phase 2b (gap detection) and Phase 4a (failure catalog). The heuristic: if you can write the function without an LLM, you should.
+
+---
+
+## L-00178 — Chat sessions must gate-check elaborate prompt work against problem layer
+**Source:** `process-rules.md`
+**Why core:** Without this, a chat session will help build an elaborate agent prompt without questioning whether prompting is the right solution layer. Observed directly: a prior session built a 377-line prompt with 62 constraint patterns and a detection+injection pipeline to prevent transitive import violations — when the actual root cause was a 10-line detection ordering bug in build_gates.py. The gate-check: "Does a build tool, linter, test, or existing gate already enforce this constraint? If yes, ensure it runs." Enforced mechanically via `MAX_INJECTED_SECTION_LINES` (150) and `MAX_TOTAL_PROMPT_LINES` (400) constants in prompt_builder.py, asserted in test_prompt_builder.py. Not blocking at runtime — the test suite catches it during development.

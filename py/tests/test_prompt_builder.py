@@ -9,6 +9,8 @@ import pytest
 from auto_sdd.lib.drift import MistakeTracker
 from auto_sdd.lib.prompt_builder import (
     BuildConfig,
+    MAX_INJECTED_SECTION_LINES,
+    MAX_TOTAL_PROMPT_LINES,
     _resolve_spec_file,
     build_feature_prompt,
     build_retry_prompt,
@@ -373,3 +375,78 @@ class TestResolveSpecFile:
              patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback", return_value=""):
             prompt = build_feature_prompt(1, "nonexistent", tmp_path, config)
         assert "SPEC_FILE: {path to the .feature.md file you created/updated}" in prompt
+
+
+# ── Prompt size limits (L-00178) ─────────────────────────────────────────────
+
+
+class TestPromptSizeLimits:
+    """L-00178: if a single injected section or the total prompt exceeds
+    size limits, the solution is probably in the wrong layer."""
+
+    def _make_prompt(self, tmp_path: Path, **overrides: str) -> str:
+        config = BuildConfig(project_dir=tmp_path)
+        codebase = overrides.get("codebase_summary", "")
+        eval_fb = overrides.get("eval_feedback", "")
+        with patch(
+            "auto_sdd.lib.prompt_builder.generate_codebase_summary",
+            return_value=codebase,
+        ), patch(
+            "auto_sdd.lib.prompt_builder.read_latest_eval_feedback",
+            return_value=eval_fb,
+        ):
+            return build_feature_prompt(1, "test-feature", tmp_path, config)
+
+    def test_base_prompt_under_total_limit(self, tmp_path: Path) -> None:
+        prompt = self._make_prompt(tmp_path)
+        lines = prompt.split("\n")
+        assert len(lines) <= MAX_TOTAL_PROMPT_LINES, (
+            f"L-00178: base prompt is {len(lines)} lines "
+            f"(limit {MAX_TOTAL_PROMPT_LINES})"
+        )
+
+    def test_bloated_section_caught(self, tmp_path: Path) -> None:
+        """A 200-line injected section should exceed the per-section limit."""
+        bloat = "\n".join(f"pattern {i}: don't do this" for i in range(200))
+        prompt = self._make_prompt(tmp_path, codebase_summary=bloat)
+        # Find the codebase summary section
+        lines = prompt.split("\n")
+        in_section = False
+        section_lines = 0
+        for line in lines:
+            if line.startswith("## Codebase Summary"):
+                in_section = True
+                section_lines = 0
+                continue
+            if in_section and line.startswith("## "):
+                break
+            if in_section:
+                section_lines += 1
+        assert section_lines > MAX_INJECTED_SECTION_LINES, (
+            "Test setup error: bloated section should exceed limit"
+        )
+
+    def test_normal_sections_under_limit(self, tmp_path: Path) -> None:
+        """With typical injections, no section exceeds the limit."""
+        codebase = "\n".join(f"component {i}" for i in range(30))
+        eval_fb = "\n".join(f"feedback {i}" for i in range(10))
+        prompt = self._make_prompt(
+            tmp_path, codebase_summary=codebase, eval_feedback=eval_fb
+        )
+        lines = prompt.split("\n")
+        current_header: str | None = None
+        section_start = 0
+        for i, line in enumerate(lines):
+            if line.startswith("## "):
+                if current_header is not None:
+                    section_len = i - section_start
+                    assert section_len <= MAX_INJECTED_SECTION_LINES, (
+                        f"L-00178: '{current_header}' is {section_len} lines"
+                    )
+                current_header = line
+                section_start = i
+        if current_header is not None:
+            section_len = len(lines) - section_start
+            assert section_len <= MAX_INJECTED_SECTION_LINES, (
+                f"L-00178: '{current_header}' is {section_len} lines"
+            )

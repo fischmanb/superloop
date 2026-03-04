@@ -33,6 +33,13 @@ from auto_sdd.lib.reliability import Feature
 
 logger = logging.getLogger(__name__)
 
+# ── Prompt size limits (L-00178) ─────────────────────────────────────────────
+# If a single injected section exceeds this, the solution is probably in the
+# wrong layer. See L-00178: "Does a build tool, linter, test, or existing gate
+# already enforce this constraint? If yes, ensure it runs."
+MAX_INJECTED_SECTION_LINES = 150
+MAX_TOTAL_PROMPT_LINES = 400
+
 
 def _normalize_name(name: str) -> str:
     """Normalize a feature name for comparison: lowercase, spaces→hyphens."""
