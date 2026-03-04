@@ -614,3 +614,29 @@ Before adding support for languages, frameworks, or ecosystems not already prese
 - **Related:** L-00175 (related_to), L-00143 (related_to)
 
 When dispatching sequential agent prompts, the next prompt can be written while the current agent executes — provided the current phase's output schema is deterministic. The prompt references the schema contract, not the actual output data. Preconditions in the next prompt verify the prior phase landed (grep-checks for expected classes/functions). Applied across Phases 4a→4b→5 of the auto-QA pipeline: Phase 4b prompt was written before 4a returned, Phase 5 before 4b returned. Zero rework from this approach. The prerequisite is that output schemas are fully specified before implementation — if the schema might change during implementation, pipelining creates rework risk. Saves significant wall-clock time in multi-phase pipelines.
+
+---
+
+## L-00178 — Chat sessions must gate-check elaborate prompt work against problem layer
+
+- **Type:** process_rule
+- **Tags:** prompt-engineering, over-engineering, solution-layer, gate-check
+- **Confidence:** high
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** L-00001 (reinforces), L-00177 (derived from same incident), L-00125 (related_to)
+
+When a user proposes or begins building an elaborate agent prompt, the chat session must ask: is the problem actually in the agent behavior layer, or is it in infrastructure, detection, or gating? A prior session helped build a 377-line prompt with 62 constraint patterns, a web-verification ceremony, and a detection+injection pipeline in prompt_builder.py — all to prevent transitive import violations. The actual root cause was a 10-line detection ordering bug in build_gates.py where `tsc --noEmit` matched before `next build`. The chat never questioned whether prompting was the right layer. This is L-00001 applied to solution design: the same way agents' self-assessments shouldn't be trusted, agents' compliance with injected rules shouldn't be the primary enforcement mechanism when a mechanical gate can catch the violation directly. The gate-check question: "Does a build tool, linter, test, or existing gate already enforce this constraint? If yes, ensure it runs. If no, then consider prompt injection."
+
+---
+
+## L-00179 — Speculative ecosystem coverage without observed failures is waste
+
+- **Type:** process_rule
+- **Tags:** scope, speculation, maintenance-cost, yagni
+- **Confidence:** high
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** L-00174 (reinforces), L-00143 (related_to)
+
+Do not build preventive infrastructure for ecosystems that have zero observed failures. The Round 50 prompt included 50 constraint patterns across Go, Rust, Python, and general TypeScript — ecosystems where no transitive boundary violation had ever occurred in actual campaigns. Each pattern requires maintenance (docs change, frameworks evolve, false patterns mislead agents). The only observed failures were in Next.js. Writing 50 speculative patterns to prevent hypothetical failures in 5 other ecosystems is engineering effort with no data justifying it. When observed failures emerge in a new ecosystem, add coverage then — the marginal cost of a single constraint file is low. The upfront cost of maintaining six files with 62 patterns against zero signal is not.

@@ -1,6 +1,6 @@
 {
-  "last_check_ts": "2026-03-04T04:00:00Z",
+  "last_check_ts": "2026-03-04T04:30:00Z",
   "last_check_hash": "c2a4912b8d6c926c6c336b8e96dbe93c",
-  "prompt_count": 2,
-  "pending_captures": ["detect_build_check() Next.js priority fix: add next.config.* detection above tsconfig to run npm run build instead of tsc --noEmit — makes L-00012 mechanically catchable per-feature instead of post-campaign"]
+  "prompt_count": 0,
+  "pending_captures": []
 }

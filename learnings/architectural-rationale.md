@@ -144,3 +144,16 @@ Date: 2026-03-03
 Related: L-00001 (reinforces), L-00016 (extends), L-00028 (related_to)
 
 Prefer mechanical validation over agent invocation for structural comparison tasks. When the task is comparing two known data structures — routes vs criteria coverage, schema field validation, set membership, catalog construction from structured inputs — pure Python is faster (~0ms vs 300+s), cheaper ($0 vs API cost), and more reliable (deterministic vs parsing failures and hallucination risk) than a second agent call. Use agents for judgment tasks where ambiguous inputs require reasoning (classifying features as FOUND/MISSING/DRIFTED, grouping failures by root cause, writing fix code). Use mechanical code for comparison tasks where inputs and logic are fully determined. Applied in Phase 2b (gap detection refactored from agent to set operations) and Phase 4a (failure catalog is deterministic restructuring of Phase 3 output with Phase 2 metadata). The distinction: if you can write the function without an LLM, you should.
+
+---
+
+## L-00177 — Build gate detection must order from most-specific to most-generic
+
+- **Type:** architectural_rationale
+- **Tags:** build-gates, detection-ordering, composition-failures, nextjs
+- **Confidence:** high
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** L-00012 (root cause of recurrence), L-00175 (related_to)
+
+When a framework-specific build tool is stricter than a generic language tool and the generic matches first, composition failures go undetected. `detect_build_check()` matched `tsconfig.json` before checking for `next.config.*`, returning `tsc --noEmit` for Next.js projects. `tsc` validates types but does not check server/client bundle boundaries — only `next build` does. This caused L-00012 to recur across two full campaigns (stakd-v1 and stakd-v2, 28 features each) despite the pattern being known. The fix: detect Next.js above generic TypeScript. Generalizable: any detection function that selects tools by file presence must order from most-specific framework to most-generic language, because frameworks add constraints their underlying language tooling doesn't enforce.
