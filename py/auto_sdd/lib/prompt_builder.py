@@ -41,6 +41,52 @@ MAX_INJECTED_SECTION_LINES = 150
 MAX_TOTAL_PROMPT_LINES = 400
 
 
+def _warn_prompt_size(prompt: str) -> None:
+    """Emit advisory warnings if prompt exceeds size thresholds (L-00178).
+
+    Non-blocking. Logs warnings so operators see them in build output
+    regardless of which model or framework runs the agent.
+    """
+    lines = prompt.split("\n")
+
+    if len(lines) > MAX_TOTAL_PROMPT_LINES:
+        logger.warning(
+            "L-00178: prompt is %d lines (threshold %d). "
+            "Is prompting the right solution layer?",
+            len(lines),
+            MAX_TOTAL_PROMPT_LINES,
+        )
+
+    current_header: str | None = None
+    section_start = 0
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            if current_header is not None:
+                section_len = i - section_start
+                if section_len > MAX_INJECTED_SECTION_LINES:
+                    logger.warning(
+                        "L-00178: section '%s' is %d lines "
+                        "(threshold %d). Does a build tool or "
+                        "gate already enforce this?",
+                        current_header,
+                        section_len,
+                        MAX_INJECTED_SECTION_LINES,
+                    )
+            current_header = line.lstrip("# ").strip()
+            section_start = i
+    if current_header is not None:
+        section_len = len(lines) - section_start
+        if section_len > MAX_INJECTED_SECTION_LINES:
+            logger.warning(
+                "L-00178: section '%s' is %d lines "
+                "(threshold %d). Does a build tool or "
+                "gate already enforce this?",
+                current_header,
+                section_len,
+                MAX_INJECTED_SECTION_LINES,
+            )
+
+
 def _normalize_name(name: str) -> str:
     """Normalize a feature name for comparison: lowercase, spaces→hyphens."""
     return name.lower().replace(" ", "-").replace("_", "-")
@@ -260,7 +306,9 @@ def build_feature_prompt(
         "They are used by the automated drift-check that runs after your build.",
     ])
 
-    return "\n".join(parts)
+    result = "\n".join(parts)
+    _warn_prompt_size(result)
+    return result
 
 
 # ── Retry prompt ─────────────────────────────────────────────────────────────

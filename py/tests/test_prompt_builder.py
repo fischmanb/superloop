@@ -426,6 +426,17 @@ class TestPromptSizeLimits:
             "Test setup error: bloated section should exceed limit"
         )
 
+    def test_warning_emitted_for_bloated_section(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """_warn_prompt_size fires a log warning for oversized sections."""
+        import logging
+
+        bloat = "\n".join(f"pattern {i}" for i in range(200))
+        with caplog.at_level(logging.WARNING, logger="auto_sdd.lib.prompt_builder"):
+            self._make_prompt(tmp_path, codebase_summary=bloat)
+        assert "L-00178" in caplog.text
+
     def test_normal_sections_under_limit(self, tmp_path: Path) -> None:
         """With typical injections, no section exceeds the limit."""
         codebase = "\n".join(f"component {i}" for i in range(30))
