@@ -643,7 +643,7 @@ Mechanical enforcement in prompt_builder.py: `MAX_INJECTED_SECTION_LINES` (150) 
 - **Date:** 2026-03-04
 - **Related:** L-00174 (reinforces), L-00143 (related_to)
 
-Do not build preventive infrastructure for ecosystems that have zero observed failures.
+Do not build preventive infrastructure for ecosystems that have zero observed failures. The Round 50 prompt included 50 constraint patterns across Go, Rust, Python, and general TypeScript — ecosystems where no transitive boundary violation had ever occurred in actual campaigns. Each pattern requires maintenance (docs change, frameworks evolve, false patterns mislead agents). The only observed failures were in Next.js. Writing 50 speculative patterns to prevent hypothetical failures in 5 other ecosystems is engineering effort with no data justifying it. When observed failures emerge in a new ecosystem, add coverage then — the marginal cost of a single constraint file is low. The upfront cost of maintaining six files with 62 patterns against zero signal is not.
 
 ## L-00180 — Silent instruction overrides are never acceptable
 
@@ -663,4 +663,24 @@ When deviating from an explicit Brian instruction, always state what you're doin
 - **Date:** 2026-03-04
 - **Related:** L-00180 (reinforces)
 
-When reading files for investigation, stash key findings (function locations, patterns, class boundaries) to a local scratch file (e.g. `/tmp/sdd-scratch.md`) after first read. Never re-read the same file regions across tool calls. This is a hard rule. Violating it caused 11+ redundant reads across two responses, one of which failed to complete, burning Extra Usage billing. The Round 50 prompt included 50 constraint patterns across Go, Rust, Python, and general TypeScript — ecosystems where no transitive boundary violation had ever occurred in actual campaigns. Each pattern requires maintenance (docs change, frameworks evolve, false patterns mislead agents). The only observed failures were in Next.js. Writing 50 speculative patterns to prevent hypothetical failures in 5 other ecosystems is engineering effort with no data justifying it. When observed failures emerge in a new ecosystem, add coverage then — the marginal cost of a single constraint file is low. The upfront cost of maintaining six files with 62 patterns against zero signal is not.
+When reading files for investigation, stash key findings (function locations, patterns, class boundaries) to a local scratch file (e.g. `/tmp/sdd-scratch.md`) after first read. Never re-read the same file regions across tool calls. This is a hard rule. Violating it caused 11+ redundant reads across two responses, one of which failed to complete, burning Extra Usage billing.
+
+## L-00185 — pytest --durations=0 is the first tool for slow test diagnosis
+
+- **Type:** process-rule
+- **Tags:** test-diagnosis, surgical-targeting, efficiency
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** L-00184 (same session)
+
+`pytest --durations=0` is the first tool for slow test diagnosis. It shows wall time per test, sorted descending. In both `test_overnight_autonomous` and `test_build_loop`, it immediately isolated the 2-3 tests responsible for 99%+ of runtime. No need to bisect, profile, or add timing instrumentation.
+
+## L-00186 — The scratch file stash pattern works and is mandatory
+
+- **Type:** process-rule
+- **Tags:** scratch-file, tool-efficiency, stash-reads
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** L-00181 (operationalizes)
+
+The `/tmp/sdd-scratch.md` pattern works. Stash diagnostic findings (durations output, line numbers, root cause) after first tool call, then execute fixes from the stash with zero re-reads. This session: one `--durations` call → stash → 3 edits → done. Previous session without stashing: 11+ reads across two responses, one failed to complete.

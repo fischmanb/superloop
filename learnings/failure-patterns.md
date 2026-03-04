@@ -280,3 +280,23 @@ Stating a number as an "estimate" without showing the computation is decoration 
 - **Related:** L-00180 (same session)
 
 Tests calling `_build_single_feature` or `_build_feature_prompt` must mock `generate_codebase_summary` — it calls `run_claude` which spawns real `subprocess.run(["claude",...])`. This caused the 71-test hang in `test_overnight_autonomous`. Six tests were affected. Fix: `@patch("...generate_codebase_summary", return_value="mock summary")`. General principle: any test exercising a code path that eventually calls an external CLI must mock every intermediate function that spawns subprocesses, not just the top-level agent runner.
+
+## L-00183 — Wrapping code in a new `with` block requires re-indenting the entire body
+
+- **Type:** failure-pattern
+- **Tags:** edit-error, indentation, with-block
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** L-00182 (same session)
+
+When wrapping existing code in a new `with` block, the entire body must be re-indented. The edit_block tool replaces exact strings — if the replacement adds a `with` wrapper but keeps the body at original indentation, Python raises IndentationError. Always mentally trace the indentation delta.
+
+## L-00184 — generate_codebase_summary is the single highest-impact unmocked function in the test suite
+
+- **Type:** empirical-finding
+- **Tags:** test-performance, mock-target, generate_codebase_summary
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** L-00182 (same root cause)
+
+As of 4pm March 4th, 2026 in auto-sdd, `generate_codebase_summary` is the single highest-impact unmocked function in the test suite. It spawns real `subprocess.run(["claude",...])` via `run_claude`. Any test exercising `build_feature_prompt` (from prompt_builder) or `_build_feature_prompt` (from overnight_autonomous) hangs without it mocked. Mock target depends on import chain: mock where the symbol is *used*, not where it's *defined*. Two independent fixes (L-00182) took 740 tests from hanging/162s to 15.86s.
