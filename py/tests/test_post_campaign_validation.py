@@ -456,7 +456,8 @@ class TestCleanupKillsServer:
 
         mock_proc.terminate.assert_called_once()
 
-    def test_cleanup_wipes_credentials(self, tmp_project: Path) -> None:
+    def test_cleanup_preserves_credentials(self, tmp_project: Path) -> None:
+        """Cleanup should NOT wipe QA credentials — teardown is separate."""
         pipeline = ValidationPipeline(
             project_dir=tmp_project,
             flush_mode="auto",
@@ -469,6 +470,23 @@ class TestCleanupKillsServer:
 
         atexit.unregister(pipeline._cleanup)
         pipeline._cleanup()
+
+        assert creds_path.exists()
+
+    def test_teardown_qa_wipes_credentials(self, tmp_project: Path) -> None:
+        """teardown_qa should wipe QA credentials and run seed --teardown."""
+        pipeline = ValidationPipeline(
+            project_dir=tmp_project,
+            flush_mode="auto",
+            validation_timeout=5.0,
+        )
+
+        creds_path = tmp_project / ".sdd-state" / "qa-credentials.json"
+        creds_path.write_text('{"email":"test@test.local"}')
+        assert creds_path.exists()
+
+        atexit.unregister(pipeline._cleanup)
+        pipeline.teardown_qa()
 
         assert not creds_path.exists()
 

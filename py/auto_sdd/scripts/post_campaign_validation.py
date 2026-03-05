@@ -2244,7 +2244,7 @@ class ValidationPipeline:
         atexit.register(self._cleanup)
 
     def _cleanup(self) -> None:
-        """Kill dev server, teardown QA account, wipe credentials."""
+        """Kill dev servers. Does NOT teardown QA account or wipe credentials."""
         logger.info("Running cleanup")
 
         # Kill dev server(s)
@@ -2264,12 +2264,13 @@ class ValidationPipeline:
         self._server_proc = None
         self._server_procs = []
 
-        # Teardown QA account
-        if self._seed_script is not None:
-            logger.info("Running QA teardown: %s --teardown", self._seed_script)
-            _run_seed_script(self._seed_script, self.project_dir, teardown=True)
+    def teardown_qa(self) -> None:
+        """Teardown QA account and wipe credentials. Call explicitly via --teardown."""
+        seed_script = self._seed_script or _find_seed_script(self.project_dir)
+        if seed_script is not None:
+            logger.info("Running QA teardown: %s --teardown", seed_script)
+            _run_seed_script(seed_script, self.project_dir, teardown=True)
 
-        # Wipe credentials
         creds_path = self.state_dir / "qa-credentials.json"
         if creds_path.exists():
             logger.info("Wiping QA credentials")
@@ -3677,6 +3678,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Run only a single phase (e.g., 0, 1, 2a, 3, 4a, 4b, 5)",
     )
+    parser.add_argument(
+        "--teardown",
+        action="store_true",
+        help="Teardown QA account and wipe credentials, then exit",
+    )
     return parser.parse_args(argv)
 
 
@@ -3723,6 +3729,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.flush_phase is not None:
         count = pipeline.flush_phase(args.flush_phase)
         logger.info("Flushed %d pending documents for phase %s", count, args.flush_phase)
+        return EXIT_ALL_PASS
+
+    if args.teardown:
+        pipeline.teardown_qa()
         return EXIT_ALL_PASS
 
     return pipeline.run()
