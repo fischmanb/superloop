@@ -296,61 +296,68 @@ Runtime signals feed the same pattern rule system. New rules enabled by runtime 
 
 ## 8. Implementation Rounds
 
-### Round 1: Vector Store + Schema (infrastructure)
+> Revised 2026-03-04 after pressure testing. Key changes: Rounds 1+2 collapsed (value in 2 rounds not 3), single risk-context file replaces read_latest_eval_feedback chain, rule registry included from Round 2 but feature-flagged until needed, project-configurable quality dimensions, mechanical convention checks prioritized over agent judgment, manual seeding from stakd post-mortems.
+
+### Round 1: Vector Store + Schema + Wire Writers
 - **New file**: `py/auto_sdd/lib/vector_store.py`
 - FeatureVector dataclass with identity + sections dict
 - JSONL-backed CRUD: create_vector, update_section, get_vector, query_vectors
 - Section schemas defined: pre_build_v1, build_signals_v1, eval_signals_v1
 - Tests: `py/tests/test_vector_store.py`
-- **Scope**: Pure infrastructure, no wiring to existing systems
-- **Estimated tokens**: ~10k active
-
-### Round 2: Wire Writers (build loop + eval sidecar)
 - Build loop: create_vector at feature start, update_section("build_signals_v1") at feature end
 - Eval sidecar: update_section("eval_signals_v1") in _evaluate_commit
 - campaign_id generation (timestamp + strategy + model)
-- build_feature_prompt returns (prompt, injections_list) tuple
+- build_feature_prompt returns (prompt, injections_list) tuple; callers updated
 - Post-hoc component_types derivation from diff file paths
-- Tests for all wiring
-- **Touches**: build_loop.py, prompt_builder.py, overnight_autonomous.py (caller update), eval_sidecar.py, test files
-- **Estimated tokens**: ~20k active (signature change cascades)
+- Seed with manual findings from stakd-v2 post-mortem (transitive imports, scope creep in later features, chained strategy cascading failures) — stored as vectors with `source: manual`
+- Tests for store, wiring, and seeding
+- **Touches**: new vector_store.py + test, build_loop.py, prompt_builder.py, overnight_autonomous.py (caller update), eval_sidecar.py, test files
+- **Estimated tokens**: ~22k active (may need 2 sub-rounds if cascading signature changes push over budget)
 
-### Round 3: Analysis Framework + Intra-Campaign Injection
-- PatternRule protocol + rule registry
+### Round 2: Analysis Framework + Intra-Campaign Injection
+- PatternRule protocol + rule registry (feature-flagged: `ENABLE_PATTERN_ANALYSIS` env var, default false until validated)
 - Initial rules: co-occurrence, temporal decay, retry effectiveness, shared module risk
-- Intra-campaign: run rules after every N evaluated commits
-- Enriched feedback via risk_context in build_feature_prompt
-- generate_campaign_findings() markdown report
-- Tests for rules, analysis runner, and enriched feedback
-- **Touches**: eval_sidecar.py, drift.py or new analysis module, prompt_builder.py, test files
+- Intra-campaign: after every N evaluated commits (configurable, default 3), run registered rules on accumulated vectors
+- Eval sidecar writes `risk-context.md` to eval output dir (replaces current `read_latest_eval_feedback` chain entirely)
+- build_feature_prompt reads risk-context.md directly — single writer, single reader, one file
+- generate_campaign_findings() markdown report from rule outputs
+- Tests for rules, analysis runner, risk-context output, and prompt integration
+- **Touches**: eval_sidecar.py, prompt_builder.py, drift.py (remove read_latest_eval_feedback or deprecate), test files
 - **Estimated tokens**: ~18k active
 
-### Round 4: Convention Eval Signals
-- Revise generate_eval_prompt() for structured convention assessment
-- New signal parsing in write_eval_result
+### Round 3: Convention Eval Signals
+- **Mechanical convention checks first** (higher trust, lower cost):
+  - Import boundary validation: static analysis of actual import graph against allowed dependency rules
+  - Type safety: count `any` types, untyped function parameters
+  - Code duplication: detect duplicate string literals or similar function bodies
+- **Agent eval only for genuinely subjective dimensions**: naming quality, architectural appropriateness
+- Structured signal format: pattern/assessment/evidence/severity (mechanical checks weighted higher in model)
+- Project-configurable quality dimensions: `.sdd-config/eval-dimensions.yaml` defines which checks to run, what categories exist, and per-project convention rules
+- Eval prompt generator reads config to know what to ask the agent (only for non-mechanical dimensions)
 - New section: convention_signals_v1
-- Register convention-based pattern rules
+- Register convention-based pattern rules in registry (feature-flagged same as Round 2)
 - Tests
-- **Touches**: eval_lib.py, eval_sidecar.py, test files
-- **Estimated tokens**: ~12k active
+- **Touches**: eval_lib.py, eval_sidecar.py, new config file, test files
+- **Estimated tokens**: ~15k active
 
 ### Phase 2 (after 1+ real Python campaigns):
 
-**Round 5: Auto-QA Feature Attribution**
+**Round 4: Auto-QA Feature Attribution**
 - backfill_runtime_signals() joins auto-QA failures to feature vectors via file paths
 - runtime_signals_v1 section population
-- New pattern rules using runtime data
+- New pattern rules using runtime data (import boundary rule, auth coverage rule, interaction risk rule)
 - **Touches**: post_campaign_validation.py or new module, vector_store.py (minor), test files
 
-**Round 6: Cross-Campaign Model**
+**Round 5: Cross-Campaign Model**
 - scikit-learn classifier on accumulated vectors
 - Pre-campaign risk profiling
 - Risk profile consumption in build_feature_prompt
 - Model evaluation / reporting
+- Enable pattern analysis feature flag by default (validated by this point)
 
 ### Phase 3 (after 3+ campaigns):
 
-**Round 7: Meta-Learner**
+**Round 6: Meta-Learner**
 - Injection effectiveness analysis
 - Adaptive injection weighting
 - Ineffective warning pruning
@@ -361,16 +368,15 @@ Runtime signals feed the same pattern rule system. New rules enabled by runtime 
 ## 9. Dependencies and Sequencing
 
 ```
-Round 1 (vector store)
-  └──▶ Round 2 (wire writers)
-         ├──▶ Round 3 (analysis + injection)
-         │      └──▶ Round 4 (convention eval)
-         │
-         └──▶ [Run real Python campaign — produces data]
-                ├──▶ Round 5 (auto-QA attribution)
-                └──▶ Round 6 (cross-campaign model)
-                       └──▶ [Run 2 more campaigns]
-                              └──▶ Round 7 (meta-learner)
+Round 1 (vector store + wire writers)
+  ├──▶ Round 2 (analysis + injection, feature-flagged)
+  │      └──▶ Round 3 (convention eval, mechanical + agent)
+  │
+  └──▶ [Run real Python campaign — produces data]
+         ├──▶ Round 4 (auto-QA attribution)
+         └──▶ Round 5 (cross-campaign model, unflag pattern analysis)
+                └──▶ [Run 2 more campaigns]
+                       └──▶ Round 6 (meta-learner)
 ```
 
 ---
@@ -381,14 +387,19 @@ Round 1 (vector store)
 |----------|--------|-----------|
 | Detection method | Statistical rules (mechanical) | Agent judgment is unverifiable (L-00182 pattern). Deterministic detection is testable, reproducible. |
 | Schema extensibility | Sectioned dict, not flat dataclass | New signal sources register sections without schema changes. Old vectors gracefully miss new sections. |
-| Storage | JSONL behind abstraction | Simple start, SQLite swap internal-only if query patterns demand it. |
+| Storage | JSONL behind vector_store.py abstraction | Build foundation right — future rounds extend through API, not refactor. SQLite swap internal-only if needed. |
+| Rule registry | Included from Round 2, feature-flagged (`ENABLE_PATTERN_ANALYSIS`) | Registry protocol exists from the start so rules are additive. Feature flag prevents premature activation before validation. |
 | Intra-campaign threshold | Every N commits (configurable) | Too frequent = noisy with small sample. Too rare = delayed injection. N=3 balances signal vs noise. |
 | Component type derivation | Post-hoc from diff file paths | Pre-build derivation from specs requires frontmatter changes. Post-hoc is accurate and free. |
-| Convention eval | Structured signals, not prose | Prose is unverifiable. Typed categories + evidence + severity enables pattern detection. |
+| Convention eval | Mechanical first, agent eval only for subjective dimensions | Import boundaries, type safety, code duplication are statically analyzable. Agent judgment reserved for naming, architecture. Mechanical signals weighted higher. |
+| Quality dimensions | Project-configurable via `.sdd-config/eval-dimensions.yaml` | Hardcoded signal names make the system auto-sdd-specific. Config-driven dimensions generalize to any project. |
 | ML approach | Simple classifiers (logistic regression, GBT) | Interpretable, verifiable, sufficient for categorical features × small N. Not neural/opaque. |
 | Vector ownership | Single store module, multiple section writers | Avoids coordination bugs from multi-writer access to same fields. |
 | Codebase summary separation | Separate from vector store | Different cache lifecycles (tree hash vs campaign). Avoids bloating every prompt with historical data. |
+| Feedback data flow | Eval sidecar writes risk-context.md, prompt builder reads it directly | Replaces read_latest_eval_feedback chain. Single writer, single reader, one file. Simpler than multi-hop advisory string. |
 | Auto-QA join | File path intersection | Only reliable join key between per-app failures and per-feature builds. |
+| Cold start | Seed with manual findings from stakd post-mortems | Eliminates blank-slate problem. System starts with human knowledge, augments with data. |
+| Round structure | Rounds 1+2 collapsed; value in 2 rounds not 3 | First round produces vectors AND wires writers. Second round produces analysis AND injection. No pure-infrastructure rounds with zero user value. |
 
 ---
 
@@ -398,10 +409,38 @@ Round 1 (vector store)
 
 2. **Vector store location**: `logs/feature-vectors.jsonl` co-locates with build logs. Alternative: `.sdd-state/vectors/` to separate state from logs. Does it matter?
 
-3. **Convention eval categories**: The initial set (import_boundaries, state_management, error_handling, type_safety, code_reuse, naming, testing, component_architecture) may not cover all projects. Should categories be project-configurable?
+3. ~~**Convention eval categories**: Should categories be project-configurable?~~ **Decided: yes.** `.sdd-config/eval-dimensions.yaml` defines per-project categories. Initial set is a starting point, not hardcoded.
 
 4. **Intra-campaign rule frequency**: N=3 commits is a guess. Should this self-tune based on campaign size?
 
 5. **Cross-campaign model retraining**: Retrain from scratch each time, or incremental? Scratch is simpler and dataset is small. Incremental matters if campaigns get large.
 
 6. **JSONL vs SQLite transition trigger**: At what data size does JSONL query performance justify migration? Probably ~1000 vectors (35+ campaigns). May never hit this.
+
+---
+
+## 12. Pressure Test Results (2026-03-04)
+
+### Test 1: Does this achieve robust, generalizable, autonomous self-improving software realization?
+
+**Strengths**: Compounding learning loop is real — each campaign feeds the next, detection improves with data, meta-learner closes the feedback loop. Sectioned schema means new signal sources don't break existing infrastructure. Mechanical detection avoids agent-judgment trap throughout.
+
+**Weaknesses identified and addressed**:
+
+| Gap | Resolution | Round |
+|-----|-----------|-------|
+| Hardcoded signal names make system auto-sdd-specific | Project-configurable quality dimensions via `.sdd-config/eval-dimensions.yaml` | Round 3 |
+| Convention eval relies on unverifiable agent judgment | Mechanical checks first (static analysis for import boundaries, type safety, code duplication). Agent eval only for genuinely subjective dimensions. Mechanical weighted higher. | Round 3 |
+| Cold start — first campaign gets zero value from empty model | Seed with manual findings from stakd post-mortems. System starts informed. | Round 1 |
+
+### Test 2: Can outputs be achieved via simpler, more extensible, or more efficient means?
+
+**Adopted simplifications**:
+
+| Proposal | Decision |
+|----------|----------|
+| Defer vector_store.py to Round 5 | **Rejected** — foundation approach is justified given clear data model and 6-round plan. Build it right once. |
+| Collapse Rounds 1+2 | **Accepted** — first round now produces vectors AND wires writers. Value in 2 rounds not 3. |
+| Single risk-context.md file replacing read_latest_eval_feedback chain | **Accepted** — single writer (sidecar), single reader (prompt builder), one file. |
+| Defer rule registry to Phase 3 | **Rejected** — registry included from Round 2 but feature-flagged (`ENABLE_PATTERN_ANALYSIS`). Protocol exists from the start so rules are additive; flag prevents premature activation. |
+| Plain function list instead of registry | **Rejected** — same reasoning. Feature flag achieves the "don't use until validated" goal without requiring later refactor. |
