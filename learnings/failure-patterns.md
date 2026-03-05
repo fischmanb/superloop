@@ -299,7 +299,7 @@ Claude Code agents running with `--dangerously-skip-permissions` in a project di
 - **Date:** 2026-03-05
 - **Related:** L-00195 (same session)
 
-When fixing a bug in one pipeline phase, grep for the same pattern in all phases. The root-only `npm run build` bug in auto-QA (`post_campaign_validation.py`) appeared in Phase 0 (fixed via agent prompt with monorepo support), then reappeared in Phase 5's build gates (same `subprocess.run([pm, "run", "build"], cwd=str(self.project_dir))` pattern, different function). Each was discovered by running the pipeline and hitting the next instance — sequential discovery that should have been a parallel fix. After fixing any phase-specific bug, search for the relevant pattern across the entire file.
+When fixing a bug in one pipeline phase, grep for the same pattern in all phases. After fixing any phase-specific bug, search for the relevant code pattern across the entire file — sequential discovery through repeated production failures should have been a parallel fix from the first instance. Observed during auto-QA validation against CRE (`WIP/auto-qa-cre-validation.md`): the root-only `npm run build` bug in `post_campaign_validation.py` was fixed in Phase 0 (via agent prompt with monorepo support), then reappeared in Phase 5's build gates (same `subprocess.run([pm, "run", "build"], cwd=str(self.project_dir))` pattern, different function). Each instance was discovered by running the pipeline and hitting the next failure.
 
 ## L-00183 — Wrapping code in a new `with` block requires re-indenting the entire body
 
