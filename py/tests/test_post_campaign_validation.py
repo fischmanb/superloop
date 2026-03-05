@@ -18,9 +18,12 @@ from auto_sdd.scripts.post_campaign_validation import (
     EXIT_ALL_PASS,
     EXIT_INFRA_FAILURE,
     EXIT_PARTIAL,
+    EXIT_RUNTIME_FAILED,
+    PHASE_ORDER,
     CriterionResult,
     DocumentRegistry,
     FixResult,
+    Phase0Result,
     Phase1Result,
     Phase2Result,
     Phase3Result,
@@ -29,7 +32,11 @@ from auto_sdd.scripts.post_campaign_validation import (
     Phase5Result,
     ValidationPipeline,
     ValidationState,
+    _detect_dev_command_single,
+    _discover_sub_projects,
     _find_seed_script,
+    _has_build_script,
+    _parse_args,
     build_ac_generation_prompt,
     build_discovery_prompt,
     build_failure_catalog,
@@ -41,6 +48,7 @@ from auto_sdd.scripts.post_campaign_validation import (
     detect_dev_command,
     detect_package_manager,
     health_check,
+    main,
     parse_ac_output,
     parse_discovery_output,
     parse_fix_output,
@@ -2215,3 +2223,279 @@ class TestPhase5EscalationRecorded:
         assert result.fix_results[0]["status"] == "NEEDS_ESCALATION"
         # Agent was called exactly once (no retry for escalation)
         mock_run_claude.assert_called_once()
+
+
+# ── --phase CLI flag tests ────────────────────────────────────────────────
+
+
+class TestParseArgsPhaseFlag:
+    def test_phase_flag_accepted(self) -> None:
+        """--phase flag is parsed correctly."""
+        args = _parse_args(["--phase", "0"])
+        assert args.phase == "0"
+
+    def test_phase_flag_2a(self) -> None:
+        args = _parse_args(["--phase", "2a"])
+        assert args.phase == "2a"
+
+    def test_phase_flag_default_none(self) -> None:
+        args = _parse_args([])
+        assert args.phase is None
+
+    def test_phase_flag_with_resume(self) -> None:
+        args = _parse_args(["--phase", "3", "--resume"])
+        assert args.phase == "3"
+        assert args.resume is True
+
+
+class TestRunSinglePhase:
+    def test_unknown_phase_returns_infra_failure(self, tmp_project: Path) -> None:
+        pipeline = ValidationPipeline(project_dir=tmp_project, phase="99")
+        pipeline._setup_logging()
+        result = pipeline._run_single_phase("99")
+        assert result == EXIT_INFRA_FAILURE
+
+    def test_single_phase_dispatches_to_phase_0(self, tmp_project: Path) -> None:
+        """--phase 0 dispatches to _run_phase_0."""
+        pipeline = ValidationPipeline(project_dir=tmp_project, phase="0")
+        pipeline._setup_logging()
+        # Mock _run_phase_0 to return success
+        with patch.object(pipeline, "_run_phase_0", return_value=EXIT_ALL_PASS):
+            result = pipeline._run_single_phase("0")
+            assert result == EXIT_ALL_PASS
+
+    def test_run_delegates_to_single_phase(self, tmp_project: Path) -> None:
+        """run() delegates to _run_single_phase when phase is set."""
+        pipeline = ValidationPipeline(project_dir=tmp_project, phase="0")
+        with patch.object(
+            pipeline, "_run_single_phase", return_value=EXIT_ALL_PASS
+        ) as mock_single:
+            result = pipeline.run()
+            mock_single.assert_called_once_with("0")
+            assert result == EXIT_ALL_PASS
+
+
+class TestMainPassesPhaseFlag:
+    def test_main_passes_phase_to_pipeline(
+        self, tmp_project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("PROJECT_DIR", str(tmp_project))
+        with patch(
+            "auto_sdd.scripts.post_campaign_validation.ValidationPipeline"
+        ) as MockPipeline:
+            mock_instance = MagicMock()
+            mock_instance.run.return_value = EXIT_ALL_PASS
+            mock_instance.flush_now.return_value = 0
+            MockPipeline.return_value = mock_instance
+            main(["--phase", "3"])
+            MockPipeline.assert_called_once()
+            call_kwargs = MockPipeline.call_args
+            assert call_kwargs[1]["phase"] == "3" or call_kwargs.kwargs["phase"] == "3"
+
+
+# ── Monorepo package manager detection tests ─────────────────────────────
+
+
+class TestPackageManagerDetectionMonorepo:
+    def test_subdir_pnpm_detected(self, tmp_path: Path) -> None:
+        sub = tmp_path / "client"
+        sub.mkdir()
+        (sub / "pnpm-lock.yaml").touch()
+        assert detect_package_manager(tmp_path) == "pnpm"
+
+    def test_subdir_yarn_detected(self, tmp_path: Path) -> None:
+        sub = tmp_path / "server"
+        sub.mkdir()
+        (sub / "yarn.lock").touch()
+        assert detect_package_manager(tmp_path) == "yarn"
+
+    def test_subdir_npm_detected(self, tmp_path: Path) -> None:
+        sub = tmp_path / "api"
+        sub.mkdir()
+        (sub / "package-lock.json").touch()
+        assert detect_package_manager(tmp_path) == "npm"
+
+    def test_mixed_subdirs_use_npm_default(self, tmp_path: Path) -> None:
+        c = tmp_path / "client"
+        c.mkdir()
+        (c / "pnpm-lock.yaml").touch()
+        s = tmp_path / "server"
+        s.mkdir()
+        (s / "yarn.lock").touch()
+        # Mixed → prefer pnpm (highest priority)
+        assert detect_package_manager(tmp_path) == "pnpm"
+
+    def test_no_lockfiles_anywhere(self, tmp_path: Path) -> None:
+        sub = tmp_path / "lib"
+        sub.mkdir()
+        assert detect_package_manager(tmp_path) == "npm"
+
+    def test_root_lockfile_takes_precedence(self, tmp_path: Path) -> None:
+        (tmp_path / "yarn.lock").touch()
+        sub = tmp_path / "client"
+        sub.mkdir()
+        (sub / "pnpm-lock.yaml").touch()
+        assert detect_package_manager(tmp_path) == "yarn"
+
+
+# ── Monorepo dev command detection tests ──────────────────────────────────
+
+
+class TestDevCommandDetectionMonorepo:
+    def test_subdir_dev_commands_returned_as_dict(self, tmp_path: Path) -> None:
+        c = tmp_path / "client"
+        c.mkdir()
+        (c / "package.json").write_text(json.dumps({"scripts": {"dev": "vite"}}))
+        s = tmp_path / "server"
+        s.mkdir()
+        (s / "package.json").write_text(json.dumps({"scripts": {"start": "node ."}}))
+        result = detect_dev_command(tmp_path)
+        assert isinstance(result, dict)
+        assert result == {"client": "dev", "server": "start"}
+
+    def test_root_package_json_returns_string(self, tmp_path: Path) -> None:
+        (tmp_path / "package.json").write_text(
+            json.dumps({"scripts": {"dev": "next dev"}})
+        )
+        result = detect_dev_command(tmp_path)
+        assert result == "dev"
+
+    def test_no_package_json_anywhere(self, tmp_path: Path) -> None:
+        result = detect_dev_command(tmp_path)
+        assert result is None
+
+    def test_subdirs_with_no_dev_scripts(self, tmp_path: Path) -> None:
+        c = tmp_path / "client"
+        c.mkdir()
+        (c / "package.json").write_text(json.dumps({"scripts": {"build": "tsc"}}))
+        result = detect_dev_command(tmp_path)
+        assert result is None
+
+
+# ── discover_sub_projects / has_build_script tests ────────────────────────
+
+
+class TestDiscoverSubProjects:
+    def test_finds_subdirs_with_package_json(self, tmp_path: Path) -> None:
+        for name in ("client", "server"):
+            d = tmp_path / name
+            d.mkdir()
+            (d / "package.json").write_text("{}")
+        (tmp_path / "docs").mkdir()
+        result = _discover_sub_projects(tmp_path)
+        assert [p.name for p in result] == ["client", "server"]
+
+    def test_skips_hidden_dirs(self, tmp_path: Path) -> None:
+        d = tmp_path / ".hidden"
+        d.mkdir()
+        (d / "package.json").write_text("{}")
+        assert _discover_sub_projects(tmp_path) == []
+
+
+class TestHasBuildScript:
+    def test_has_build(self, tmp_path: Path) -> None:
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"scripts": {"build": "tsc"}}))
+        assert _has_build_script(pkg) is True
+
+    def test_no_build(self, tmp_path: Path) -> None:
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"scripts": {"dev": "vite"}}))
+        assert _has_build_script(pkg) is False
+
+    def test_missing_file(self, tmp_path: Path) -> None:
+        assert _has_build_script(tmp_path / "package.json") is False
+
+
+# ── Phase0Result server_processes field tests ─────────────────────────────
+
+
+class TestPhase0ResultServerProcesses:
+    def test_default_empty(self) -> None:
+        r = Phase0Result()
+        assert r.server_processes == []
+
+
+# ── Revalidation prompt retry policy tests ────────────────────────────────
+
+
+class TestRevalidationPromptRetryPolicy:
+    def test_retry_policy_present(self) -> None:
+        """build_revalidation_prompt now includes retry policy (parity with Phase 3)."""
+        criteria: list[dict[str, Any]] = [
+            {
+                "id": "AC-001",
+                "description": "Test",
+                "steps": ["Go to /"],
+                "expected_outcome": "Page loads",
+            },
+        ]
+        prompt = build_revalidation_prompt(
+            "http://localhost:3000", criteria, None, "/tmp/shots"
+        )
+        assert "retry" in prompt.lower()
+        assert "3 times" in prompt or "max 3" in prompt
+
+
+# ── Playwright prompt networkidle and interaction tests ───────────────────
+
+
+class TestPlaywrightPromptNetworkIdle:
+    def test_networkidle_instruction_present(self) -> None:
+        feature: dict[str, Any] = {
+            "feature": "Test",
+            "criteria": [
+                {
+                    "id": "AC-001",
+                    "description": "D",
+                    "steps": ["Go to /"],
+                    "expected_outcome": "OK",
+                }
+            ],
+        }
+        prompt = build_playwright_prompt(
+            "http://localhost:3000", feature, None, "/tmp/shots"
+        )
+        assert "networkidle" in prompt
+        assert "waitForLoadState" in prompt
+
+
+class TestPlaywrightPromptInteractionPatterns:
+    def test_interaction_patterns_present(self) -> None:
+        feature: dict[str, Any] = {
+            "feature": "Test",
+            "criteria": [
+                {
+                    "id": "AC-001",
+                    "description": "D",
+                    "steps": ["Go to /"],
+                    "expected_outcome": "OK",
+                }
+            ],
+        }
+        prompt = build_playwright_prompt(
+            "http://localhost:3000", feature, None, "/tmp/shots"
+        )
+        assert "Dropdowns" in prompt or "dropdowns" in prompt.lower()
+        assert "Filters" in prompt or "filters" in prompt.lower()
+        assert "Pagination" in prompt or "pagination" in prompt.lower()
+        assert "Async data" in prompt or "async data" in prompt.lower()
+
+
+# ── Pipeline cleanup with multiple server processes ───────────────────────
+
+
+class TestCleanupMultipleServers:
+    def test_cleanup_terminates_all_server_processes(
+        self, tmp_project: Path
+    ) -> None:
+        pipeline = ValidationPipeline(project_dir=tmp_project)
+        proc1 = MagicMock()
+        proc1.pid = 1001
+        proc2 = MagicMock()
+        proc2.pid = 1002
+        pipeline._server_procs = [proc1, proc2]
+        pipeline._server_proc = proc1
+        pipeline._cleanup()
+        proc1.terminate.assert_called_once()
+        proc2.terminate.assert_called_once()

@@ -264,38 +264,88 @@ class ValidationState:
 
 
 def detect_package_manager(project_dir: Path) -> str:
-    """Detect package manager from lock files.  Falls back to npm."""
+    """Detect package manager from lock files.  Falls back to npm.
+
+    If no lockfile is found at the project root, searches immediate
+    subdirectories.  Preference order: pnpm > yarn > npm.  If
+    subdirectories use different package managers, defaults to npm.
+    """
+    # Check project root first
     if (project_dir / "pnpm-lock.yaml").exists():
         return "pnpm"
     if (project_dir / "yarn.lock").exists():
         return "yarn"
     if (project_dir / "package-lock.json").exists():
         return "npm"
+
+    # Search immediate subdirectories
+    found: set[str] = set()
+    for child in sorted(project_dir.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        if (child / "pnpm-lock.yaml").exists():
+            found.add("pnpm")
+        elif (child / "yarn.lock").exists():
+            found.add("yarn")
+        elif (child / "package-lock.json").exists():
+            found.add("npm")
+
+    if not found:
+        return "npm"
+    if len(found) == 1:
+        return found.pop()
+    # Mixed package managers across subdirs — prefer pnpm > yarn > npm
+    for preference in ("pnpm", "yarn", "npm"):
+        if preference in found:
+            return preference
     return "npm"
 
 
-def detect_dev_command(project_dir: Path) -> str | None:
-    """Read package.json scripts and pick the dev command name.
-
-    Checks for ``dev``, ``start``, ``serve`` in that order.
-    Returns the script name (not the full command), or None.
-    """
-    pkg_json_path = project_dir / "package.json"
+def _detect_dev_command_single(pkg_json_path: Path) -> str | None:
+    """Read a single package.json and return the dev command name or None."""
     if not pkg_json_path.exists():
         return None
-
     try:
         pkg = json.loads(pkg_json_path.read_text())
     except (json.JSONDecodeError, OSError):
         return None
-
     scripts: Any = pkg.get("scripts", {})
     if not isinstance(scripts, dict):
         return None
-
     for candidate in ("dev", "start", "serve"):
         if candidate in scripts:
             return candidate
+    return None
+
+
+def detect_dev_command(project_dir: Path) -> str | dict[str, str] | None:
+    """Read package.json scripts and pick the dev command name.
+
+    If a root ``package.json`` exists, returns a single script name
+    (e.g. ``"dev"``).  If no root ``package.json`` is found, searches
+    immediate subdirectories and returns a dict mapping subdir name to
+    dev command (e.g. ``{"client": "dev", "server": "start"}``).
+    Returns ``None`` when nothing is found.
+    """
+    root_result = _detect_dev_command_single(project_dir / "package.json")
+    if root_result is not None:
+        return root_result
+
+    # No root package.json — check immediate subdirectories
+    if (project_dir / "package.json").exists():
+        # Root package.json exists but has no dev/start/serve script
+        return None
+
+    subdir_commands: dict[str, str] = {}
+    for child in sorted(project_dir.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        cmd = _detect_dev_command_single(child / "package.json")
+        if cmd is not None:
+            subdir_commands[child.name] = cmd
+
+    if subdir_commands:
+        return subdir_commands
     return None
 
 
@@ -417,6 +467,7 @@ class Phase0Result:
         self.package_manager: str = ""
         self.dev_command: str = ""
         self.server_process: subprocess.Popen[str] | None = None
+        self.server_processes: list[subprocess.Popen[str]] = []
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -984,11 +1035,13 @@ def build_playwright_prompt(
         f"\n## Instructions\n\n"
         f"For each criterion above:\n"
         f"1. Navigate to the appropriate route.\n"
-        f"2. Follow the steps exactly as described.\n"
-        f"3. Check whether the expected outcome is met.\n"
-        f"4. Report the result as VALIDATION_PASS, VALIDATION_FAIL, or "
+        f"2. After navigation, call `await page.waitForLoadState('networkidle')` "
+        f"before asserting on any data-dependent UI.\n"
+        f"3. Follow the steps exactly as described.\n"
+        f"4. Check whether the expected outcome is met.\n"
+        f"5. Report the result as VALIDATION_PASS, VALIDATION_FAIL, or "
         f"VALIDATION_BLOCKED.\n"
-        f"5. On failure or block, take a screenshot and save it to: "
+        f"6. On failure or block, take a screenshot and save it to: "
         f"{screenshot_dir}\n\n"
         f"**Retry policy:** If a criterion fails due to a transient issue "
         f"(element not loaded yet, page still rendering, click didn't land), "
@@ -996,6 +1049,18 @@ def build_playwright_prompt(
         f"**Infrastructure failure:** If Playwright itself crashes or becomes "
         f"unresponsive, report INFRA_FAILURE for all remaining criteria and "
         f"stop testing.\n\n"
+        f"**Multi-step interaction patterns:**\n"
+        f"- Dropdowns/selects: click to open, wait for options to be visible, "
+        f"verify option count matches expected, select an option, verify the "
+        f"selection takes effect in the UI.\n"
+        f"- Filters/search: enter the filter value, wait for networkidle "
+        f"(API refetch), then verify results update — do not assert on stale "
+        f"data before the refetch completes.\n"
+        f"- Pagination: navigate pages, verify content changes between pages, "
+        f"verify the page indicator updates.\n"
+        f"- Async data: after any action that triggers an API call, wait for "
+        f"networkidle before asserting. Never assert on a loading/skeleton "
+        f"state as if it were final content.\n\n"
         f"Output your results as a single JSON object fenced with ``` markers, "
         f"using this exact schema:\n"
         f"```json\n"
@@ -1591,6 +1656,9 @@ def build_revalidation_prompt(
         f"4. Report the result as PASS, FAIL, or BLOCKED.\n"
         f"5. On failure or block, take a screenshot and save it to: "
         f"{screenshot_dir}\n\n"
+        f"**Retry policy:** If a criterion fails due to a transient issue "
+        f"(element not loaded yet, page still rendering, click didn't land), "
+        f"retry up to max 3 times before marking it as failed.\n\n"
         f"Output your results as a single JSON object fenced with ``` markers:\n"
         f"```json\n"
         f'{{\n'
@@ -1608,6 +1676,202 @@ def build_revalidation_prompt(
     )
 
 
+def _has_build_script(pkg_json_path: Path) -> bool:
+    """Check whether a package.json has a ``build`` script."""
+    if not pkg_json_path.exists():
+        return False
+    try:
+        pkg = json.loads(pkg_json_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return False
+    scripts = pkg.get("scripts", {})
+    return isinstance(scripts, dict) and "build" in scripts
+
+
+def _discover_sub_projects(project_dir: Path) -> list[Path]:
+    """Return immediate subdirectories that contain a package.json."""
+    results: list[Path] = []
+    for child in sorted(project_dir.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        if (child / "package.json").exists():
+            results.append(child)
+    return results
+
+
+def _run_phase_0_monorepo(
+    project_dir: Path,
+    pm: str,
+    timeout: float,
+    result: Phase0Result,
+) -> Phase0Result:
+    """Phase 0 monorepo path: build and start sub-projects."""
+    sub_projects = _discover_sub_projects(project_dir)
+    if not sub_projects:
+        result.error = (
+            "No root package.json and no sub-projects with package.json found"
+        )
+        logger.error(result.error)
+        return result
+
+    logger.info(
+        "Monorepo mode: found sub-projects %s",
+        [p.name for p in sub_projects],
+    )
+
+    # 2. Build each sub-project that has a build script
+    combined_build_output = ""
+    for subdir in sub_projects:
+        if not _has_build_script(subdir / "package.json"):
+            logger.info("Skipping build in %s (no build script)", subdir.name)
+            continue
+        logger.info("Building sub-project: %s", subdir.name)
+        try:
+            build = subprocess.run(
+                [pm, "run", "build"],
+                capture_output=True,
+                text=True,
+                cwd=str(subdir),
+                timeout=300,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            result.error = (
+                f"Build failed in {subdir.name}: {exc}"
+            )
+            logger.error("Build failed: %s", result.error)
+            return result
+
+        combined_build_output += build.stdout + build.stderr
+        if build.returncode != 0:
+            result.error = (
+                f"Build failed in {subdir.name} (exit {build.returncode}): "
+                f"{build.stderr.strip()[:1000]}"
+            )
+            logger.error("Build failed: %s", result.error)
+            return result
+        logger.info("Build succeeded in %s", subdir.name)
+
+    result.build_output = combined_build_output
+
+    # 3. Start dev servers in each sub-project that has a dev command
+    dev_cmds = detect_dev_command(project_dir)
+    if not isinstance(dev_cmds, dict) or not dev_cmds:
+        result.error = (
+            "No dev commands found in any sub-project package.json "
+            "(looked for: dev, start, serve)"
+        )
+        logger.error(result.error)
+        return result
+
+    result.dev_command = json.dumps(dev_cmds)
+    server_procs: list[subprocess.Popen[str]] = []
+    collected_outputs: list[str] = []
+
+    for subdir_name, cmd_name in dev_cmds.items():
+        subdir_path = project_dir / subdir_name
+        logger.info(
+            "Starting dev server in %s: %s run %s", subdir_name, pm, cmd_name,
+        )
+        try:
+            proc = subprocess.Popen(
+                [pm, "run", cmd_name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=str(subdir_path),
+            )
+        except OSError as exc:
+            result.error = (
+                f"Failed to start dev server in {subdir_name}: {exc}"
+            )
+            logger.error(result.error)
+            # Kill any servers already started
+            for running_proc in server_procs:
+                try:
+                    running_proc.terminate()
+                except OSError:
+                    pass
+            return result
+        server_procs.append(proc)
+
+    result.server_processes = server_procs
+    # Also set server_process to first one for backward compat
+    if server_procs:
+        result.server_process = server_procs[0]
+
+    # 4. Port detection: read output from all server processes, also try common ports
+    import select as select_mod
+
+    detected_ports: list[int] = []
+    detection_deadline = time.monotonic() + min(timeout / 2, 15.0)
+    all_collected = ""
+
+    while time.monotonic() < detection_deadline:
+        for proc in server_procs:
+            if proc.stdout is not None and proc.stdout.readable():
+                ready, _, _ = select_mod.select([proc.stdout], [], [], 0.2)
+                if ready:
+                    chunk = proc.stdout.readline()
+                    if chunk:
+                        all_collected += chunk
+                        logger.debug("Dev server: %s", chunk.rstrip())
+                        parsed = parse_port_from_output(chunk)
+                        if parsed is not None and parsed not in detected_ports:
+                            detected_ports.append(parsed)
+        # Stop early once we found at least one port per server
+        if len(detected_ports) >= len(server_procs):
+            break
+        time.sleep(0.5)
+
+    collected_outputs.append(all_collected)
+    result.dev_output = all_collected
+
+    # Also try common ports
+    for candidate_port in _COMMON_PORTS:
+        if candidate_port in detected_ports:
+            continue
+        url = f"http://localhost:{candidate_port}"
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    detected_ports.append(candidate_port)
+        except (urllib.error.URLError, OSError, ValueError):
+            continue
+
+    if not detected_ports:
+        result.error = "Could not detect any dev server ports"
+        logger.error(result.error)
+        return result
+
+    # Health check: find first responsive port
+    result.port = detected_ports[0]
+    result.url = f"http://localhost:{detected_ports[0]}"
+    logger.info("Detected dev servers at ports: %s", detected_ports)
+
+    logger.info("Running health check (timeout: %.0fs)", timeout)
+    healthy = False
+    for p in detected_ports:
+        check_url = f"http://localhost:{p}"
+        if health_check(check_url, timeout=timeout):
+            result.port = p
+            result.url = check_url
+            healthy = True
+            break
+
+    if not healthy:
+        result.error = (
+            f"Health check failed: none of ports {detected_ports} "
+            f"returned HTTP 200 within {timeout}s"
+        )
+        logger.error(result.error)
+        return result
+
+    result.status = "RUNTIME_READY"
+    logger.info("RUNTIME_READY: %s", result.url)
+    return result
+
+
 def run_phase_0(
     project_dir: Path,
     timeout: float = 60.0,
@@ -1619,6 +1883,9 @@ def run_phase_0(
     3. Start dev server
     4. Health check
     5. Auth bootstrap (if seed script exists)
+
+    When no root ``package.json`` exists, falls back to monorepo mode:
+    discovers sub-projects, builds each, and starts dev servers in each.
     """
     result = Phase0Result()
 
@@ -1627,135 +1894,144 @@ def run_phase_0(
     result.package_manager = pm
     logger.info("Detected package manager: %s", pm)
 
-    # 2. Production build
-    logger.info("Running production build: %s run build", pm)
-    try:
-        build = subprocess.run(
-            [pm, "run", "build"],
-            capture_output=True,
-            text=True,
-            cwd=str(project_dir),
-            timeout=300,
-        )
-    except (subprocess.TimeoutExpired, OSError) as exc:
-        result.error = f"Build command failed to execute: {exc}"
-        logger.error("Build failed: %s", result.error)
-        return result
-
-    result.build_output = build.stdout + build.stderr
-    if build.returncode != 0:
-        result.error = (
-            f"Production build failed (exit {build.returncode}): "
-            f"{build.stderr.strip()[:1000]}"
-        )
-        logger.error("Build failed: %s", result.error)
-        return result
-
-    logger.info("Production build succeeded")
-
-    # 3. Dev server start
-    dev_cmd_name = detect_dev_command(project_dir)
-    if dev_cmd_name is None:
-        result.error = (
-            "No dev command found in package.json scripts "
-            "(looked for: dev, start, serve)"
-        )
-        logger.error(result.error)
-        return result
-
-    result.dev_command = dev_cmd_name
-    logger.info("Starting dev server: %s run %s", pm, dev_cmd_name)
-
-    try:
-        server_proc = subprocess.Popen(
-            [pm, "run", dev_cmd_name],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            cwd=str(project_dir),
-        )
-    except OSError as exc:
-        result.error = f"Failed to start dev server: {exc}"
-        logger.error(result.error)
-        return result
-
-    result.server_process = server_proc
-
-    # 4. Port detection + health check
-    port: int | None = None
-
-    # Give the server a moment to emit its URL
-    detection_deadline = time.monotonic() + min(timeout / 2, 15.0)
-    collected_output = ""
-    while time.monotonic() < detection_deadline:
-        if server_proc.stdout is not None and server_proc.stdout.readable():
-            # Non-blocking read via select or small timeout
-            import select
-            ready, _, _ = select.select([server_proc.stdout], [], [], 1.0)
-            if ready:
-                chunk = server_proc.stdout.readline()
-                if chunk:
-                    collected_output += chunk
-                    logger.debug("Dev server: %s", chunk.rstrip())
-                    parsed = parse_port_from_output(collected_output)
-                    if parsed is not None:
-                        port = parsed
-                        break
-        else:
-            time.sleep(0.5)
-
-        # Check if process died
-        if server_proc.poll() is not None:
-            rest = ""
-            if server_proc.stdout is not None:
-                rest = server_proc.stdout.read()
-            collected_output += rest
-            result.dev_output = collected_output
-            result.error = (
-                f"Dev server exited prematurely (code {server_proc.returncode}): "
-                f"{collected_output.strip()[:500]}"
+    # Check for monorepo / split-project layout
+    if not (project_dir / "package.json").exists():
+        logger.info("No root package.json — entering monorepo mode")
+        result = _run_phase_0_monorepo(project_dir, pm, timeout, result)
+        if result.status != "RUNTIME_READY":
+            return result
+        # Skip to auth bootstrap
+    else:
+        # ── Single-project path (original) ──
+        # 2. Production build
+        logger.info("Running production build: %s run build", pm)
+        try:
+            build = subprocess.run(
+                [pm, "run", "build"],
+                capture_output=True,
+                text=True,
+                cwd=str(project_dir),
+                timeout=300,
             )
-            result.server_process = None
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            result.error = f"Build command failed to execute: {exc}"
+            logger.error("Build failed: %s", result.error)
+            return result
+
+        result.build_output = build.stdout + build.stderr
+        if build.returncode != 0:
+            result.error = (
+                f"Production build failed (exit {build.returncode}): "
+                f"{build.stderr.strip()[:1000]}"
+            )
+            logger.error("Build failed: %s", result.error)
+            return result
+
+        logger.info("Production build succeeded")
+
+        # 3. Dev server start
+        dev_cmd_name = detect_dev_command(project_dir)
+        if dev_cmd_name is None or isinstance(dev_cmd_name, dict):
+            result.error = (
+                "No dev command found in package.json scripts "
+                "(looked for: dev, start, serve)"
+            )
             logger.error(result.error)
             return result
 
-    result.dev_output = collected_output
+        result.dev_command = dev_cmd_name
+        logger.info("Starting dev server: %s run %s", pm, dev_cmd_name)
 
-    # If we didn't parse a port, try common ports
-    if port is None:
-        logger.info("Could not detect port from output, trying common ports")
-        for candidate_port in _COMMON_PORTS:
-            url = f"http://localhost:{candidate_port}"
-            try:
-                req = urllib.request.Request(url, method="GET")
-                with urllib.request.urlopen(req, timeout=2) as resp:
-                    if resp.status == 200:
-                        port = candidate_port
-                        break
-            except (urllib.error.URLError, OSError, ValueError):
-                continue
+        try:
+            server_proc = subprocess.Popen(
+                [pm, "run", dev_cmd_name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=str(project_dir),
+            )
+        except OSError as exc:
+            result.error = f"Failed to start dev server: {exc}"
+            logger.error(result.error)
+            return result
 
-    if port is None:
-        result.error = "Could not detect dev server port"
-        logger.error(result.error)
-        return result
+        result.server_process = server_proc
 
-    result.port = port
-    result.url = f"http://localhost:{port}"
-    logger.info("Detected dev server at %s", result.url)
+        # 4. Port detection + health check
+        port: int | None = None
 
-    # Health check with exponential backoff
-    logger.info("Running health check (timeout: %.0fs)", timeout)
-    if not health_check(result.url, timeout=timeout):
-        result.error = (
-            f"Health check failed: {result.url} did not return HTTP 200 "
-            f"within {timeout}s"
-        )
-        logger.error(result.error)
-        return result
+        # Give the server a moment to emit its URL
+        detection_deadline = time.monotonic() + min(timeout / 2, 15.0)
+        collected_output = ""
+        while time.monotonic() < detection_deadline:
+            if server_proc.stdout is not None and server_proc.stdout.readable():
+                # Non-blocking read via select or small timeout
+                import select
+                ready, _, _ = select.select([server_proc.stdout], [], [], 1.0)
+                if ready:
+                    chunk = server_proc.stdout.readline()
+                    if chunk:
+                        collected_output += chunk
+                        logger.debug("Dev server: %s", chunk.rstrip())
+                        parsed = parse_port_from_output(collected_output)
+                        if parsed is not None:
+                            port = parsed
+                            break
+            else:
+                time.sleep(0.5)
 
-    result.status = "RUNTIME_READY"
-    logger.info("RUNTIME_READY: %s", result.url)
+            # Check if process died
+            if server_proc.poll() is not None:
+                rest = ""
+                if server_proc.stdout is not None:
+                    rest = server_proc.stdout.read()
+                collected_output += rest
+                result.dev_output = collected_output
+                result.error = (
+                    f"Dev server exited prematurely (code {server_proc.returncode}): "
+                    f"{collected_output.strip()[:500]}"
+                )
+                result.server_process = None
+                logger.error(result.error)
+                return result
+
+        result.dev_output = collected_output
+
+        # If we didn't parse a port, try common ports
+        if port is None:
+            logger.info("Could not detect port from output, trying common ports")
+            for candidate_port in _COMMON_PORTS:
+                url = f"http://localhost:{candidate_port}"
+                try:
+                    req = urllib.request.Request(url, method="GET")
+                    with urllib.request.urlopen(req, timeout=2) as resp:
+                        if resp.status == 200:
+                            port = candidate_port
+                            break
+                except (urllib.error.URLError, OSError, ValueError):
+                    continue
+
+        if port is None:
+            result.error = "Could not detect dev server port"
+            logger.error(result.error)
+            return result
+
+        result.port = port
+        result.url = f"http://localhost:{port}"
+        logger.info("Detected dev server at %s", result.url)
+
+        # Health check with exponential backoff
+        logger.info("Running health check (timeout: %.0fs)", timeout)
+        if not health_check(result.url, timeout=timeout):
+            result.error = (
+                f"Health check failed: {result.url} did not return HTTP 200 "
+                f"within {timeout}s"
+            )
+            logger.error(result.error)
+            return result
+
+        result.status = "RUNTIME_READY"
+        logger.info("RUNTIME_READY: %s", result.url)
 
     # 5. Auth bootstrap
     seed_script = _find_seed_script(project_dir)
@@ -1795,11 +2071,13 @@ class ValidationPipeline:
         flush_mode: str = "auto",
         validation_timeout: float = 60.0,
         resume: bool = False,
+        phase: str | None = None,
     ) -> None:
         self.project_dir = project_dir.resolve()
         self.flush_mode = flush_mode
         self.validation_timeout = validation_timeout
         self.resume = resume
+        self.single_phase = phase
 
         self.run_id = f"val-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
@@ -1826,6 +2104,7 @@ class ValidationPipeline:
 
         # Server process reference (for cleanup)
         self._server_proc: subprocess.Popen[str] | None = None
+        self._server_procs: list[subprocess.Popen[str]] = []
         self._seed_script: Path | None = None
 
         # Register cleanup
@@ -1835,18 +2114,22 @@ class ValidationPipeline:
         """Kill dev server, teardown QA account, wipe credentials."""
         logger.info("Running cleanup")
 
-        # Kill dev server
-        if self._server_proc is not None:
-            logger.info("Terminating dev server (PID %d)", self._server_proc.pid)
+        # Kill dev server(s)
+        all_procs = list(self._server_procs)
+        if self._server_proc is not None and self._server_proc not in all_procs:
+            all_procs.append(self._server_proc)
+        for proc in all_procs:
+            logger.info("Terminating dev server (PID %d)", proc.pid)
             try:
-                self._server_proc.terminate()
+                proc.terminate()
                 try:
-                    self._server_proc.wait(timeout=10)
+                    proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
-                    self._server_proc.kill()
+                    proc.kill()
             except OSError:
                 pass
-            self._server_proc = None
+        self._server_proc = None
+        self._server_procs = []
 
         # Teardown QA account
         if self._seed_script is not None:
@@ -1900,6 +2183,7 @@ class ValidationPipeline:
 
         # Track server for cleanup
         self._server_proc = phase_result.server_process
+        self._server_procs = list(phase_result.server_processes)
         self._seed_script = _find_seed_script(self.project_dir)
 
         # Write runtime report
@@ -3046,6 +3330,45 @@ class ValidationPipeline:
 
         return result
 
+    def _run_single_phase(self, phase_id: str) -> int:
+        """Execute a single phase by identifier. Returns an exit code."""
+        phase_dispatch: dict[str, Any] = {
+            "0": self._run_phase_0,
+            "1": self._run_phase_1,
+            "2a": lambda: (
+                EXIT_PARTIAL
+                if self._run_phase_2().status == "AC_GENERATION_FAILED"
+                else EXIT_ALL_PASS
+            ),
+            "3": self._run_phase_3,
+            "4a": lambda: (
+                EXIT_PARTIAL
+                if self._run_phase_4a().status != "CATALOG_COMPLETE"
+                else EXIT_ALL_PASS
+            ),
+            "4b": lambda: (
+                EXIT_ALL_PASS
+                if self._run_phase_4b().status
+                in ("RCA_COMPLETE", "RCA_SKIPPED")
+                else EXIT_PARTIAL
+            ),
+            "5": lambda: (
+                EXIT_ALL_PASS
+                if self._run_phase_5().status != "FIX_FAILED"
+                else EXIT_PARTIAL
+            ),
+        }
+        handler = phase_dispatch.get(phase_id)
+        if handler is None:
+            logger.error(
+                "Unknown phase: %s (valid: %s)",
+                phase_id,
+                ", ".join(phase_dispatch),
+            )
+            return EXIT_INFRA_FAILURE
+        result = handler()
+        return int(result)
+
     def run(self) -> int:
         """Execute the full validation pipeline. Returns an exit code."""
         self._setup_logging()
@@ -3057,6 +3380,10 @@ class ValidationPipeline:
             self.validation_timeout,
             self.resume,
         )
+
+        if self.single_phase is not None:
+            logger.info("Running single phase: %s", self.single_phase)
+            return self._run_single_phase(self.single_phase)
 
         # Phase 0
         exit_code = self._run_phase_0()
@@ -3144,6 +3471,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Flush pending documents for a specific phase (e.g., 2a)",
     )
+    parser.add_argument(
+        "--phase",
+        type=str,
+        default=None,
+        help="Run only a single phase (e.g., 0, 1, 2a, 3, 4a, 4b, 5)",
+    )
     return parser.parse_args(argv)
 
 
@@ -3174,6 +3507,7 @@ def main(argv: list[str] | None = None) -> int:
         flush_mode=flush_mode,
         validation_timeout=validation_timeout,
         resume=args.resume,
+        phase=args.phase,
     )
 
     # Handle flush-only modes

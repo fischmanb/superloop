@@ -1594,6 +1594,31 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - pytest: 96/96 passed (test_post_campaign_validation.py), 131/131 passed (combined with test_claude_wrapper.py)
 - git diff --stat: Only 2 Python files modified (+ Agents.md)
 
+### Round: Auto-QA Phase Fixes — --phase flag, monorepo support, prompt hardening (branch: claude/auto-qa-phase-fixes-89776a)
+
+**What was asked**: Fix 5 blockers before running auto-QA against a split client/server project (CRE lease tracker). Add --phase CLI flag, monorepo support in Phase 0, retry policy parity for Phase 5 re-validation, networkidle waits in Playwright prompt, and multi-step interaction patterns in Playwright prompt.
+
+**What changed**:
+- `py/auto_sdd/scripts/post_campaign_validation.py`:
+  - Added `--phase` CLI argument to `_parse_args()` and `single_phase` parameter to `ValidationPipeline.__init__()` + `_run_single_phase()` dispatch method
+  - `detect_package_manager()` now searches subdirectories when no root lockfile exists
+  - `detect_dev_command()` returns `dict[str, str]` mapping subdir→command when no root package.json exists; extracted `_detect_dev_command_single()` helper
+  - Added `_discover_sub_projects()`, `_has_build_script()`, `_run_phase_0_monorepo()` for split-project support
+  - `Phase0Result` gained `server_processes: list[Popen]` field for multi-server tracking
+  - `_cleanup()` terminates all tracked server processes (not just the first)
+  - `build_revalidation_prompt()` now includes retry policy text (parity with Phase 3)
+  - `build_playwright_prompt()` now includes `networkidle` wait instruction after navigation and multi-step interaction patterns (dropdowns, filters, pagination, async data)
+- `py/tests/test_post_campaign_validation.py`:
+  - Added 25 new tests across 11 new test classes covering --phase flag parsing, single-phase dispatch, monorepo package manager detection, monorepo dev command detection, sub-project discovery, build script detection, Phase0Result fields, revalidation retry policy, networkidle instruction, interaction patterns, multi-server cleanup
+
+**What was NOT changed**: No new files created. No changes to any other Python modules. No package manager commands run.
+
+**Verification results**:
+- mypy --strict: 0 errors
+- pytest test_post_campaign_validation.py: all passed (original + 25 new)
+- pytest tests/ full suite: 1 pre-existing failure in test_eval_sidecar (git branch issue, unrelated)
+- git diff --stat: Only allowed files modified
+
 ---
 ## Questions?
 
