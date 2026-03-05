@@ -3218,8 +3218,33 @@ class ValidationPipeline:
                 )
                 continue
 
-            # Collect failure entries for this root cause
+            # Skip infrastructure failures (all affected are BLOCKED, not app bugs)
             affected_failures = rc.get("affected_failures", [])
+            all_blocked = (
+                len(affected_failures) > 0
+                and all(
+                    fid.startswith("BLOCK-") for fid in affected_failures
+                )
+            )
+            if all_blocked:
+                fr = FixResult()
+                fr.root_cause_id = rc_id
+                fr.status = "SKIPPED"
+                fr.error = (
+                    "Infrastructure failure (all criteria BLOCKED) — "
+                    "likely parse error, auth failure, or agent timeout. "
+                    "Not an app bug."
+                )
+                result.fix_results.append(fr.to_dict())
+                result.total_skipped += 1
+                logger.info(
+                    "Skipping root cause %s: infrastructure failure "
+                    "(all %d affected criteria are BLOCKED)",
+                    rc_id, len(affected_failures),
+                )
+                continue
+
+            # Collect failure entries for this root cause
             failure_entries = [
                 failure_lookup[fid]
                 for fid in affected_failures
@@ -3301,20 +3326,62 @@ class ValidationPipeline:
                         fix_recorded = True
                         break
 
-                    # Run build gates
+                    # Run build gates (monorepo-aware)
                     pm = detect_package_manager(self.project_dir)
-                    try:
-                        gate_result = subprocess.run(
-                            [pm, "run", "build"],
-                            cwd=str(self.project_dir),
-                            capture_output=True,
-                            text=True,
-                            timeout=120,
-                        )
-                        gates_passed = gate_result.returncode == 0
-                    except (subprocess.TimeoutExpired, OSError) as exc:
-                        logger.error("Build gates failed: %s", exc)
-                        gates_passed = False
+                    gates_passed = True
+                    root_pkg = self.project_dir / "package.json"
+                    root_has_build = False
+                    if root_pkg.exists():
+                        try:
+                            root_scripts = json.loads(root_pkg.read_text()).get("scripts", {})
+                            root_has_build = "build" in root_scripts
+                        except (json.JSONDecodeError, OSError):
+                            pass
+
+                    if root_has_build:
+                        # Single-project build gate
+                        try:
+                            gate_result = subprocess.run(
+                                [pm, "run", "build"],
+                                cwd=str(self.project_dir),
+                                capture_output=True,
+                                text=True,
+                                timeout=120,
+                            )
+                            gates_passed = gate_result.returncode == 0
+                        except (subprocess.TimeoutExpired, OSError) as exc:
+                            logger.error("Build gates failed: %s", exc)
+                            gates_passed = False
+                    else:
+                        # Monorepo: build each sub-project
+                        for child in sorted(self.project_dir.iterdir()):
+                            if not child.is_dir():
+                                continue
+                            child_pkg = child / "package.json"
+                            if not child_pkg.exists():
+                                continue
+                            try:
+                                child_scripts = json.loads(child_pkg.read_text()).get("scripts", {})
+                            except (json.JSONDecodeError, OSError):
+                                continue
+                            if "build" not in child_scripts:
+                                continue
+                            try:
+                                gate_result = subprocess.run(
+                                    [pm, "run", "build"],
+                                    cwd=str(child),
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=120,
+                                )
+                                if gate_result.returncode != 0:
+                                    logger.error("Build gate failed in %s", child.name)
+                                    gates_passed = False
+                                    break
+                            except (subprocess.TimeoutExpired, OSError) as exc:
+                                logger.error("Build gates failed in %s: %s", child.name, exc)
+                                gates_passed = False
+                                break
 
                     if not gates_passed:
                         # Revert working directory changes
