@@ -149,9 +149,43 @@ The monorepo fix only landed in Phase 0 (`run_phase_0` / `_run_phase_0_monorepo`
 
 ---
 
-## 7. Open Questions
+## 7. Post-Run Fixes Applied (2026-03-05)
 
-1. **CRE server database**: Does the server need a running database? SQLite file? Postgres? Need to check `server/` for DB config before Round 2.
-2. **CRE auth bootstrap**: Phase 0 looks for a seed script for auth. Does CRE have one, or does it need manual account creation?
-3. **Monorepo strategy**: Should Phase 0 auto-detect sub-projects, or require explicit config (e.g., `PROJECT_DIRS=client,server` env var)? Auto-detect is more generalizable but harder to get right.
-4. **Round 1 sizing**: `post_campaign_validation.py` is ~3200 lines. Modifying Phase 0 + argparse + two prompt functions + tests may exceed single-prompt context budget. May need sub-round split.
+All fixes committed directly to main, not via agent prompts.
+
+| Fix | Commit | What |
+|-----|--------|------|
+| Configurable AGENT_TIMEOUT | `9272626` | All 6 `run_claude` calls use `self.agent_timeout` (default 600s via `AGENT_TIMEOUT` env var). Phase 1 was timing out at 300s. |
+| Phase 0 monorepo fallback | `16dca22` | Root `package.json` without build script falls through to monorepo mode. Phase 1 agent had created a root `package.json` with only playwright deps. |
+| Phase 5 monorepo build gates | `66eedcc` | Phase 5 build gates now check root `package.json` for build script and fall through to sub-project builds. All 4 CRE fix agents were failing at this gate. |
+| Skip infra failures in Phase 5 | `66eedcc` | Root causes where all affected criteria are `BLOCK-*` entries are skipped with "Infrastructure failure" message instead of dispatching fix agents. |
+| Credential persistence | `a3ee3e8` | `_cleanup()` no longer teardowns QA account or wipes credentials. New `teardown_qa()` method + `--teardown` CLI flag for explicit wipe. Credentials persist across runs, `--resume`, `--phase` invocations. |
+| CRE .gitignore | CRE `8204dbd` | Root-level `node_modules`/`package-lock.json` gitignored to prevent agent install artifacts from persisting. |
+
+## 8. CLI Reference (current)
+
+```bash
+# Full pipeline
+PROJECT_DIR=~/cre-lease-tracker python -m auto_sdd.scripts.post_campaign_validation
+
+# Single phase
+PROJECT_DIR=~/cre-lease-tracker python -m auto_sdd.scripts.post_campaign_validation --phase 0
+
+# Resume from last completed phase
+PROJECT_DIR=~/cre-lease-tracker python -m auto_sdd.scripts.post_campaign_validation --resume
+
+# Teardown QA account and wipe credentials
+PROJECT_DIR=~/cre-lease-tracker python -m auto_sdd.scripts.post_campaign_validation --teardown
+
+# Override agent timeout (default 600s)
+AGENT_TIMEOUT=900 PROJECT_DIR=~/cre-lease-tracker python -m auto_sdd.scripts.post_campaign_validation
+```
+
+## 9. Open Questions (updated)
+
+1. ~~CRE server database~~ — **Resolved**: SQLite at `server/data/comps.db`, no external DB needed.
+2. ~~CRE auth bootstrap~~ — **Resolved**: `scripts/qa-seed.ts` created, Phase 0 finds and runs it.
+3. ~~Monorepo strategy~~ — **Resolved**: Auto-detect via subdirectory scan. Works for CRE.
+4. ~~Round 1 sizing~~ — **Resolved**: Single agent prompt handled all changes (~3.5k actual tokens).
+5. **Phase 1 browsing against API health URL**: Phase 1 discovery agent was sent to `http://localhost:3001/api/health` (the first RUNTIME_READY URL) instead of the client URL (`http://localhost:5173`). Need to verify Phase 1 uses the client URL for browsing.
+6. **8 BLOCKED criteria from parse error**: Phase 3 agent for "Lease Comp Search and Filtering" returned prose instead of JSON. Root cause unclear — `login-failure.png` suggests auth may have failed for that specific agent invocation. May be transient or may indicate a prompt/parsing issue.
