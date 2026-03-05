@@ -10,14 +10,19 @@
 
 Ordered by efficiency gain per complexity added:
 
-1. **Campaign intelligence system — design complete, implementation next.**
+1. **Auto-QA validation against CRE lease tracker — zero production runs to date.**
+   - 96 tests pass but pipeline has never run against a real project. Must validate before building intelligence on top.
+   - Target project: `~/cre-lease-tracker` (3 features built, small/controlled, exercises multi-feature interactions)
+   - **Next action: investigation** — verify CRE builds/boots, check auto-QA entry point interface (`main()` in `post_campaign_validation.py`), confirm Playwright availability, determine if auto-QA boots the app or expects it running
+   - Then: run full auto-QA pipeline, document findings, fix whatever breaks
+   - Produces first real runtime signal data for CIS
+2. **Campaign intelligence system — design complete, implementation blocked on #1.**
    - Full plan: `WIP/campaign-intelligence-system.md` (pressure-tested, revised)
+   - CIS value depends on auto-QA producing validated runtime signals. Build-only CIS is just a fancier eval sidecar.
    - 3 Phase 1 rounds: (1) vector store + wire writers, (2) analysis framework + intra-campaign injection, (3) convention eval signals
    - Phase 2 (after real campaign): auto-QA feature attribution, cross-campaign ML model
    - Phase 3 (after 3+ campaigns): meta-learner
-   - **Next action**: Draft Round 1 agent prompt
-2. **Integration test against real project** — Python build pipeline complete but never validated end-to-end against a live project. Use cre-lease-tracker or stakd. Also produces first real data for the campaign intelligence system.
-3. **Retire bash test suites** — 2,149 lines of dead test code (`tests/test-*.sh`, `tests/dry-run.sh`). Python suite supersedes all of them.
+3. **Integration test of Python build pipeline against real project** — may combine with #1 (run campaign then auto-QA in sequence).
 4. **Extract `errors.py`/`signals.py`/`state.py` from `reliability.py` monolith** — Conventions specify these modules but Phase 1 inlined them. Low urgency.
 5. **Local model integration** — Replace cloud API with local LM Studio on Mac Studio. Reference: `archive/local-llm-pipeline/`. *Not started.*
 6. **Adaptive routing / parallelism** — Only if data from campaigns justifies complexity. *Deprioritized.*

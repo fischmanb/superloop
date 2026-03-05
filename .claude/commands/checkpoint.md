@@ -15,9 +15,10 @@ Single command to ensure all context management files are current. Prevents cont
 - If `pending_captures` is non-empty → proceed to step 2
 - If empty → skip to step 3
 
-### 2. Flush Captures
+### 2. Flush Captures + Update ACTIVE-CONSIDERATIONS
 - Read `ACTIVE-CONSIDERATIONS.md`
 - Staleness scan: flag any items marked ✅, "complete", "merged", or "done" — report to Brian, do not auto-remove
+- **Priority stack update**: If priorities changed this session (new work items, reordering, blockers resolved), update the priority stack NOW — not in a separate commit after the checkpoint. ACTIVE-CONSIDERATIONS must reflect current state in the checkpoint commit.
 - Append `pending_captures` to the appropriate section (priority stack items → stack, everything else → "Other active items")
 - Clear `pending_captures`
 
