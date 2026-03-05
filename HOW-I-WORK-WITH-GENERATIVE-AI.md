@@ -996,9 +996,22 @@ The checkpoint protocol is the primary value-preservation mechanism across sessi
 
 ---
 
-## Accumulation
+## M-00088
 
-Raw captures from checkpoint scans. New entries land here as `- (YYYY-MM-DD) text` during checkpoint step 5, then get converted to graph-schema entries above during periodic curation passes.
+- **Type:** observation
+- **Tags:** trust-building, session-arc, calibration, correction-as-tuning
+- **Confidence:** high
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** M-00084 (related_to), L-00180 (related_to)
+
+Brian's session arc follows a deliberate calibration pattern: let Claude fail on small tasks, correct sharply, verify the correction takes hold in the same session, then escalate to high-leverage design work once execution is reliable. Observed 2026-03-04: session began with test fixes that required heavy handholding (redundant file reads, failed response, Extra Usage billing). Brian corrected with L-00180 (silent overrides) and L-00181 (stash reads). Once the `test_build_loop` fix completed cleanly using the corrected approach, Brian immediately escalated to product architecture — campaign intelligence system design, auto-QA prioritization, seed data strategy. The corrections aren't punishment; they're tuning. Trust is earned on small things (fix tests without re-reading files), then extended to big things (design the intelligence system).
+
+---
+
+## Accumulation (DEPRECATED — see L-00194)
+
+> **Process change (2026-03-04):** New methodology observations go directly into graph-schema M-entries above. This section is a backlog of raw captures that predate the change. Clear by converting to schema entries or discarding. Do NOT add new raw entries here.
 
 - (2026-03-03) Brian enforces architectural consistency: when a design principle is established for one module (agent-based over regex), he expects it applied uniformly to analogous modules and challenges inconsistency directly ("why are you sure this should not be agent detection as well").
 - (2026-03-03) Brian catches scope inflation with "what do I actually need this for" — adding Rust/Go language support without asking what ecosystems Brian actually targets was immediately flagged. YAGNI enforced empirically.

@@ -44,9 +44,9 @@ Single command to ensure all context management files are current. Prevents cont
 ### 5. Methodology Signals
 - Scan session for operator-level insights: preferences, principles, reasoning patterns, workflow decisions, distinctions Brian drew, corrections that reveal generalizable observations
 - Bias toward capture — a false positive costs 5 seconds to delete, a false negative is gone
-- If any found: append raw notes to the `## Accumulation` section at the bottom of `HOW-I-WORK-WITH-GENERATIVE-AI.md`
-- Format: `- (YYYY-MM-DD) <raw observation>`
-- Existing entries above Accumulation use graph-schema format with M-XXXXX IDs. Raw captures in Accumulation get converted to graph-schema during periodic curation passes.
+- If any found: write as graph-schema M-entries directly in `HOW-I-WORK-WITH-GENERATIVE-AI.md` (above the deprecated Accumulation section). Use the next sequential M-XXXXX ID.
+- Format: Same graph-schema as existing M-entries (## M-XXXXX, Type, Tags, Confidence, Status, Date, Related, body paragraph). Must be self-contained per L-00191.
+- Do NOT append raw notes to the Accumulation section — that workflow is deprecated per L-00194.
 - Voice: Third person ("Brian prefers...", "Brian has found..."), empirical not prescriptive. Describe what was observed/tried/preferred, not universal laws. "Brian has found X effective" over "one must always X." This does not apply to operational gates elsewhere in the repo.
 - NEVER use first person. The document is written *about* Brian by AI; first-person would misrepresent authorship.
 

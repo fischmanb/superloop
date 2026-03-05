@@ -734,3 +734,23 @@ Quantitative outcome signals (pass/fail, counts, durations) are necessary but in
 - **Related:** L-00180 (same class — communication discipline)
 
 Every learning entry must be legible to a fresh reader with no session context. References to implementation details (round numbers, file names, design phases) must be grounded with the project or plan they belong to. "Round 2" means nothing without "Round 2 of the campaign intelligence system (`WIP/campaign-intelligence-system.md`)." This applies to all new captures going forward AND should be checked during checkpoint step 4 active scan — if an existing learning contains ungrounded references, flag it for revision. The failure mode: learnings that made sense in-session become cryptic within a week because the context evaporated.
+
+## L-00192 — Validate infrastructure against real data before building intelligence on top of it
+
+- **Type:** process-rule
+- **Tags:** dependency-ordering, validation-first, Brian-pattern
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** L-00187 (complementary), L-00188 (same session)
+
+Don't build intelligence on top of unvalidated infrastructure. Brian reordered the campaign intelligence system (`WIP/campaign-intelligence-system.md`) below auto-QA validation against the CRE lease tracker project because CIS's value proposition depends on auto-QA producing validated runtime signals. Build-only CIS is just a fancier eval sidecar. General principle: when System B consumes System A's output, validate System A against real data before building System B. The cost of discovering System A doesn't work after building System B is high — it can reshape what System B needs to capture.
+
+## L-00194 — Methodology observations go straight to graph schema; no raw accumulation backlog
+
+- **Type:** process-rule
+- **Tags:** methodology-capture, graph-schema, process-change, Brian-correction
+- **Status:** active
+- **Date:** 2026-03-04
+- **Related:** L-00191 (same class — capture quality)
+
+M-entries (methodology observations in `HOW-I-WORK-WITH-GENERATIVE-AI.md`) must be written in graph schema format from the start — same as L-entries. Same format, same quality bar, same self-contained requirement (L-00191). The prior approach was to dump raw notes in an "Accumulation" section and "periodically curate" them into graph schema. "Periodic curation" had no trigger, no cadence, and no definition — it was deferred work that never fired. The raw notes were harder to find and use than schema entries. Going forward: every observation either meets the bar for a graph-schema M-entry or isn't worth capturing. The Accumulation section is a backlog to clear, not an active intake.
