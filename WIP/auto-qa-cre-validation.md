@@ -106,7 +106,50 @@ Round 1 (pipeline fixes)
 
 ---
 
-## 5. Open Questions
+## 6. First Full Run Results (2026-03-05)
+
+**Run ID**: `val-20260305-223636`  
+**Total**: ~31 minutes, ~$5.61 API cost  
+**Artifacts**: `logs/validation/val-20260305-223636/`
+
+### Phase Results
+
+| Phase | Duration | Result |
+|-------|----------|--------|
+| 0: Bootstrap | 18s | RUNTIME_READY (both ports, health discovery, auth seeded) |
+| 1: Discovery | 3.5 min | 8 routes found, $0.72 |
+| 2a: AC Writer | 1.5 min | 5 features, 25 criteria, $0.22 |
+| 2b: Gap Detection | instant | 25 criteria |
+| 3: Playwright | 22 min | 14 pass, 3 fail, 8 blocked, $4.46 (5 agent calls) |
+| 4a: Failure Catalog | instant | 25 total |
+| 4b: RCA | 20s | 4 root causes, $0.07 |
+| 5: Fix Agents | 4 min | 0 fixed, 4 failed, $1.15 (4 agent calls) |
+
+### Root Causes Identified
+
+- **RC-001** (8 BLOCKED): Phase 3 parse error — agent returned prose instead of JSON for "Lease Comp Search and Filtering". Screenshot shows `login-failure.png`. **This is an infrastructure failure, not an app bug.** Phase 5 tried to fix it by modifying `qa-test-phase3.js` (a temp agent file). Pipeline should not dispatch fix agents for infra failures.
+- **RC-002** (1 FAIL): Missing 404 catch-all route — unknown routes redirect to /dashboard. Fix agent correctly created NotFound.tsx + modified App.tsx.
+- **RC-003** (1 FAIL): Dashboard Recent Activity shows static empty placeholder. Fix agent correctly modified 4 files (server route + client API + types + page).
+- **RC-004** (1 FAIL): Register page missing "Manager" role option. Fix agent correctly modified Register.tsx.
+
+### Why All Fix Agents Failed
+
+**Root cause: Phase 5 build gates use root-only `npm run build`** (line 3304-3312). Same pattern that broke Phase 0 before the monorepo fix. CRE has no root build script. Every fix agent did the correct work (modified the right files) but the build gate ran `npm run build` at root, got "Missing script: build", reverted all changes with `git checkout -- .`, and reported "Build gates failed after fix."
+
+The monorepo fix only landed in Phase 0 (`run_phase_0` / `_run_phase_0_monorepo`), not in Phase 5's build gate.
+
+### Fixes Needed
+
+1. **Phase 5 build gates need monorepo support** — same pattern as Phase 0. Build each sub-project, not root.
+2. **Distinguish infra vs app failures** — Phase 4b/5 should tag RC entries as `type: infra` vs `type: app` and skip fix agents for infra issues (parse errors, auth failures, agent timeouts).
+
+### Notes on Criteria Count
+
+25 criteria for 3 features (~8 per feature). Phase 2a invented 2 additional "features" (404 handling, dashboard recent activity) from the roadmap's "real error handling" requirement. For a 28-feature project, expect 200+ criteria. The count is reasonable for this project's scope.
+
+---
+
+## 7. Open Questions
 
 1. **CRE server database**: Does the server need a running database? SQLite file? Postgres? Need to check `server/` for DB config before Round 2.
 2. **CRE auth bootstrap**: Phase 0 looks for a seed script for auth. Does CRE have one, or does it need manual account creation?
