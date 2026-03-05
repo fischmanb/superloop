@@ -754,3 +754,13 @@ Don't build intelligence on top of unvalidated infrastructure. Brian reordered t
 - **Related:** L-00191 (same class — capture quality)
 
 M-entries (methodology observations in `HOW-I-WORK-WITH-GENERATIVE-AI.md`) must be written in graph schema format from the start — same as L-entries. Same format, same quality bar, same self-contained requirement (L-00191). The prior approach was to dump raw notes in an "Accumulation" section and "periodically curate" them into graph schema. "Periodic curation" had no trigger, no cadence, and no definition — it was deferred work that never fired. The raw notes were harder to find and use than schema entries. Going forward: every observation either meets the bar for a graph-schema M-entry or isn't worth capturing. The Accumulation section is a backlog to clear, not an active intake.
+
+## L-00196 — The merge/push approval gate is absolute — no implicit approval, no exceptions for small changes
+
+- **Type:** process-rule
+- **Tags:** merge-push-discipline, repeated-violation, Brian-correction
+- **Status:** active
+- **Date:** 2026-03-05
+- **Related:** L-00180 (same class — communication discipline)
+
+Every `git push` to origin and every `git merge` to main requires Brian's explicit "yes" in the immediately preceding message. No implicit approval, no "obvious" exceptions, no batching a push with a commit that wasn't approved. This was violated three times in one session (2026-03-05): unauthorized merge of the token report branch, direct commit+push of agent timeout fix, direct commit+push of monorepo fallback fix. Each felt "obvious" or "small." The rule exists precisely because small changes feel safe and bypass scrutiny. Brian's words: "don't push without clarity on whether you can!!!" The cost of asking is one message. The cost of violating is trust erosion.

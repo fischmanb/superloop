@@ -1009,6 +1009,19 @@ Brian's session arc follows a deliberate calibration pattern: let Claude fail on
 
 ---
 
+## M-00089
+
+- **Type:** observation
+- **Tags:** validation-loop, fast-iteration, run-then-fix
+- **Confidence:** high
+- **Status:** active
+- **Date:** 2026-03-05
+- **Related:** L-00192 (validates_principle), M-00088 (complementary)
+
+Brian validates infrastructure through fast iteration loops rather than exhaustive pre-analysis. During auto-QA validation against CRE (`WIP/auto-qa-cre-validation.md`): ran Phase 0 → port conflict (pre-existing servers) → killed, re-ran → health check timeout (wrong path) → merged health fix, re-ran → both ports healthy → full pipeline → Phase 0 failed (root package.json created by previous Phase 1 agent) → fixed fallback logic, re-ran → Phase 0 passed, Phase 1 timed out → increased timeout. Four iterations in rapid succession, each revealing the next real blocker. This is faster and more reliable than trying to predict all failure modes in advance, because production failures are often interaction effects invisible to analysis (e.g., a Phase 1 agent creating artifacts that break Phase 0 on re-run).
+
+---
+
 ## Accumulation (DEPRECATED — see L-00194)
 
 > **Process change (2026-03-04):** New methodology observations go directly into graph-schema M-entries above. This section is a backlog of raw captures that predate the change. Clear by converting to schema entries or discarding. Do NOT add new raw entries here.

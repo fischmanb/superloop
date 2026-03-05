@@ -281,6 +281,16 @@ Stating a number as an "estimate" without showing the computation is decoration 
 
 Tests calling `_build_single_feature` or `_build_feature_prompt` must mock `generate_codebase_summary` — it calls `run_claude` which spawns real `subprocess.run(["claude",...])`. This caused the 71-test hang in `test_overnight_autonomous`. Six tests were affected. Fix: `@patch("...generate_codebase_summary", return_value="mock summary")`. General principle: any test exercising a code path that eventually calls an external CLI must mock every intermediate function that spawns subprocesses, not just the top-level agent runner.
 
+## L-00195 — Agents with filesystem permissions can create artifacts that break subsequent pipeline phases
+
+- **Type:** failure-pattern
+- **Tags:** agent-side-effects, project-structure, auto-QA
+- **Status:** active
+- **Date:** 2026-03-05
+- **Related:** L-00182 (same class — unmocked subprocess effects)
+
+Claude Code agents running with `--dangerously-skip-permissions` in a project directory can create artifacts (package.json, node_modules, lock files) that break subsequent pipeline phases. Pipeline code must defensively handle unexpected project state changes between phases. Defenses: (1) pipeline code checks for meaningful content (e.g., build script presence) before choosing code paths, not just file existence, (2) project `.gitignore` prevents artifacts from persisting across runs, (3) agent prompts should instruct dependency installation in subdirectories, not project root. Observed during auto-QA validation against CRE lease tracker (`WIP/auto-qa-cre-validation.md`): Phase 1's discovery agent ran `npm install playwright` at CRE root, creating a root `package.json` with only playwright deps. Phase 0's monorepo detection on the next run saw the root `package.json`, took the single-project path, and failed (`npm run build` with no build script).
+
 ## L-00183 — Wrapping code in a new `with` block requires re-indenting the entire body
 
 - **Type:** failure-pattern

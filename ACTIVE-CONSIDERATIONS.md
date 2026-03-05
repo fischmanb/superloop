@@ -6,15 +6,17 @@
 
 ---
 
-### Priority stack (updated 2026-03-04, late evening)
+### Priority stack (updated 2026-03-05, afternoon)
 
 Ordered by efficiency gain per complexity added:
 
-1. **Auto-QA validation against CRE lease tracker — zero production runs to date.**
-   - 96 tests pass but pipeline has never run against a real project. Must validate before building intelligence on top.
-   - Target project: `~/cre-lease-tracker` (3 features built, small/controlled, exercises multi-feature interactions)
-   - **Next action: investigation** — verify CRE builds/boots, check auto-QA entry point interface (`main()` in `post_campaign_validation.py`), confirm Playwright availability, determine if auto-QA boots the app or expects it running
-   - Then: run full auto-QA pipeline, document findings, fix whatever breaks
+1. **Auto-QA validation against CRE lease tracker — Phase 0 passes, full pipeline pending.**
+   - Plan: `WIP/auto-qa-cre-validation.md` (4 rounds)
+   - **Completed**: Investigation (2 agent prompts), `--phase` flag, monorepo support, Playwright prompt hardening (networkidle, multi-step interactions, retry parity), health check path discovery, per-port status, configurable `AGENT_TIMEOUT` (default 600s), qa-seed.ts for CRE, Phase 0 monorepo fallback when root package.json has no build script
+   - **Phase 0 passes clean**: Both ports detected (3001 + 5173), health paths discovered (`/api/health`), auth bootstrapped (`qa-test@test.local`), teardown on cleanup
+   - **Blocker found and fixed**: Phase 1 agent installed playwright at CRE root, creating a root `package.json` that broke monorepo detection. Fixed with build-script check fallback + CRE .gitignore.
+   - **Phase 1 timed out at 300s** (old default). Agent timeout now 600s. Not yet re-tested.
+   - **Next action**: Re-run full pipeline (`PROJECT_DIR=~/cre-lease-tracker ... post_campaign_validation`). Tee output to `/tmp/auto-qa-cre-run.log`.
    - Produces first real runtime signal data for CIS
 2. **Campaign intelligence system — design complete, implementation blocked on #1.**
    - Full plan: `WIP/campaign-intelligence-system.md` (pressure-tested, revised)

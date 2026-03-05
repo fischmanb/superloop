@@ -503,3 +503,9 @@
 **Decision:** All methodology observations (M-entries in `HOW-I-WORK-WITH-GENERATIVE-AI.md`) are written directly in graph-schema format. The "Accumulation" section (raw notes awaiting periodic curation) is deprecated. Checkpoint step 5 updated to match.
 **Why:** The raw-note-then-curate-later pattern created deferred work with no trigger, no cadence, and no definition. "Periodic curation passes" was hope, not process. Raw notes were harder to find and use than schema entries. M-entries are just as concrete as L-entries and deserve the same quality bar (L-00191: self-contained, grounded references).
 **Rejected:** Keeping Accumulation as intake with a defined curation cadence (still defers work; the cadence would be another undefined process). Writing M-entries at lower quality bar than L-entries (artificial distinction — both are observations about what works).
+
+## 2026-03-05 — Auto-QA: configurable agent timeout + monorepo fallback hardening
+
+**Decision:** Make all Claude agent call timeouts in the auto-QA pipeline configurable via `AGENT_TIMEOUT` env var (default 600s). Harden Phase 0 monorepo detection to fall through when root `package.json` exists but has no `build` script.
+**Why:** Phase 1 discovery agent timed out at 300s against CRE (3 features — smallest possible project). 300s was a hardcoded constant with no override. Separately, Phase 1's agent ran `npm install playwright` at CRE root, creating a `package.json` with only playwright deps. This caused Phase 0 to take the single-project path on subsequent runs and fail (`npm run build` with no build script). Both are production-run-only bugs invisible to tests.
+**Rejected:** Increasing only Phase 1's timeout (same problem exists in all 6 agent calls). Hardcoded 600s everywhere (loses configurability for different environments).
