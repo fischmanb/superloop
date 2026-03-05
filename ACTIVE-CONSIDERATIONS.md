@@ -38,10 +38,6 @@ Ordered by efficiency gain per complexity added:
 7. **Local model integration** — Replace cloud API with local LM Studio on Mac Studio. Reference: `archive/local-llm-pipeline/`. *Not started.*
 8. **Adaptive routing / parallelism** — Only if data from campaigns justifies complexity. *Deprioritized.*
 
-### Historical build estimator (designed, not yet built)
-
-Correlates t-shirt sizes with actual metrics from `logs/build-summary-*.json`. Writes to `logs/estimation-model.json`. Self-correcting after each `write_build_summary()`. Build after a real Python campaign provides data.
-
 ### Other active items
 
 - **HOW-I-WORK corpus curation**: 84+ entries (M-00001–M-00084+). 4+ coherent clusters ready for formalization. Action: curate entries into named sections, promote mature patterns to learnings.

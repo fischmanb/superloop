@@ -259,6 +259,8 @@ Before a campaign starts, the model reads the accumulated dataset and the new ca
 
 Output: `logs/risk-profile-{campaign_id}.json` — per-feature risk scores and top risk factors. `build_feature_prompt` reads the relevant entry before each feature build.
 
+> **Note:** This subsumes the previously standalone "Historical build estimator" (which would have correlated t-shirt sizes with actual build metrics). The feature vector schema already captures complexity_tier → build_duration → outcome, and the cross-campaign model provides the self-correcting estimation capability. No separate estimator needed.
+
 ### 6.3 Meta-Learning (Phase 3)
 
 After 3+ campaigns, the system has enough data to evaluate its own interventions:
