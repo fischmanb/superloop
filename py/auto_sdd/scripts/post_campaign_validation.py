@@ -56,6 +56,15 @@ EXIT_INFRA_FAILURE = 3
 
 _COMMON_PORTS = [3000, 3001, 5173, 8080]
 
+_HEALTH_FALLBACK_PATHS = ["/", "/health", "/api/health", "/healthz"]
+
+_HEALTH_ROUTE_RE = re.compile(
+    r"""['"/](?P<path>/?(?:api/)?(?:health|healthz|status|readyz|livez))['"]""",
+    re.IGNORECASE,
+)
+
+_HEALTH_SOURCE_EXTENSIONS = {".ts", ".js", ".py", ".go", ".rs"}
+
 _PORT_RE = re.compile(
     r"(?:localhost|127\.0\.0\.1|0\.0\.0\.0)[:\s]+(\d{2,5})"
     r"|(?:port)\s+(\d{2,5})"
@@ -360,6 +369,41 @@ def parse_port_from_output(output: str) -> int | None:
     return None
 
 
+def discover_health_paths(project_dir: Path) -> list[str]:
+    """Scan project source files for health/status route definitions.
+
+    Searches ``.ts``, ``.js``, ``.py``, ``.go``, and ``.rs`` files for
+    common health-check route patterns and returns deduplicated paths.
+    """
+    paths: list[str] = []
+    seen: set[str] = set()
+
+    for source_file in project_dir.rglob("*"):
+        if source_file.suffix not in _HEALTH_SOURCE_EXTENSIONS:
+            continue
+        if source_file.is_dir():
+            continue
+        # Skip node_modules, .git, dist, build dirs
+        parts = source_file.parts
+        if any(
+            p in ("node_modules", ".git", "dist", "build", "__pycache__")
+            for p in parts
+        ):
+            continue
+        try:
+            text = source_file.read_text(errors="replace")
+        except OSError:
+            continue
+        for m in _HEALTH_ROUTE_RE.finditer(text):
+            raw = m.group("path")
+            # Normalise: ensure leading slash
+            path = raw if raw.startswith("/") else f"/{raw}"
+            if path not in seen:
+                seen.add(path)
+                paths.append(path)
+    return paths
+
+
 def health_check(
     url: str,
     timeout: float = 60.0,
@@ -383,6 +427,37 @@ def health_check(
         time.sleep(sleep_time)
         backoff = min(backoff * 2, 16.0)
     return False
+
+
+def health_check_with_paths(
+    port: int,
+    paths: list[str],
+    timeout: float = 60.0,
+    initial_backoff: float = 1.0,
+) -> str | None:
+    """Try multiple health paths against a port, return first that succeeds.
+
+    Returns the successful path (e.g. ``/api/health``) or ``None``.
+    """
+    deadline = time.monotonic() + timeout
+    backoff = initial_backoff
+    while time.monotonic() < deadline:
+        for path in paths:
+            url = f"http://localhost:{port}{path}"
+            try:
+                req = urllib.request.Request(url, method="GET")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    if resp.status == 200:
+                        return path
+            except (urllib.error.URLError, OSError, ValueError):
+                pass
+        remaining = deadline - time.monotonic()
+        sleep_time = min(backoff, max(remaining, 0))
+        if sleep_time <= 0:
+            break
+        time.sleep(sleep_time)
+        backoff = min(backoff * 2, 16.0)
+    return None
 
 
 def _find_seed_script(project_dir: Path) -> Path | None:
@@ -468,6 +543,7 @@ class Phase0Result:
         self.dev_command: str = ""
         self.server_process: subprocess.Popen[str] | None = None
         self.server_processes: list[subprocess.Popen[str]] = []
+        self.port_health: dict[int, str | None] = {}
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -479,6 +555,9 @@ class Phase0Result:
             "package_manager": self.package_manager,
             "dev_command": self.dev_command,
             "error": self.error,
+            "port_health": {
+                str(p): v for p, v in self.port_health.items()
+            },
             "timestamp": _now_iso(),
         }
 
@@ -1844,22 +1923,45 @@ def _run_phase_0_monorepo(
         logger.error(result.error)
         return result
 
-    # Health check: find first responsive port
+    # Discover health paths from project source
+    discovered = discover_health_paths(project_dir)
+    # Build ordered candidate list: discovered paths first, then fallbacks
+    candidate_paths = list(discovered)
+    for fb in _HEALTH_FALLBACK_PATHS:
+        if fb not in candidate_paths:
+            candidate_paths.append(fb)
+
     result.port = detected_ports[0]
     result.url = f"http://localhost:{detected_ports[0]}"
     logger.info("Detected dev servers at ports: %s", detected_ports)
+    if discovered:
+        logger.info("Discovered health paths: %s", discovered)
 
+    # Health check: try all detected ports with path discovery
     logger.info("Running health check (timeout: %.0fs)", timeout)
-    healthy = False
+    per_port_timeout = max(timeout / max(len(detected_ports), 1), 5.0)
+    any_healthy = False
     for p in detected_ports:
-        check_url = f"http://localhost:{p}"
-        if health_check(check_url, timeout=timeout):
-            result.port = p
-            result.url = check_url
-            healthy = True
-            break
+        matched_path = health_check_with_paths(
+            p, candidate_paths, timeout=per_port_timeout, initial_backoff=1.0,
+        )
+        result.port_health[p] = matched_path
+        if matched_path is not None:
+            logger.info(
+                "RUNTIME_READY: http://localhost:%d%s", p, matched_path,
+            )
+            if not any_healthy:
+                result.port = p
+                result.url = f"http://localhost:{p}{matched_path}"
+                any_healthy = True
+        else:
+            logger.warning(
+                "Health check WARNING: port %d did not respond on any of %s",
+                p,
+                candidate_paths,
+            )
 
-    if not healthy:
+    if not any_healthy:
         result.error = (
             f"Health check failed: none of ports {detected_ports} "
             f"returned HTTP 200 within {timeout}s"
@@ -2017,19 +2119,33 @@ def run_phase_0(
             return result
 
         result.port = port
-        result.url = f"http://localhost:{port}"
-        logger.info("Detected dev server at %s", result.url)
+        logger.info("Detected dev server at http://localhost:%d", port)
 
-        # Health check with exponential backoff
+        # Discover health paths from project source
+        discovered = discover_health_paths(project_dir)
+        candidate_paths = list(discovered)
+        for fb in _HEALTH_FALLBACK_PATHS:
+            if fb not in candidate_paths:
+                candidate_paths.append(fb)
+        if discovered:
+            logger.info("Discovered health paths: %s", discovered)
+
+        # Health check with path discovery
         logger.info("Running health check (timeout: %.0fs)", timeout)
-        if not health_check(result.url, timeout=timeout):
+        matched_path = health_check_with_paths(
+            port, candidate_paths, timeout=timeout,
+        )
+        result.port_health[port] = matched_path
+        if matched_path is None:
             result.error = (
-                f"Health check failed: {result.url} did not return HTTP 200 "
+                f"Health check failed: http://localhost:{port} did not "
+                f"return HTTP 200 on any of {candidate_paths} "
                 f"within {timeout}s"
             )
             logger.error(result.error)
             return result
 
+        result.url = f"http://localhost:{port}{matched_path}"
         result.status = "RUNTIME_READY"
         logger.info("RUNTIME_READY: %s", result.url)
 

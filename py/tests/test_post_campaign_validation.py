@@ -47,7 +47,9 @@ from auto_sdd.scripts.post_campaign_validation import (
     detect_coverage_gaps,
     detect_dev_command,
     detect_package_manager,
+    discover_health_paths,
     health_check,
+    health_check_with_paths,
     main,
     parse_ac_output,
     parse_discovery_output,
@@ -2499,3 +2501,125 @@ class TestCleanupMultipleServers:
         pipeline._cleanup()
         proc1.terminate.assert_called_once()
         proc2.terminate.assert_called_once()
+
+
+# ── discover_health_paths tests ────────────────────────────────────────────
+
+
+class TestDiscoverHealthPaths:
+    def test_finds_health_route_in_ts(self, tmp_path: Path) -> None:
+        src = tmp_path / "server.ts"
+        src.write_text("app.get('/api/health', (req, res) => res.send('ok'))")
+        paths = discover_health_paths(tmp_path)
+        assert "/api/health" in paths
+
+    def test_finds_healthz_route(self, tmp_path: Path) -> None:
+        src = tmp_path / "app.py"
+        src.write_text('app.route("/healthz")')
+        paths = discover_health_paths(tmp_path)
+        assert "/healthz" in paths
+
+    def test_finds_status_route(self, tmp_path: Path) -> None:
+        src = tmp_path / "main.go"
+        src.write_text('http.HandleFunc("/api/status", handler)')
+        paths = discover_health_paths(tmp_path)
+        assert "/api/status" in paths
+
+    def test_deduplicates(self, tmp_path: Path) -> None:
+        (tmp_path / "a.ts").write_text("router.get('/health', h)")
+        (tmp_path / "b.ts").write_text("app.get('/health', h)")
+        paths = discover_health_paths(tmp_path)
+        assert paths.count("/health") == 1
+
+    def test_skips_node_modules(self, tmp_path: Path) -> None:
+        nm = tmp_path / "node_modules" / "pkg"
+        nm.mkdir(parents=True)
+        (nm / "index.js").write_text("app.get('/health', h)")
+        paths = discover_health_paths(tmp_path)
+        assert paths == []
+
+    def test_empty_project(self, tmp_path: Path) -> None:
+        paths = discover_health_paths(tmp_path)
+        assert paths == []
+
+    def test_ignores_non_source_files(self, tmp_path: Path) -> None:
+        (tmp_path / "readme.md").write_text("/health endpoint")
+        paths = discover_health_paths(tmp_path)
+        assert paths == []
+
+    def test_finds_readyz_livez(self, tmp_path: Path) -> None:
+        (tmp_path / "probe.go").write_text(
+            'mux.HandleFunc("/readyz", readyHandler)\n'
+            'mux.HandleFunc("/livez", liveHandler)\n'
+        )
+        paths = discover_health_paths(tmp_path)
+        assert "/readyz" in paths
+        assert "/livez" in paths
+
+
+# ── health_check_with_paths tests ──────────────────────────────────────────
+
+
+class TestHealthCheckWithPaths:
+    @patch("auto_sdd.scripts.post_campaign_validation.urllib.request.urlopen")
+    def test_returns_matching_path(self, mock_urlopen: MagicMock) -> None:
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        # Fail on /, succeed on /api/health
+        def side_effect(req: Any, timeout: float = 5) -> Any:
+            if "/api/health" in req.full_url:
+                return mock_resp
+            raise ConnectionRefusedError("refused")
+
+        mock_urlopen.side_effect = side_effect
+        result = health_check_with_paths(
+            3001, ["/", "/api/health"], timeout=5.0, initial_backoff=0.01,
+        )
+        assert result == "/api/health"
+
+    @patch("auto_sdd.scripts.post_campaign_validation.urllib.request.urlopen")
+    def test_returns_none_on_timeout(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.side_effect = ConnectionRefusedError("refused")
+        result = health_check_with_paths(
+            3001, ["/", "/health"], timeout=0.1, initial_backoff=0.01,
+        )
+        assert result is None
+
+    @patch("auto_sdd.scripts.post_campaign_validation.urllib.request.urlopen")
+    def test_returns_first_path_that_works(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+
+        result = health_check_with_paths(
+            3000, ["/health", "/api/health"], timeout=5.0,
+        )
+        assert result == "/health"
+
+
+# ── Phase0Result port_health tests ────────────────────────────────────────
+
+
+class TestPhase0ResultPortHealth:
+    def test_default_empty(self) -> None:
+        r = Phase0Result()
+        assert r.port_health == {}
+
+    def test_to_dict_includes_port_health(self) -> None:
+        r = Phase0Result()
+        r.port_health = {3000: "/", 3001: "/api/health"}
+        d = r.to_dict()
+        assert d["port_health"] == {"3000": "/", "3001": "/api/health"}
+
+    def test_to_dict_port_health_with_none(self) -> None:
+        r = Phase0Result()
+        r.port_health = {3000: "/", 3001: None}
+        d = r.to_dict()
+        assert d["port_health"]["3001"] is None

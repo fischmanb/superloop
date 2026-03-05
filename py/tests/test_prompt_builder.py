@@ -461,3 +461,53 @@ class TestPromptSizeLimits:
             assert section_len <= MAX_INJECTED_SECTION_LINES, (
                 f"L-00178: '{current_header}' is {section_len} lines"
             )
+
+
+# ── QA seed prompt injection ──────────────────────────────────────────────
+
+
+class TestQaSeedPromptInjection:
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_first_feature_includes_qa_seed_instruction(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        config = BuildConfig(project_dir=tmp_path)
+        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert "qa-seed" in prompt
+        assert "qa-test@test.local" in prompt
+        assert "--teardown" in prompt
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_non_first_feature_excludes_qa_seed(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        config = BuildConfig(project_dir=tmp_path)
+        prompt = build_feature_prompt(2, "Dashboard", tmp_path, config)
+        assert "qa-seed" not in prompt
+        assert "qa-test@test.local" not in prompt
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_qa_seed_mentions_auth_detection(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        config = BuildConfig(project_dir=tmp_path)
+        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert "authentication" in prompt.lower() or "auth" in prompt.lower()

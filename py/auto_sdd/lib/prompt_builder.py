@@ -259,6 +259,18 @@ def build_feature_prompt(
     parts.append("   - Read CLAUDE.md for project-specific constraints")
     parts.append("   - Run any build or test commands if they exist")
 
+    # QA seed script instruction for first feature in auth-detected projects
+    if feature_id == 1:
+        parts.append(
+            "   - If the project has authentication (e.g. bcryptjs, passport, "
+            "next-auth, clerk, supabase, JWT imports, or auth route files), "
+            "also produce a `scripts/qa-seed.ts` (or .js/.sh) that creates a "
+            "test user (`qa-test@test.local`, highest role) via the app's "
+            "actual user-creation path, outputs JSON "
+            '`{"email":"...","password":"...","role":"..."}` to stdout, and '
+            "supports `--teardown` to delete the account."
+        )
+
     parts.extend([
         "4. Update roadmap to mark it \u2705 completed",
         "5. Commit all changes with a descriptive message",

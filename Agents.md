@@ -1636,6 +1636,24 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - pytest: all tests pass
 - git diff --stat: only allowed files modified
 
+### Round N: Health Check Path Discovery + QA Seed Prompt (branch: claude/apply-hard-constraints-NC3AI)
+
+**What was asked**: Fix Phase 0 health check to discover health route paths from project source (not just try `/`), track per-port health status, and inject qa-seed script instruction into `build_feature_prompt()` for auth-detected projects.
+
+**What changed**:
+- `post_campaign_validation.py`: Added `discover_health_paths()` to scan `.ts/.js/.py/.go/.rs` files for health route patterns. Added `health_check_with_paths()` that tries multiple paths per port. Updated monorepo and single-project health check flows to use path discovery with fallback list. Added `port_health` dict to `Phase0Result` tracking which path succeeded per port. Ports that fail health check now log WARNING but don't block Phase 0.
+- `prompt_builder.py`: Added qa-seed instruction to `build_feature_prompt()` for feature_id == 1, telling the build agent to produce `scripts/qa-seed.ts` when auth is detected.
+- Tests: Added `TestDiscoverHealthPaths` (8 tests), `TestHealthCheckWithPaths` (3 tests), `TestPhase0ResultPortHealth` (3 tests), `TestQaSeedPromptInjection` (3 tests).
+
+**What was NOT changed**: No changes to retry logic, auth bootstrap, or any other phase. No new files created.
+
+**Verification**:
+- mypy --strict: both files pass
+- pytest tests/test_post_campaign_validation.py: 138 passed
+- pytest tests/test_prompt_builder.py: 36 passed
+- pytest tests/ -q: 784 passed, 1 pre-existing failure (test_eval_sidecar unrelated to changes)
+- git diff --stat: only 4 allowed files modified
+
 ---
 ## Questions?
 
