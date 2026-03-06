@@ -11,6 +11,7 @@ from auto_sdd.lib.prompt_builder import (
     BuildConfig,
     MAX_INJECTED_SECTION_LINES,
     MAX_TOTAL_PROMPT_LINES,
+    _read_risk_context,
     _resolve_spec_file,
     build_feature_prompt,
     build_retry_prompt,
@@ -616,3 +617,89 @@ class TestBuildFeaturePromptReturnType:
         config = BuildConfig(project_dir=tmp_path)
         _, injections = build_feature_prompt(1, "Auth", tmp_path, config)
         assert "resolved_spec" in injections
+
+
+# ── Risk context injection (CIS Round 2) ────────────────────────────────────
+
+
+class TestRiskContextInjection:
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_reads_risk_context_from_eval_dir(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        eval_dir = tmp_path / "evals"
+        eval_dir.mkdir()
+        risk_file = eval_dir / "risk-context.md"
+        risk_file.write_text("## Campaign Intelligence (5 features analyzed)\n\n"
+                             "\u26a0 SHARED_MODULE_RISK: Watch out.\n")
+        config = BuildConfig(project_dir=tmp_path, eval_output_dir=eval_dir)
+        prompt, injections = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert "Campaign Intelligence" in prompt
+        assert "SHARED_MODULE_RISK" in prompt
+        assert "risk_context" in injections
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_reads_risk_context_from_sdd_state_fallback(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        sdd_state = tmp_path / ".sdd-state"
+        sdd_state.mkdir()
+        (sdd_state / "risk-context.md").write_text("## Campaign Intelligence\nData here.")
+        config = BuildConfig(project_dir=tmp_path)
+        prompt, injections = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert "Campaign Intelligence" in prompt
+        assert "risk_context" in injections
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_no_risk_context_when_file_missing(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        config = BuildConfig(project_dir=tmp_path)
+        prompt, injections = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert "risk_context" not in injections
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_no_risk_context_when_file_empty(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        sdd_state = tmp_path / ".sdd-state"
+        sdd_state.mkdir()
+        (sdd_state / "risk-context.md").write_text("")
+        config = BuildConfig(project_dir=tmp_path)
+        prompt, injections = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert "risk_context" not in injections
+
+    def test_read_risk_context_prefers_eval_dir(self, tmp_path: Path) -> None:
+        eval_dir = tmp_path / "evals"
+        eval_dir.mkdir()
+        (eval_dir / "risk-context.md").write_text("from-eval-dir")
+        sdd_state = tmp_path / ".sdd-state"
+        sdd_state.mkdir()
+        (sdd_state / "risk-context.md").write_text("from-sdd-state")
+        config = BuildConfig(project_dir=tmp_path, eval_output_dir=eval_dir)
+        result = _read_risk_context(tmp_path, config)
+        assert result == "from-eval-dir"

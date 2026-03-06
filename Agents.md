@@ -1671,6 +1671,28 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - git status: only 2 new files (vector_store.py, test_vector_store.py) + Agents.md + general-estimates.jsonl
 
 ---
+
+### CIS Round 2: Pattern Analysis + Intra-Campaign Risk Injection
+
+**Asked:** Implement CIS Round 2 — pattern analysis rules that detect statistical patterns in accumulated feature vectors and inject risk warnings into subsequent build prompts.
+
+**Changed:**
+- **NEW** `py/auto_sdd/lib/pattern_analysis.py` — Finding/PatternRule dataclasses, 4 detection rules (co-occurrence, temporal decay, retry effectiveness, shared module risk), feature-flagged run_analysis(), risk context + campaign report formatters
+- **MODIFIED** `py/auto_sdd/scripts/build_loop.py` — imports pattern_analysis, adds ANALYSIS_INTERVAL env var (default 3), calls _run_pattern_analysis() every N completed features, writes risk-context.md to eval_output_dir
+- **MODIFIED** `py/auto_sdd/lib/prompt_builder.py` — adds _read_risk_context() that reads risk-context.md from eval_output_dir or .sdd-state/ fallback, injects as separate section in build prompts with "risk_context" injection label
+- **NEW** `py/tests/test_pattern_analysis.py` — 33 tests: dataclasses, feature flag, all 4 rules, run_analysis, formatters, registry
+- **MODIFIED** `py/tests/test_build_loop.py` — 3 tests: analysis interval trigger, risk-context.md writing, analysis failure non-fatal
+- **MODIFIED** `py/tests/test_prompt_builder.py` — 5 tests: risk-context from eval dir, sdd-state fallback, missing file, empty file, eval dir preference
+
+**NOT changed:** vector_store.py, eval_sidecar.py, drift.py, any other files outside the allowed list.
+
+**Verification:**
+- mypy --strict: all 3 source files pass
+- pytest target tests: 152 passed
+- pytest tests/ -q: 1 pre-existing failure (test_eval_sidecar::test_merge_commit_skipped — unrelated git branch issue)
+- git diff --stat: only allowed files modified
+
+---
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.

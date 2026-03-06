@@ -47,7 +47,8 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "ENABLE_RESUME", "AGENT_MODEL", "BUILD_MODEL", "RETRY_MODEL",
         "DRIFT_MODEL", "REVIEW_MODEL", "LOGS_DIR", "EVAL_OUTPUT_DIR",
         "COST_LOG_FILE", "BUILD_CHECK_CMD", "TEST_CHECK_CMD",
-        "EVAL_SIDECAR", "CLAUDECODE",
+        "EVAL_SIDECAR", "CLAUDECODE", "ANALYSIS_INTERVAL",
+        "ENABLE_PATTERN_ANALYSIS",
     ]:
         monkeypatch.delenv(var, raising=False)
 
@@ -1225,3 +1226,71 @@ class TestDeriveComponentTypes:
         )
         result = derive_component_types(tmp_path)
         assert sorted(result) == ["client", "database", "other", "server", "style", "test"]
+
+
+# ── CIS Round 2: Pattern analysis wiring ────────────────────────────────────
+
+
+class TestPatternAnalysisWiring:
+    """Test that BuildLoop runs pattern analysis at the configured interval."""
+
+    def test_analysis_runs_after_n_features(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        loop.analysis_interval = 2
+        loop._current_strategy = "chained"
+        loop._loop_limit = 10
+
+        # Record 2 results to trigger analysis at interval 2
+        with patch("auto_sdd.scripts.build_loop.run_analysis", return_value=[]) as mock_analysis, \
+             patch("auto_sdd.scripts.build_loop.derive_component_types", return_value=[]), \
+             patch("auto_sdd.scripts.build_loop.read_latest_eval_feedback", return_value=""), \
+             patch("auto_sdd.scripts.build_loop.update_repeated_mistakes"):
+            loop._record_build_result(
+                "feat-1", "built", "model-x", 60, "branch-1",
+            )
+            # After 1 feature (built=1, failed=0), total=1, not multiple of 2
+            mock_analysis.assert_not_called()
+
+            loop._record_build_result(
+                "feat-2", "built", "model-x", 90, "branch-1",
+            )
+            # After 2 features, total=2, triggers analysis
+            mock_analysis.assert_called_once()
+
+    def test_risk_context_written(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        loop.analysis_interval = 1
+        loop._current_strategy = "chained"
+        loop._loop_limit = 10
+
+        fake_finding_list = [MagicMock()]
+        with patch("auto_sdd.scripts.build_loop.run_analysis", return_value=fake_finding_list), \
+             patch("auto_sdd.scripts.build_loop.generate_risk_context", return_value="## Risk Context\nTest") as mock_ctx, \
+             patch("auto_sdd.scripts.build_loop.derive_component_types", return_value=[]), \
+             patch("auto_sdd.scripts.build_loop.read_latest_eval_feedback", return_value=""), \
+             patch("auto_sdd.scripts.build_loop.update_repeated_mistakes"):
+            loop._record_build_result(
+                "feat-1", "built", "model-x", 60, "branch-1",
+            )
+
+        risk_path = loop.eval_output_dir / "risk-context.md"
+        assert risk_path.exists()
+        content = risk_path.read_text()
+        assert "Risk Context" in content
+
+    def test_analysis_failure_does_not_abort(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        loop.analysis_interval = 1
+        loop._current_strategy = "chained"
+        loop._loop_limit = 10
+
+        with patch("auto_sdd.scripts.build_loop.run_analysis", side_effect=RuntimeError("boom")), \
+             patch("auto_sdd.scripts.build_loop.derive_component_types", return_value=[]), \
+             patch("auto_sdd.scripts.build_loop.read_latest_eval_feedback", return_value=""), \
+             patch("auto_sdd.scripts.build_loop.update_repeated_mistakes"):
+            # Should not raise
+            loop._record_build_result(
+                "feat-1", "built", "model-x", 60, "branch-1",
+            )
+        # Loop state should be intact
+        assert loop.loop_built == 1

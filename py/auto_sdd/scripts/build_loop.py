@@ -89,6 +89,10 @@ from auto_sdd.lib.prompt_builder import (
     build_retry_prompt,
     show_preflight_summary,
 )
+from auto_sdd.lib.pattern_analysis import (
+    generate_risk_context,
+    run_analysis,
+)
 from auto_sdd.lib.vector_store import VectorStore, generate_campaign_id
 from auto_sdd.lib.reliability import (
     AutoSddError,
@@ -484,6 +488,9 @@ class BuildLoop:
         self.vector_store = VectorStore(
             self.project_dir / ".sdd-state" / "feature-vectors.jsonl"
         )
+        self.analysis_interval = int(
+            _env_str("ANALYSIS_INTERVAL", "3")
+        )
 
         # ── Acquire lock ─────────────────────────────────────────────────
         lock_dir = Path(tempfile.gettempdir())
@@ -722,6 +729,39 @@ class BuildLoop:
                 self.branch_strategy,
                 list(self.built_feature_names),
                 branch,
+            )
+
+        # ── CIS: periodic pattern analysis ──────────────────────────────
+        completed = self.loop_built + self.loop_failed
+        if (
+            self.analysis_interval > 0
+            and completed > 0
+            and completed % self.analysis_interval == 0
+        ):
+            self._run_pattern_analysis()
+
+    def _run_pattern_analysis(self) -> None:
+        """Run pattern analysis on current campaign vectors and write risk context."""
+        try:
+            vectors = self.vector_store.query_vectors(
+                {"campaign_id": self.campaign_id}
+            )
+            findings = run_analysis(vectors)
+            risk_text = generate_risk_context(findings, len(vectors))
+            if risk_text:
+                risk_path = (
+                    self.eval_output_dir / "risk-context.md"
+                )
+                risk_path.parent.mkdir(parents=True, exist_ok=True)
+                risk_path.write_text(risk_text)
+                logger.info(
+                    "CIS: wrote risk context (%d findings) to %s",
+                    len(findings),
+                    risk_path,
+                )
+        except Exception:
+            logger.debug(
+                "CIS: pattern analysis failed (non-fatal)", exc_info=True
             )
 
     # ── Core build loop ──────────────────────────────────────────────────

@@ -192,6 +192,31 @@ def show_preflight_summary(
     logger.info("")
 
 
+# ── Risk context (CIS Round 2) ───────────────────────────────────────────────
+
+
+def _read_risk_context(project_dir: Path, config: BuildConfig) -> str:
+    """Read the risk-context.md file written by pattern analysis.
+
+    Checks eval_output_dir first, then .sdd-state/ fallback.
+    Returns the file contents if found and non-empty, else empty string.
+    """
+    candidates: list[Path] = []
+    if config.eval_output_dir is not None:
+        candidates.append(config.eval_output_dir / "risk-context.md")
+    candidates.append(project_dir / ".sdd-state" / "risk-context.md")
+
+    for path in candidates:
+        try:
+            if path.is_file():
+                content = path.read_text().strip()
+                if content:
+                    return content
+        except Exception:
+            logger.debug("Failed to read risk context from %s", path, exc_info=True)
+    return ""
+
+
 # ── Build prompt ─────────────────────────────────────────────────────────────
 
 
@@ -297,6 +322,12 @@ def build_feature_prompt(
         parts.append("## Sidecar Eval Feedback (from previous build)")
         parts.append(eval_feedback)
         injections.append("eval_feedback")
+
+    # Read risk context from pattern analysis (CIS Round 2)
+    risk_context = _read_risk_context(project_dir, config)
+    if risk_context:
+        parts.append(risk_context)
+        injections.append("risk_context")
 
     if cumulative_mistakes:
         parts.append("## Known Mistakes (accumulated across this campaign)")
