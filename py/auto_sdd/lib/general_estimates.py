@@ -29,8 +29,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Default estimates file (relative to repo root)
-_DEFAULT_ESTIMATES_FILE = Path("general-estimates.jsonl")
+# Default estimates file — resolve relative to repo root, not CWD.
+# The repo root is 2 levels up from this file (lib/ -> auto_sdd/ -> py/ -> repo)
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_DEFAULT_ESTIMATES_FILE = _REPO_ROOT / "general-estimates.jsonl"
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -38,30 +40,42 @@ _DEFAULT_ESTIMATES_FILE = Path("general-estimates.jsonl")
 
 def get_session_actual_tokens(
     jsonl_path: Path | None = None,
+    project_dir: Path | None = None,
+    after: str | None = None,
 ) -> dict[str, object]:
     """Read Claude Code session JSONL and return actual token counts.
 
     Parses assistant entries from the JSONL file and sums their
     ``message.usage`` fields.
 
+    When *jsonl_path* is ``None``, searches for session files scoped to
+    *project_dir* (or the most recent globally if *project_dir* is also
+    ``None``).  If *after* is given (ISO timestamp), only session files
+    modified after that time are included.  Multiple session files are
+    summed to handle compaction splits.
+
     Args:
-        jsonl_path: Explicit path to a session JSONL file. If ``None``,
-            finds the most recent JSONL under ``~/.claude/projects/``.
+        jsonl_path: Explicit path to a session JSONL file.
+        project_dir: Scope session file search to this project directory.
+        after: ISO timestamp — only include session files modified after
+            this time.
 
     Returns:
         Dict with keys: ``input_tokens``, ``output_tokens``,
         ``cache_creation_tokens``, ``cache_read_tokens``, ``active_tokens``,
-        ``cumulative_tokens``, ``total_tokens``, ``api_calls``, ``source``.
+        ``cumulative_tokens``, ``total_tokens``, ``api_calls``, ``source``,
+        ``files_summed``.
 
     Raises:
         FileNotFoundError: If no JSONL file is found or the specified path
             does not exist.
     """
-    if jsonl_path is None:
-        jsonl_path = _find_most_recent_session_jsonl()
-
-    if not jsonl_path.exists():
-        raise FileNotFoundError(f"JSONL file not found: {jsonl_path}")
+    if jsonl_path is not None:
+        if not jsonl_path.exists():
+            raise FileNotFoundError(f"JSONL file not found: {jsonl_path}")
+        paths = [jsonl_path]
+    else:
+        paths = _find_session_jsonls(project_dir=project_dir, after=after)
 
     input_total = 0
     output_total = 0
@@ -69,30 +83,35 @@ def get_session_actual_tokens(
     cache_read_total = 0
     api_calls = 0
 
-    for line in jsonl_path.read_text().splitlines():
-        line = line.strip()
-        if not line:
+    for p in paths:
+        if not p.exists():
             continue
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if data.get("type") != "assistant":
-            continue
-        usage = data.get("message", {})
-        if isinstance(usage, dict):
-            usage = usage.get("usage", {})
-        else:
-            continue
-        if not isinstance(usage, dict) or not usage:
-            continue
-        api_calls += 1
-        input_total += _int_from(usage.get("input_tokens"))
-        output_total += _int_from(usage.get("output_tokens"))
-        cache_creation_total += _int_from(
-            usage.get("cache_creation_input_tokens")
-        )
-        cache_read_total += _int_from(usage.get("cache_read_input_tokens"))
+        for line in p.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if data.get("type") != "assistant":
+                continue
+            usage = data.get("message", {})
+            if isinstance(usage, dict):
+                usage = usage.get("usage", {})
+            else:
+                continue
+            if not isinstance(usage, dict) or not usage:
+                continue
+            api_calls += 1
+            input_total += _int_from(usage.get("input_tokens"))
+            output_total += _int_from(usage.get("output_tokens"))
+            cache_creation_total += _int_from(
+                usage.get("cache_creation_input_tokens")
+            )
+            cache_read_total += _int_from(
+                usage.get("cache_read_input_tokens")
+            )
 
     active = input_total + output_total
     cumulative = active + cache_creation_total + cache_read_total
@@ -107,6 +126,7 @@ def get_session_actual_tokens(
         "total_tokens": cumulative,
         "api_calls": api_calls,
         "source": "jsonl_direct",
+        "files_summed": len(paths),
     }
 
 
@@ -276,15 +296,35 @@ def _int_from(val: object) -> int:
     return 0
 
 
-def _find_most_recent_session_jsonl() -> Path:
-    """Find the most recent Claude session JSONL file.
+def _encode_project_dir(project_dir: Path) -> str:
+    """Encode a project directory path to Claude's session dir name.
 
-    Searches ``~/.claude/projects/`` for ``*.jsonl`` files and returns the
-    one with the most recent modification time.
+    Claude Code stores session files under
+    ``~/.claude/projects/{encoded_cwd}/`` where the CWD is encoded
+    by replacing ``/`` with ``-``.
+    """
+    return str(project_dir.resolve()).replace("/", "-")
+
+
+def _find_session_jsonls(
+    project_dir: Path | None = None,
+    after: str | None = None,
+) -> list[Path]:
+    """Find Claude session JSONL files, optionally scoped by project.
+
+    Args:
+        project_dir: If given, only search in the session dir for this
+            project CWD. If ``None``, searches all project dirs and
+            returns the single most recent file (legacy behavior).
+        after: ISO timestamp string. If given, only return files whose
+            mtime is after this timestamp. Handles compaction splits by
+            returning ALL matching files so they can be summed.
+
+    Returns:
+        List of Path objects to session JSONL files, newest first.
 
     Raises:
-        FileNotFoundError: If the projects directory does not exist or
-            contains no JSONL files.
+        FileNotFoundError: If no matching session files are found.
     """
     claude_projects_dir = Path.home() / ".claude" / "projects"
 
@@ -294,12 +334,61 @@ def _find_most_recent_session_jsonl() -> Path:
             f"{claude_projects_dir}"
         )
 
-    jsonl_files = list(claude_projects_dir.rglob("*.jsonl"))
+    if project_dir is not None:
+        encoded = _encode_project_dir(project_dir)
+        search_dir = claude_projects_dir / encoded
+        if not search_dir.is_dir():
+            raise FileNotFoundError(
+                f"No session dir for project {project_dir}: "
+                f"expected {search_dir}"
+            )
+        jsonl_files = list(search_dir.glob("*.jsonl"))
+    else:
+        jsonl_files = list(claude_projects_dir.rglob("*.jsonl"))
+
     if not jsonl_files:
         raise FileNotFoundError(
             f"No JSONL session files found in {claude_projects_dir}"
         )
 
-    # Sort by modification time, most recent first
+    # Filter by time if requested
+    if after is not None:
+        from datetime import datetime, timezone
+
+        try:
+            cutoff = datetime.fromisoformat(after)
+            if cutoff.tzinfo is None:
+                cutoff = cutoff.replace(tzinfo=timezone.utc)
+            cutoff_ts = cutoff.timestamp()
+        except ValueError:
+            logger.warning("Invalid 'after' timestamp: %s, ignoring", after)
+            cutoff_ts = 0.0
+
+        jsonl_files = [
+            f for f in jsonl_files if f.stat().st_mtime > cutoff_ts
+        ]
+
+        if not jsonl_files:
+            raise FileNotFoundError(
+                f"No session files modified after {after}"
+            )
+
+    # Sort by mtime, newest first
     jsonl_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return jsonl_files[0]
+
+    # If project_dir was given, return ALL matching files (sum for compaction)
+    # If no project_dir, return just the most recent (legacy fallback)
+    if project_dir is not None:
+        return jsonl_files
+    return jsonl_files[:1]
+
+
+def _find_most_recent_session_jsonl() -> Path:
+    """Find the most recent Claude session JSONL file.
+
+    .. deprecated::
+        Use ``_find_session_jsonls(project_dir=...)`` instead for
+        project-scoped, compaction-safe session discovery.
+    """
+    results = _find_session_jsonls()
+    return results[0]

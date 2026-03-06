@@ -205,9 +205,12 @@ class TestAppendGeneralEstimate:
 
     def test_default_path_used(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """When no explicit path given, uses _DEFAULT_ESTIMATES_FILE."""
-        monkeypatch.chdir(tmp_path)
-        append_general_estimate({"test": True})
         default_path = tmp_path / "general-estimates.jsonl"
+        monkeypatch.setattr(
+            "auto_sdd.lib.general_estimates._DEFAULT_ESTIMATES_FILE",
+            default_path,
+        )
+        append_general_estimate({"test": True})
         assert default_path.exists()
 
 
