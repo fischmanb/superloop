@@ -363,7 +363,7 @@ A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
 **Fresh onboard (state file missing or `last_check_ts` > 24h stale)**:
 - Full read of ONBOARDING.md. This is the only case where the whole file gets read.
 - Read `ACTIVE-CONSIDERATIONS.md` — priority stack and in-flight work.
-- Check for `.handoff.md` at repo root (ONLY on the very first prompt of a fresh chat — never mid-session). If it exists, read it for session-specific continuity from the retiring chat, absorb the context, then delete the file. See `.specs/HANDOFF-PROTOCOL.md`.
+- Check for `.handoff.md` at repo root (ONLY on the very first prompt of a fresh chat — never mid-session). If it exists, read it for session-specific continuity from the retiring chat, absorb the context, then move it to `archive/handoffs/handoff-{DATE}.md` (create dir if needed). Never delete handoffs. See `.specs/HANDOFF-PROTOCOL.md`.
 - Read `learnings/core.md` — the curated constitutional learnings. These hard-won failure modes repeat if not internalized at session start. (When core.md is empty, read `.specs/learnings/agent-operations.md` as fallback.)
 - **Flush stale captures**: If `pending_captures` is non-empty, reconcile them into **ACTIVE-CONSIDERATIONS.md** immediately. This is the only write permitted during fresh onboard.
 - Report status. No other file writes, no commits, no edits. First response is read-only.

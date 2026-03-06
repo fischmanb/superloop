@@ -64,7 +64,7 @@ The fresh session's onboarding should:
 2. Read `.handoff.md` if it exists (session-specific continuity)
 3. Read ACTIVE-CONSIDERATIONS.md (current priorities)
 4. Read core.md (constitutional learnings)
-5. Delete `.handoff.md` after absorbing it (it's single-use)
+5. Move `.handoff.md` to `archive/handoffs/handoff-{DATE}.md` after absorbing it (create dir if needed). Never delete handoffs — they form a session history.
 
 ## Notes
 
