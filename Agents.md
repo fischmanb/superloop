@@ -1654,6 +1654,22 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - pytest tests/ -q: 784 passed, 1 pre-existing failure (test_eval_sidecar unrelated to changes)
 - git diff --stat: only 4 allowed files modified
 
+### CIS Round 1a: Vector Store (branch: claude/setup-ve-library-6sOe5)
+
+**What was asked**: Implement the data layer for the Campaign Intelligence System — FeatureVector dataclass, JSONL-backed VectorStore with CRUD operations, section schema constants, campaign_id generation. No existing files modified.
+
+**What changed**:
+- NEW `py/auto_sdd/lib/vector_store.py`: FeatureVector dataclass (identity + extensible sections dict), VectorStore class (create_vector, update_section, get_vector, query_vectors, atomic JSONL persistence via temp file + rename), section schema constants (PRE_BUILD_V1_FIELDS, BUILD_SIGNALS_V1_FIELDS, EVAL_SIGNALS_V1_FIELDS, RUNTIME_SIGNALS_V1_FIELDS), generate_campaign_id function.
+- NEW `py/tests/test_vector_store.py`: 32 tests covering create, duplicate detection, update/merge, get, query with filters (identity + dotted section fields), persistence/reload, atomic write, parent dir creation, campaign_id format, schema constants, dataclass defaults.
+
+**What was NOT changed**: No existing Python files modified. No package installs. No existing test behavior affected.
+
+**Verification**:
+- mypy --strict auto_sdd/lib/vector_store.py: Success, 0 issues
+- pytest tests/test_vector_store.py -v: 32 passed
+- pytest tests/ -q: 817 passed, 1 pre-existing failure (test_eval_sidecar::test_merge_commit_skipped — unrelated git branch issue)
+- git status: only 2 new files (vector_store.py, test_vector_store.py) + Agents.md + general-estimates.jsonl
+
 ---
 ## Questions?
 
