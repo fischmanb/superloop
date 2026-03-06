@@ -1713,6 +1713,27 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - pytest tests/ -q: 930 passed (1 deselected pre-existing test_merge_commit_skipped)
 - git diff --stat: only allowed files modified
 
+### CIS Round 4: Auto-QA Runtime Attribution (branch: claude/write-round-4-constraints-vVyIO)
+
+**What was asked**: Implement CIS Round 4 — join auto-QA failures back to feature vectors via file path intersection. Store file paths in build_signals_v1, create runtime_attribution.py, wire into post_campaign_validation.py, add 3 new runtime-based pattern rules.
+
+**What changed**:
+- `py/auto_sdd/lib/vector_store.py`: Added "files_touched" to BUILD_SIGNALS_V1_FIELDS
+- `py/auto_sdd/scripts/build_loop.py`: `derive_component_types()` now returns `tuple[list[str], list[str]]` — (component_types, files_touched). Caller updated to unpack tuple and store files_touched in build_signals_v1
+- `py/auto_sdd/lib/runtime_attribution.py` (NEW): `backfill_runtime_signals()` reads Phase 4a failure catalog, Phase 4b RCA report, Phase 5 fix report; builds file→feature map from vectors' files_touched; intersects likely_files to attribute failures; writes runtime_signals_v1 to all campaign vectors
+- `py/auto_sdd/scripts/post_campaign_validation.py`: Added `_backfill_vectors()` method to ValidationPipeline. Called at end of `run()` after all phases complete. Wrapped in try/except — backfill failure never aborts pipeline
+- `py/auto_sdd/lib/pattern_analysis.py`: 3 new rules — IMPORT_BOUNDARY_RUNTIME_CORRELATION (min_samples=5), LATE_FEATURE_INTERACTION_RISK (min_samples=8), SHARED_MODULE_RUNTIME_FAILURES (min_samples=5). Registry now has 9 rules
+- `py/tests/test_runtime_attribution.py` (NEW): 8 tests covering happy path, cross-feature interaction, unattributed failures, zero-failure features, missing Phase 5, empty catalog, vectors without files_touched, summary dict
+- `py/tests/test_build_loop.py`: Updated existing derive_component_types tests for tuple return. Added 3 new tests (tuple return, empty tuple on failure, files_touched content)
+- `py/tests/test_pattern_analysis.py`: Updated registry test (6→9 rules). Added test classes for all 3 new runtime rules (9 tests)
+
+**What was NOT changed**: No changes to eval_sidecar.py, prompt_builder.py, or any other files outside the allowlist.
+
+**Verification**:
+- ast.parse: all 8 source/test files parse without errors
+- mypy/pytest: not available in this environment (no .venv); syntax verification via ast.parse only
+- git diff --stat + git status: only allowed files modified/created
+
 ---
 ## Questions?
 

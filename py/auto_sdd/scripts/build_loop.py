@@ -209,13 +209,17 @@ def _detect_dep_excludes(project_dir: Path) -> list[str]:
     return excludes
 
 
-def derive_component_types(project_dir: Path) -> list[str]:
+def derive_component_types(
+    project_dir: Path,
+) -> tuple[list[str], list[str]]:
     """Categorize files changed in the last commit into component types.
 
     Runs ``git diff --name-only HEAD~1`` and classifies each path.
 
     Returns:
-        Deduplicated list of component type strings.
+        Tuple of (component_types, files_touched).
+        component_types: Deduplicated list of component type strings.
+        files_touched: Raw list of file paths from the diff.
     """
     try:
         result = subprocess.run(
@@ -226,15 +230,17 @@ def derive_component_types(project_dir: Path) -> list[str]:
             timeout=30,
         )
         if result.returncode != 0:
-            return []
+            return [], []
     except (subprocess.TimeoutExpired, OSError):
-        return []
+        return [], []
 
     types: set[str] = set()
+    files_touched: list[str] = []
     for line in result.stdout.strip().splitlines():
         path = line.strip()
         if not path:
             continue
+        files_touched.append(path)
         if path.endswith(".css") or path.endswith(".scss"):
             types.add("style")
         elif "/test" in path or ".test." in path or ".spec." in path:
@@ -254,7 +260,7 @@ def derive_component_types(project_dir: Path) -> list[str]:
             types.add("server")
         else:
             types.add("other")
-    return sorted(types)
+    return sorted(types), files_touched
 
 
 def _load_env_local(project_dir: Path) -> None:
@@ -664,7 +670,9 @@ class BuildLoop:
         # ── CIS: update build_signals_v1 ────────────────────────────────
         if vector_id:
             try:
-                comp_types = derive_component_types(self.project_dir)
+                comp_types, files_touched = derive_component_types(
+                    self.project_dir
+                )
                 self.vector_store.update_section(
                     vector_id,
                     "build_signals_v1",
@@ -678,6 +686,7 @@ class BuildLoop:
                         "injections_received": injections_received or [],
                         "component_types": comp_types,
                         "touches_shared_modules": "database" in comp_types,
+                        "files_touched": files_touched,
                     },
                 )
             except Exception:

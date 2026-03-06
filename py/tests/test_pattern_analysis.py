@@ -12,8 +12,11 @@ from auto_sdd.lib.pattern_analysis import (
     PatternRule,
     detect_cooccurrence,
     detect_import_boundary_correlation,
+    detect_import_boundary_runtime_correlation,
+    detect_late_feature_interaction_risk,
     detect_retry_effectiveness,
     detect_shared_module_risk,
+    detect_shared_module_runtime_failures,
     detect_temporal_decay,
     detect_type_safety_trend,
     generate_campaign_findings,
@@ -691,7 +694,7 @@ class TestDetectTypeSafetyTrend:
 
 
 class TestRuleRegistry:
-    def test_six_rules_registered(self) -> None:
+    def test_nine_rules_registered(self) -> None:
         rule_names = [r.name for r in RULES]
         assert "CO_OCCURRENCE" in rule_names
         assert "TEMPORAL_DECAY" in rule_names
@@ -699,7 +702,10 @@ class TestRuleRegistry:
         assert "SHARED_MODULE_RISK" in rule_names
         assert "IMPORT_BOUNDARY_CORRELATION" in rule_names
         assert "TYPE_SAFETY_TREND" in rule_names
-        assert len(RULES) == 6
+        assert "IMPORT_BOUNDARY_RUNTIME_CORRELATION" in rule_names
+        assert "LATE_FEATURE_INTERACTION_RISK" in rule_names
+        assert "SHARED_MODULE_RUNTIME_FAILURES" in rule_names
+        assert len(RULES) == 9
 
     def test_min_samples_values(self) -> None:
         by_name = {r.name: r for r in RULES}
@@ -709,3 +715,178 @@ class TestRuleRegistry:
         assert by_name["SHARED_MODULE_RISK"].min_samples == 5
         assert by_name["IMPORT_BOUNDARY_CORRELATION"].min_samples == 5
         assert by_name["TYPE_SAFETY_TREND"].min_samples == 5
+        assert by_name["IMPORT_BOUNDARY_RUNTIME_CORRELATION"].min_samples == 5
+        assert by_name["LATE_FEATURE_INTERACTION_RISK"].min_samples == 8
+        assert by_name["SHARED_MODULE_RUNTIME_FAILURES"].min_samples == 5
+
+
+# ── detect_import_boundary_runtime_correlation ─────────────────────────────
+
+
+class TestDetectImportBoundaryRuntimeCorrelation:
+    def test_correlation_detected(self) -> None:
+        """Import violations + runtime failures = correlation."""
+        vectors = []
+        # 3 features with import violations, all have runtime failures
+        for i in range(3):
+            vectors.append(_make_vector(
+                feature_id=i,
+                feature_name=f"bad-{i}",
+                convention_signals={
+                    "violations": [
+                        {"pattern": "import_boundaries", "assessment": "violated"},
+                    ],
+                },
+                build_signals={"build_success": True},
+                runtime_signals={"runtime_failures_caused": 2},
+            ))
+        # 3 clean features, no runtime failures
+        for i in range(3, 6):
+            vectors.append(_make_vector(
+                feature_id=i,
+                convention_signals={"violations": []},
+                build_signals={"build_success": True},
+                runtime_signals={"runtime_failures_caused": 0},
+            ))
+        findings = detect_import_boundary_runtime_correlation(vectors)
+        assert len(findings) == 1
+        assert findings[0].rule_name == "IMPORT_BOUNDARY_RUNTIME_CORRELATION"
+
+    def test_no_correlation_when_equal_rates(self) -> None:
+        vectors = []
+        for i in range(6):
+            has_violation = i < 3
+            vectors.append(_make_vector(
+                feature_id=i,
+                convention_signals={
+                    "violations": (
+                        [{"pattern": "import_boundaries", "assessment": "violated"}]
+                        if has_violation else []
+                    ),
+                },
+                build_signals={"build_success": True},
+                runtime_signals={"runtime_failures_caused": 0},
+            ))
+        findings = detect_import_boundary_runtime_correlation(vectors)
+        assert findings == []
+
+    def test_no_runtime_signals_skipped(self) -> None:
+        """Vectors without runtime_signals_v1 are skipped."""
+        vectors = [
+            _make_vector(
+                feature_id=i,
+                convention_signals={"violations": [
+                    {"pattern": "import_boundaries", "assessment": "violated"},
+                ]},
+            )
+            for i in range(6)
+        ]
+        findings = detect_import_boundary_runtime_correlation(vectors)
+        assert findings == []
+
+
+# ── detect_late_feature_interaction_risk ──────────────────────────────────
+
+
+class TestDetectLateFeatureInteractionRisk:
+    def test_late_features_more_interactions(self) -> None:
+        vectors = []
+        # Early features (positions 1-4): no interactions
+        for i in range(4):
+            vectors.append(_make_vector(
+                feature_id=i,
+                build_order_position=i + 1,
+                runtime_signals={
+                    "runtime_failures_caused": 0,
+                    "cross_feature_interaction": False,
+                },
+            ))
+        # Late features (positions 5-8): all have interactions
+        for i in range(4, 8):
+            vectors.append(_make_vector(
+                feature_id=i,
+                build_order_position=i + 1,
+                runtime_signals={
+                    "runtime_failures_caused": 1,
+                    "cross_feature_interaction": True,
+                },
+            ))
+        findings = detect_late_feature_interaction_risk(vectors)
+        assert len(findings) == 1
+        assert findings[0].rule_name == "LATE_FEATURE_INTERACTION_RISK"
+
+    def test_no_difference(self) -> None:
+        vectors = []
+        for i in range(8):
+            vectors.append(_make_vector(
+                feature_id=i,
+                build_order_position=i + 1,
+                runtime_signals={
+                    "runtime_failures_caused": 0,
+                    "cross_feature_interaction": False,
+                },
+            ))
+        findings = detect_late_feature_interaction_risk(vectors)
+        assert findings == []
+
+    def test_below_min_samples(self) -> None:
+        vectors = [
+            _make_vector(
+                feature_id=i,
+                build_order_position=i,
+                runtime_signals={"cross_feature_interaction": True},
+            )
+            for i in range(4)
+        ]
+        # min_samples=8, only 4 vectors
+        findings = detect_late_feature_interaction_risk(vectors)
+        assert findings == []
+
+
+# ── detect_shared_module_runtime_failures ─────────────────────────────────
+
+
+class TestDetectSharedModuleRuntimeFailures:
+    def test_shared_modules_more_runtime_failures(self) -> None:
+        vectors = []
+        # 3 shared, all have runtime failures
+        for i in range(3):
+            vectors.append(_make_vector(
+                feature_id=i,
+                feature_name=f"shared-{i}",
+                build_signals={"touches_shared_modules": True},
+                runtime_signals={"runtime_failures_caused": 2},
+            ))
+        # 3 non-shared, no runtime failures
+        for i in range(3, 6):
+            vectors.append(_make_vector(
+                feature_id=i,
+                feature_name=f"isolated-{i}",
+                build_signals={"touches_shared_modules": False},
+                runtime_signals={"runtime_failures_caused": 0},
+            ))
+        findings = detect_shared_module_runtime_failures(vectors)
+        assert len(findings) == 1
+        assert findings[0].rule_name == "SHARED_MODULE_RUNTIME_FAILURES"
+
+    def test_equal_rates_no_finding(self) -> None:
+        vectors = []
+        for i in range(6):
+            vectors.append(_make_vector(
+                feature_id=i,
+                build_signals={"touches_shared_modules": i < 3},
+                runtime_signals={"runtime_failures_caused": 0},
+            ))
+        findings = detect_shared_module_runtime_failures(vectors)
+        assert findings == []
+
+    def test_no_runtime_signals_excluded(self) -> None:
+        vectors = [
+            _make_vector(
+                feature_id=i,
+                build_signals={"touches_shared_modules": True},
+            )
+            for i in range(6)
+        ]
+        findings = detect_shared_module_runtime_failures(vectors)
+        assert findings == []

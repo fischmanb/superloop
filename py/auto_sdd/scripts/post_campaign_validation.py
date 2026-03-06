@@ -3568,6 +3568,52 @@ class ValidationPipeline:
         result = handler()
         return int(result)
 
+    def _backfill_vectors(self) -> None:
+        """Backfill runtime_signals_v1 into feature vectors from auto-QA data.
+
+        Creates a VectorStore pointing at the project's vector store file,
+        discovers the most recent campaign_id, and calls
+        backfill_runtime_signals(). Failures are logged but never abort
+        the pipeline.
+        """
+        try:
+            from auto_sdd.lib.runtime_attribution import (
+                backfill_runtime_signals,
+            )
+            from auto_sdd.lib.vector_store import VectorStore
+
+            store_path = self.project_dir / ".sdd-state" / "feature-vectors.jsonl"
+            if not store_path.exists():
+                logger.info(
+                    "No vector store at %s — skipping runtime backfill",
+                    store_path,
+                )
+                return
+
+            store = VectorStore(store_path)
+            all_vectors = store.query_vectors()
+            if not all_vectors:
+                logger.info("Vector store is empty — skipping runtime backfill")
+                return
+
+            # Discover most recent campaign_id by timestamp
+            latest = max(all_vectors, key=lambda v: v.timestamp)
+            campaign_id = latest.campaign_id
+
+            summary = backfill_runtime_signals(
+                store, campaign_id, self.log_dir
+            )
+            logger.info(
+                "Runtime backfill complete for campaign %s: %s",
+                campaign_id,
+                summary,
+            )
+        except Exception:
+            logger.warning(
+                "Runtime vector backfill failed (non-fatal)",
+                exc_info=True,
+            )
+
     def run(self) -> int:
         """Execute the full validation pipeline. Returns an exit code."""
         self._setup_logging()
@@ -3629,6 +3675,9 @@ class ValidationPipeline:
             phase5_result.total_skipped,
             phase5_result.total_escalated,
         )
+
+        # CIS: Backfill runtime signals into feature vectors
+        self._backfill_vectors()
 
         return EXIT_ALL_PASS
 

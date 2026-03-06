@@ -545,6 +545,268 @@ RULES.append(PatternRule(
 ))
 
 
+# ── Rule 7: Import boundary → runtime failure correlation ──────────────────
+
+
+def detect_import_boundary_runtime_correlation(
+    vectors: list[FeatureVector],
+) -> list[Finding]:
+    """Flag if import boundary violations predict runtime failures."""
+    with_violations: list[FeatureVector] = []
+    without_violations: list[FeatureVector] = []
+
+    for vec in vectors:
+        # Must have both convention and runtime signals
+        if "runtime_signals_v1" not in vec.sections:
+            continue
+        violations = _get_convention_signal(vec, "violations")
+        if not isinstance(violations, list):
+            continue
+        has_import_violation = any(
+            isinstance(v, dict) and v.get("pattern") == "import_boundaries"
+            for v in violations
+        )
+        if has_import_violation:
+            with_violations.append(vec)
+        else:
+            without_violations.append(vec)
+
+    if not with_violations or not without_violations:
+        return []
+
+    def _has_runtime_failure(vec: FeatureVector) -> bool:
+        rt = _get_runtime_signal(vec, "runtime_failures_caused")
+        return isinstance(rt, int) and rt > 0
+
+    with_fail = sum(1 for v in with_violations if _has_runtime_failure(v))
+    without_fail = sum(
+        1 for v in without_violations if _has_runtime_failure(v)
+    )
+
+    with_rate = with_fail / len(with_violations)
+    without_rate = (
+        without_fail / len(without_violations) if without_violations else 0
+    )
+
+    if without_rate == 0 and with_fail > 0:
+        return [Finding(
+            rule_name="IMPORT_BOUNDARY_RUNTIME_CORRELATION",
+            confidence=round(min(1.0, 0.6 + with_rate * 0.4), 2),
+            evidence=[
+                f"Features with import boundary violations: "
+                f"{with_fail}/{len(with_violations)} had runtime failures "
+                f"({with_rate:.0%})",
+                f"Features without: "
+                f"{without_fail}/{len(without_violations)} had runtime failures "
+                f"({without_rate:.0%})",
+            ] + [v.feature_name for v in with_violations
+                 if _has_runtime_failure(v)][:5],
+            recommendation=(
+                "Import boundary violations at build time predict runtime "
+                "failures. Verify server/client boundaries and transitive "
+                "imports before building."
+            ),
+        )]
+
+    if without_rate > 0 and with_rate > 2 * without_rate:
+        return [Finding(
+            rule_name="IMPORT_BOUNDARY_RUNTIME_CORRELATION",
+            confidence=round(
+                min(1.0, with_rate / (2 * without_rate) * 0.5 + 0.3), 2
+            ),
+            evidence=[
+                f"Features with import boundary violations: "
+                f"{with_fail}/{len(with_violations)} had runtime failures "
+                f"({with_rate:.0%})",
+                f"Features without: "
+                f"{without_fail}/{len(without_violations)} had runtime failures "
+                f"({without_rate:.0%})",
+            ] + [v.feature_name for v in with_violations
+                 if _has_runtime_failure(v)][:5],
+            recommendation=(
+                "Import boundary violations at build time predict runtime "
+                "failures. Verify server/client boundaries and transitive "
+                "imports before building."
+            ),
+        )]
+
+    return []
+
+
+RULES.append(PatternRule(
+    name="IMPORT_BOUNDARY_RUNTIME_CORRELATION",
+    min_samples=5,
+    detect=detect_import_boundary_runtime_correlation,
+))
+
+
+# ── Rule 8: Late feature interaction risk ──────────────────────────────────
+
+
+def detect_late_feature_interaction_risk(
+    vectors: list[FeatureVector],
+) -> list[Finding]:
+    """Flag if later-built features have more cross-feature interactions."""
+    # Need vectors with runtime signals
+    with_runtime = [
+        v for v in vectors if "runtime_signals_v1" in v.sections
+    ]
+    if not with_runtime:
+        return []
+
+    sorted_vecs = sorted(with_runtime, key=lambda v: v.build_order_position)
+    median_pos = sorted_vecs[len(sorted_vecs) // 2].build_order_position
+
+    early: list[FeatureVector] = []
+    late: list[FeatureVector] = []
+    for v in sorted_vecs:
+        if v.build_order_position <= median_pos:
+            early.append(v)
+        else:
+            late.append(v)
+
+    if not early or not late:
+        return []
+
+    def _has_interaction(vec: FeatureVector) -> bool:
+        return _get_runtime_signal(vec, "cross_feature_interaction") is True
+
+    early_interactions = sum(1 for v in early if _has_interaction(v))
+    late_interactions = sum(1 for v in late if _has_interaction(v))
+
+    early_rate = early_interactions / len(early)
+    late_rate = late_interactions / len(late)
+
+    if early_rate == 0 and late_interactions > 0:
+        return [Finding(
+            rule_name="LATE_FEATURE_INTERACTION_RISK",
+            confidence=round(min(1.0, 0.5 + late_rate * 0.5), 2),
+            evidence=[
+                f"Early features ({len(early)}): "
+                f"{early_interactions} cross-feature interactions "
+                f"({early_rate:.0%})",
+                f"Late features ({len(late)}): "
+                f"{late_interactions} cross-feature interactions "
+                f"({late_rate:.0%})",
+            ],
+            recommendation=(
+                "Later-built features show more cross-feature interactions. "
+                "Features built later in the campaign are more likely to cause "
+                "interaction bugs. Consider building risky features earlier."
+            ),
+        )]
+
+    if early_rate > 0 and late_rate > 2 * early_rate:
+        return [Finding(
+            rule_name="LATE_FEATURE_INTERACTION_RISK",
+            confidence=round(
+                min(1.0, late_rate / (2 * early_rate) * 0.5 + 0.2), 2
+            ),
+            evidence=[
+                f"Early features ({len(early)}): "
+                f"{early_interactions} cross-feature interactions "
+                f"({early_rate:.0%})",
+                f"Late features ({len(late)}): "
+                f"{late_interactions} cross-feature interactions "
+                f"({late_rate:.0%})",
+            ],
+            recommendation=(
+                "Later-built features show more cross-feature interactions. "
+                "Features built later in the campaign are more likely to cause "
+                "interaction bugs. Consider building risky features earlier."
+            ),
+        )]
+
+    return []
+
+
+RULES.append(PatternRule(
+    name="LATE_FEATURE_INTERACTION_RISK",
+    min_samples=8,
+    detect=detect_late_feature_interaction_risk,
+))
+
+
+# ── Rule 9: Shared module runtime failures ─────────────────────────────────
+
+
+def detect_shared_module_runtime_failures(
+    vectors: list[FeatureVector],
+) -> list[Finding]:
+    """Flag if shared-module features have more runtime failures."""
+    shared: list[FeatureVector] = []
+    non_shared: list[FeatureVector] = []
+
+    for vec in vectors:
+        if "runtime_signals_v1" not in vec.sections:
+            continue
+        touches = _get_build_signal(vec, "touches_shared_modules")
+        if touches is True:
+            shared.append(vec)
+        elif touches is False:
+            non_shared.append(vec)
+
+    if not shared or not non_shared:
+        return []
+
+    def _has_runtime_failure(vec: FeatureVector) -> bool:
+        rt = _get_runtime_signal(vec, "runtime_failures_caused")
+        return isinstance(rt, int) and rt > 0
+
+    shared_fail = sum(1 for v in shared if _has_runtime_failure(v))
+    non_shared_fail = sum(1 for v in non_shared if _has_runtime_failure(v))
+
+    shared_rate = shared_fail / len(shared)
+    non_shared_rate = non_shared_fail / len(non_shared)
+
+    if non_shared_rate == 0 and shared_fail > 0:
+        return [Finding(
+            rule_name="SHARED_MODULE_RUNTIME_FAILURES",
+            confidence=round(min(1.0, 0.5 + shared_rate * 0.5), 2),
+            evidence=[
+                f"Shared module features: {shared_fail}/{len(shared)} had "
+                f"runtime failures ({shared_rate:.0%})",
+                f"Non-shared features: {non_shared_fail}/{len(non_shared)} had "
+                f"runtime failures ({non_shared_rate:.0%})",
+            ] + [v.feature_name for v in shared
+                 if _has_runtime_failure(v)][:5],
+            recommendation=(
+                "Features touching shared modules cause more runtime failures. "
+                "Shared module changes have higher blast radius — validate "
+                "interactions before committing."
+            ),
+        )]
+
+    if non_shared_rate > 0 and shared_rate > 2 * non_shared_rate:
+        return [Finding(
+            rule_name="SHARED_MODULE_RUNTIME_FAILURES",
+            confidence=round(
+                min(1.0, shared_rate / (2 * non_shared_rate) * 0.5 + 0.3), 2
+            ),
+            evidence=[
+                f"Shared module features: {shared_fail}/{len(shared)} had "
+                f"runtime failures ({shared_rate:.0%})",
+                f"Non-shared features: {non_shared_fail}/{len(non_shared)} had "
+                f"runtime failures ({non_shared_rate:.0%})",
+            ] + [v.feature_name for v in shared
+                 if _has_runtime_failure(v)][:5],
+            recommendation=(
+                "Features touching shared modules cause more runtime failures. "
+                "Shared module changes have higher blast radius — validate "
+                "interactions before committing."
+            ),
+        )]
+
+    return []
+
+
+RULES.append(PatternRule(
+    name="SHARED_MODULE_RUNTIME_FAILURES",
+    min_samples=5,
+    detect=detect_shared_module_runtime_failures,
+))
+
+
 # ── Analysis runner ─────────────────────────────────────────────────────────
 
 

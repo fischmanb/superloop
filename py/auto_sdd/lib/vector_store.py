@@ -38,6 +38,7 @@ BUILD_SIGNALS_V1_FIELDS: list[str] = [
     "injections_received",
     "component_types",
     "touches_shared_modules",
+    "files_touched",
 ]
 
 EVAL_SIGNALS_V1_FIELDS: list[str] = [

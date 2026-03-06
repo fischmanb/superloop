@@ -1074,7 +1074,7 @@ class TestVectorStoreWiring:
         })
         with patch(
             "auto_sdd.scripts.build_loop.derive_component_types",
-            return_value=["client", "test"],
+            return_value=(["client", "test"], ["src/components/App.tsx", "src/auth.test.ts"]),
         ):
             loop._record_build_result(
                 "auth", "built", "opus", 120, "auto/chained-123",
@@ -1132,8 +1132,8 @@ class TestDeriveComponentTypes:
             returncode=0,
             stdout="src/components/Button.tsx\nclient/App.tsx\n",
         )
-        result = derive_component_types(tmp_path)
-        assert "client" in result
+        comp_types, files = derive_component_types(tmp_path)
+        assert "client" in comp_types
 
     @patch("subprocess.run")
     def test_categorizes_server_files(
@@ -1143,8 +1143,8 @@ class TestDeriveComponentTypes:
             returncode=0,
             stdout="server/api.ts\nsrc/api/handler.ts\nsrc/routes/index.ts\n",
         )
-        result = derive_component_types(tmp_path)
-        assert "server" in result
+        comp_types, _files = derive_component_types(tmp_path)
+        assert "server" in comp_types
 
     @patch("subprocess.run")
     def test_categorizes_database_files(
@@ -1154,8 +1154,8 @@ class TestDeriveComponentTypes:
             returncode=0,
             stdout="src/db/schema.ts\nlib/models/user.ts\n",
         )
-        result = derive_component_types(tmp_path)
-        assert "database" in result
+        comp_types, _files = derive_component_types(tmp_path)
+        assert "database" in comp_types
 
     @patch("subprocess.run")
     def test_categorizes_test_files(
@@ -1165,8 +1165,8 @@ class TestDeriveComponentTypes:
             returncode=0,
             stdout="src/auth.test.ts\ntests/login.spec.ts\n",
         )
-        result = derive_component_types(tmp_path)
-        assert "test" in result
+        comp_types, _files = derive_component_types(tmp_path)
+        assert "test" in comp_types
 
     @patch("subprocess.run")
     def test_categorizes_style_files(
@@ -1176,8 +1176,8 @@ class TestDeriveComponentTypes:
             returncode=0,
             stdout="src/styles/main.css\ntheme.scss\n",
         )
-        result = derive_component_types(tmp_path)
-        assert "style" in result
+        comp_types, _files = derive_component_types(tmp_path)
+        assert "style" in comp_types
 
     @patch("subprocess.run")
     def test_categorizes_other_files(
@@ -1187,8 +1187,8 @@ class TestDeriveComponentTypes:
             returncode=0,
             stdout="README.md\npackage.json\n",
         )
-        result = derive_component_types(tmp_path)
-        assert "other" in result
+        comp_types, _files = derive_component_types(tmp_path)
+        assert "other" in comp_types
 
     @patch("subprocess.run")
     def test_deduplicates(
@@ -1198,8 +1198,8 @@ class TestDeriveComponentTypes:
             returncode=0,
             stdout="client/a.tsx\nclient/b.tsx\n",
         )
-        result = derive_component_types(tmp_path)
-        assert result.count("client") == 1
+        comp_types, _files = derive_component_types(tmp_path)
+        assert comp_types.count("client") == 1
 
     @patch("subprocess.run")
     def test_returns_empty_on_failure(
@@ -1207,7 +1207,7 @@ class TestDeriveComponentTypes:
     ) -> None:
         mock_run.return_value = MagicMock(returncode=1, stdout="")
         result = derive_component_types(tmp_path)
-        assert result == []
+        assert result == ([], [])
 
     @patch("subprocess.run")
     def test_mixed_types(
@@ -1225,7 +1225,49 @@ class TestDeriveComponentTypes:
             ),
         )
         result = derive_component_types(tmp_path)
-        assert sorted(result) == ["client", "database", "other", "server", "style", "test"]
+        comp_types, files = result
+        assert sorted(comp_types) == ["client", "database", "other", "server", "style", "test"]
+        assert "client/App.tsx" in files
+        assert "server/api.ts" in files
+
+    @patch("subprocess.run")
+    def test_returns_tuple(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        """derive_component_types returns (component_types, files_touched) tuple."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="src/components/Button.tsx\nserver/api.ts\n",
+        )
+        result = derive_component_types(tmp_path)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        comp_types, files = result
+        assert isinstance(comp_types, list)
+        assert isinstance(files, list)
+        assert "client" in comp_types
+        assert "server" in comp_types
+        assert files == ["src/components/Button.tsx", "server/api.ts"]
+
+    @patch("subprocess.run")
+    def test_returns_empty_tuple_on_failure(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        result = derive_component_types(tmp_path)
+        assert result == ([], [])
+
+    @patch("subprocess.run")
+    def test_files_touched_in_build_signals(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        """files_touched is stored in build_signals_v1."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="src/components/Button.tsx\n",
+        )
+        comp_types, files = derive_component_types(tmp_path)
+        assert files == ["src/components/Button.tsx"]
 
 
 # ── CIS Round 2: Pattern analysis wiring ────────────────────────────────────
@@ -1242,7 +1284,7 @@ class TestPatternAnalysisWiring:
 
         # Record 2 results to trigger analysis at interval 2
         with patch("auto_sdd.scripts.build_loop.run_analysis", return_value=[]) as mock_analysis, \
-             patch("auto_sdd.scripts.build_loop.derive_component_types", return_value=[]), \
+             patch("auto_sdd.scripts.build_loop.derive_component_types", return_value=([], [])), \
              patch("auto_sdd.scripts.build_loop.read_latest_eval_feedback", return_value=""), \
              patch("auto_sdd.scripts.build_loop.update_repeated_mistakes"):
             loop._record_build_result(
@@ -1266,7 +1308,7 @@ class TestPatternAnalysisWiring:
         fake_finding_list = [MagicMock()]
         with patch("auto_sdd.scripts.build_loop.run_analysis", return_value=fake_finding_list), \
              patch("auto_sdd.scripts.build_loop.generate_risk_context", return_value="## Risk Context\nTest") as mock_ctx, \
-             patch("auto_sdd.scripts.build_loop.derive_component_types", return_value=[]), \
+             patch("auto_sdd.scripts.build_loop.derive_component_types", return_value=([], [])), \
              patch("auto_sdd.scripts.build_loop.read_latest_eval_feedback", return_value=""), \
              patch("auto_sdd.scripts.build_loop.update_repeated_mistakes"):
             loop._record_build_result(
@@ -1285,7 +1327,7 @@ class TestPatternAnalysisWiring:
         loop._loop_limit = 10
 
         with patch("auto_sdd.scripts.build_loop.run_analysis", side_effect=RuntimeError("boom")), \
-             patch("auto_sdd.scripts.build_loop.derive_component_types", return_value=[]), \
+             patch("auto_sdd.scripts.build_loop.derive_component_types", return_value=([], [])), \
              patch("auto_sdd.scripts.build_loop.read_latest_eval_feedback", return_value=""), \
              patch("auto_sdd.scripts.build_loop.update_repeated_mistakes"):
             # Should not raise
