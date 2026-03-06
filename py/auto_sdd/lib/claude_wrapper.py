@@ -152,12 +152,37 @@ def _append_cost_log(path: Path, record: dict[str, object]) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _log_token_usage(
+    result: ClaudeResult, activity_type: str = "agent_call"
+) -> None:
+    """Append token usage from a ClaudeResult to general-estimates.jsonl."""
+    from auto_sdd.lib.general_estimates import (
+        _DEFAULT_ESTIMATES_FILE,
+        append_general_estimate,
+    )
+
+    record: dict[str, object] = {
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "activity_type": activity_type,
+        "source": "claude_wrapper",
+        "input_tokens": result.input_tokens,
+        "output_tokens": result.output_tokens,
+        "active_tokens": (result.input_tokens or 0) + (result.output_tokens or 0),
+        "cost_usd": result.cost_usd,
+        "model": result.model,
+        "exit_code": result.exit_code,
+        "duration_ms": result.duration_ms,
+    }
+    append_general_estimate(record, estimates_file=_DEFAULT_ESTIMATES_FILE)
+
+
 def run_claude(
     args: list[str],
     *,
     cost_log_path: Path | None = None,
     timeout: int = 600,
     cwd: Path | str | None = None,
+    activity_type: str = "agent_call",
 ) -> ClaudeResult:
     """Invoke the ``claude`` CLI, extract the result, and optionally log cost.
 
@@ -170,6 +195,9 @@ def run_claude(
         timeout: Seconds before the subprocess is killed.  Default 10 minutes.
         cwd: Working directory for the subprocess.  ``None`` inherits the
             current process's working directory.
+        activity_type: Label for this call in the estimates log (e.g.,
+            ``"build_feature"``, ``"eval_sidecar"``).  Defaults to
+            ``"agent_call"``.
 
     Returns:
         :class:`ClaudeResult` with parsed output and cost metadata.
@@ -297,6 +325,12 @@ def run_claude(
         session_id=session_id,
         duration_ms=duration_ms,
     )
+
+    # Log token usage to general estimates (best-effort, never fails the call)
+    try:
+        _log_token_usage(claude_result, activity_type=activity_type)
+    except Exception:
+        logger.debug("Failed to log token usage", exc_info=True)
 
     logger.info(
         "Claude completed: exit=%d, cost=$%s, tokens_in=%s, tokens_out=%s",

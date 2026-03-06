@@ -16,8 +16,18 @@ from auto_sdd.lib.claude_wrapper import (
     ClaudeResult,
     _build_cost_record,
     _dominant_model,
+    _log_token_usage,
     run_claude,
 )
+
+
+@pytest.fixture(autouse=True)
+def _suppress_token_logging(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent run_claude from writing to real general-estimates.jsonl."""
+    monkeypatch.setattr(
+        "auto_sdd.lib.claude_wrapper._log_token_usage",
+        lambda *a, **kw: None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -622,3 +632,134 @@ class TestRunClaudeEdgeCases:
         assert result.exit_code == 0
         cmd = mock_run.call_args[0][0]
         assert cmd == ["claude", "--output-format", "json"]
+
+
+# ---------------------------------------------------------------------------
+# _log_token_usage
+# ---------------------------------------------------------------------------
+
+
+class TestLogTokenUsage:
+    """Tests for _log_token_usage."""
+
+    @patch("auto_sdd.lib.general_estimates.append_general_estimate")
+    def test_log_token_usage_calls_append_with_correct_shape(
+        self, mock_append: Any
+    ) -> None:
+        result = ClaudeResult(
+            output="hello",
+            exit_code=0,
+            cost_usd=0.05,
+            input_tokens=1000,
+            output_tokens=500,
+            model="claude-3-opus",
+            duration_ms=3000,
+        )
+        _log_token_usage(result, activity_type="build_feature")
+
+        mock_append.assert_called_once()
+        record = mock_append.call_args[0][0]
+        assert record["activity_type"] == "build_feature"
+        assert record["source"] == "claude_wrapper"
+        assert record["input_tokens"] == 1000
+        assert record["output_tokens"] == 500
+        assert record["active_tokens"] == 1500
+        assert record["cost_usd"] == 0.05
+        assert record["model"] == "claude-3-opus"
+        assert record["exit_code"] == 0
+        assert record["duration_ms"] == 3000
+        assert "timestamp" in record
+
+    @patch("auto_sdd.lib.general_estimates.append_general_estimate")
+    def test_log_token_usage_handles_none_tokens(
+        self, mock_append: Any
+    ) -> None:
+        result = ClaudeResult(output="hello", exit_code=0)
+        _log_token_usage(result)
+
+        record = mock_append.call_args[0][0]
+        assert record["active_tokens"] == 0
+        assert record["input_tokens"] is None
+        assert record["output_tokens"] is None
+
+    @patch("auto_sdd.lib.general_estimates.append_general_estimate")
+    def test_log_token_usage_default_activity_type(
+        self, mock_append: Any
+    ) -> None:
+        result = ClaudeResult(output="hello", exit_code=0)
+        _log_token_usage(result)
+
+        record = mock_append.call_args[0][0]
+        assert record["activity_type"] == "agent_call"
+
+    @patch(
+        "auto_sdd.lib.general_estimates.append_general_estimate",
+        side_effect=OSError("disk full"),
+    )
+    def test_log_token_usage_exception_propagates(
+        self, mock_append: Any
+    ) -> None:
+        """_log_token_usage itself does NOT swallow exceptions —
+        the try/except is in run_claude."""
+        result = ClaudeResult(output="hello", exit_code=0)
+        with pytest.raises(OSError, match="disk full"):
+            _log_token_usage(result)
+
+
+# ---------------------------------------------------------------------------
+# run_claude — activity_type parameter and token logging
+# ---------------------------------------------------------------------------
+
+
+class TestRunClaudeTokenLogging:
+    """Tests for activity_type parameter and automatic token logging."""
+
+    @patch("auto_sdd.lib.claude_wrapper._log_token_usage")
+    @patch("auto_sdd.lib.claude_wrapper.subprocess.run")
+    def test_run_claude_accepts_activity_type(
+        self, mock_run: Any, mock_log: Any
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=["claude"],
+            returncode=0,
+            stdout=_make_claude_json(),
+            stderr="",
+        )
+        result = run_claude(["-p", "test"], activity_type="build_feature")
+        assert result.exit_code == 0
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["activity_type"] == "build_feature"
+
+    @patch("auto_sdd.lib.claude_wrapper._log_token_usage")
+    @patch("auto_sdd.lib.claude_wrapper.subprocess.run")
+    def test_run_claude_default_activity_type(
+        self, mock_run: Any, mock_log: Any
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=["claude"],
+            returncode=0,
+            stdout=_make_claude_json(),
+            stderr="",
+        )
+        run_claude(["-p", "test"])
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["activity_type"] == "agent_call"
+
+    @patch(
+        "auto_sdd.lib.claude_wrapper._log_token_usage",
+        side_effect=RuntimeError("boom"),
+    )
+    @patch("auto_sdd.lib.claude_wrapper.subprocess.run")
+    def test_run_claude_token_log_failure_does_not_propagate(
+        self, mock_run: Any, mock_log: Any
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=["claude"],
+            returncode=0,
+            stdout=_make_claude_json(),
+            stderr="",
+        )
+        result = run_claude(["-p", "test"])
+        assert result.output == "Hello world"
+        assert result.exit_code == 0

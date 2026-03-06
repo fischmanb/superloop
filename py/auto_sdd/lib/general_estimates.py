@@ -192,6 +192,9 @@ def query_estimate_actuals(
         }
 
     entries: list[dict[str, int]] = []
+    cost_values: list[float] = []
+    duration_values: list[int] = []
+    source_counts: dict[str, int] = {}
 
     for line in path.read_text().splitlines():
         line = line.strip()
@@ -205,6 +208,10 @@ def query_estimate_actuals(
             continue
         if activity_type and entry.get("activity_type") != activity_type:
             continue
+
+        # Track source breakdown
+        src = str(entry.get("source", "unknown"))
+        source_counts[src] = source_counts.get(src, 0) + 1
 
         # Prefer active_tokens, fall back to approx_actual_tokens
         tokens = _int_from(
@@ -220,12 +227,23 @@ def query_estimate_actuals(
                 }
             )
 
+        # Collect cost and duration from wrapper records
+        raw_cost = entry.get("cost_usd")
+        if isinstance(raw_cost, (int, float)) and raw_cost > 0:
+            cost_values.append(float(raw_cost))
+        raw_dur = entry.get("duration_ms")
+        if isinstance(raw_dur, (int, float)) and raw_dur > 0:
+            duration_values.append(int(raw_dur))
+
     if not entries:
-        return {
+        result_dict: dict[str, object] = {
             "activity_type": label,
             "sample_count": 0,
             "calibration_ready": False,
         }
+        if source_counts:
+            result_dict["source_breakdown"] = source_counts
+        return result_dict
 
     tokens_list = [e["tokens"] for e in entries]
     errors: list[float] = []
@@ -235,7 +253,7 @@ def query_estimate_actuals(
                 ((e["estimated"] - e["tokens"]) / e["tokens"]) * 100
             )
 
-    return {
+    result_dict = {
         "activity_type": label,
         "sample_count": len(entries),
         "avg_active_tokens": int(sum(tokens_list) / len(tokens_list)),
@@ -246,6 +264,19 @@ def query_estimate_actuals(
         ),
         "calibration_ready": len(entries) >= 5,
     }
+
+    if cost_values:
+        result_dict["avg_cost_usd"] = round(
+            sum(cost_values) / len(cost_values), 6
+        )
+    if duration_values:
+        result_dict["avg_duration_ms"] = int(
+            sum(duration_values) / len(duration_values)
+        )
+    if source_counts:
+        result_dict["source_breakdown"] = source_counts
+
+    return result_dict
 
 
 def estimate_general_tokens(
@@ -277,6 +308,102 @@ def estimate_general_tokens(
     actuals_weight = min(sample_count * 0.2, 1.0)
     blended = int(avg * actuals_weight + fallback_estimate * (1.0 - actuals_weight))
     return blended
+
+
+def estimate_from_history(
+    activity_type: str,
+    fallback: int = 30000,
+    estimates_file: Path | None = None,
+) -> dict[str, object]:
+    """Return a calibrated estimate with reasoning for a prompt.
+
+    Queries historical data for the activity type and returns a dict
+    suitable for inclusion in an agent prompt's token budget section.
+
+    Returns:
+        Dict with: ``estimated_tokens``, ``basis`` (str explaining the
+        estimate), ``sample_count``, ``avg_actual``, ``avg_cost_usd``.
+    """
+    stats = query_estimate_actuals(activity_type, estimates_file)
+    sample_count = _int_from(stats.get("sample_count"))
+    avg_actual = _int_from(stats.get("avg_active_tokens"))
+    avg_cost: float | None = None
+    raw_cost = stats.get("avg_cost_usd")
+    if isinstance(raw_cost, (int, float)):
+        avg_cost = float(raw_cost)
+
+    if sample_count >= 3:
+        return {
+            "estimated_tokens": avg_actual,
+            "basis": f"historical average from {sample_count} samples",
+            "sample_count": sample_count,
+            "avg_actual": avg_actual,
+            "avg_cost_usd": avg_cost,
+        }
+
+    if sample_count >= 1:
+        # Blend: weight actuals by 20% per sample, rest is fallback
+        actuals_weight = sample_count * 0.2
+        blended = int(
+            avg_actual * actuals_weight + fallback * (1.0 - actuals_weight)
+        )
+        return {
+            "estimated_tokens": blended,
+            "basis": f"blended ({sample_count} samples + fallback)",
+            "sample_count": sample_count,
+            "avg_actual": avg_actual,
+            "avg_cost_usd": avg_cost,
+        }
+
+    # 0 samples — try prefix match for similar activity types
+    path = estimates_file or _DEFAULT_ESTIMATES_FILE
+    if path.exists():
+        prefix = activity_type.split("_")[0] + "_"
+        similar_stats = query_estimate_actuals(None, estimates_file)
+        # Re-scan for prefix matches
+        similar_count = 0
+        similar_total = 0
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(entry, dict):
+                continue
+            entry_type = entry.get("activity_type", "")
+            if isinstance(entry_type, str) and entry_type.startswith(prefix):
+                tokens = _int_from(
+                    entry.get(
+                        "active_tokens", entry.get("approx_actual_tokens")
+                    )
+                )
+                if tokens > 0:
+                    similar_count += 1
+                    similar_total += tokens
+
+        if similar_count > 0:
+            similar_avg = similar_total // similar_count
+            return {
+                "estimated_tokens": similar_avg,
+                "basis": (
+                    f"similar activity prefix '{prefix}*' "
+                    f"from {similar_count} samples"
+                ),
+                "sample_count": 0,
+                "avg_actual": 0,
+                "avg_cost_usd": None,
+            }
+
+    return {
+        "estimated_tokens": fallback,
+        "basis": "no historical data, using fallback",
+        "sample_count": 0,
+        "avg_actual": 0,
+        "avg_cost_usd": None,
+    }
 
 
 # ── Private helpers ───────────────────────────────────────────────────────────

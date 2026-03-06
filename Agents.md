@@ -1734,6 +1734,24 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - mypy/pytest: not available in this environment (no .venv); syntax verification via ast.parse only
 - git diff --stat + git status: only allowed files modified/created
 
+### Token Measurement Fix (branch: claude/modify-claude-wrapper-u1rrR)
+
+**What was asked**: Fix the broken token estimation system. `get_session_actual_tokens()` reads Claude Code CLI session files from `~/.claude/projects/`, but agents run via the desktop app which doesn't write there. Instead, use the reliable token/cost data already parsed into `ClaudeResult` by `run_claude()`.
+
+**What changed**:
+- `py/auto_sdd/lib/claude_wrapper.py`: Added `_log_token_usage()` private function that appends token usage from `ClaudeResult` to `general-estimates.jsonl` via `append_general_estimate()`. Added `activity_type` parameter to `run_claude()` (default `"agent_call"`). Token logging is best-effort (try/except, never fails the call).
+- `py/auto_sdd/lib/general_estimates.py`: Updated `query_estimate_actuals()` to return `avg_cost_usd`, `avg_duration_ms`, and `source_breakdown` from wrapper records. Added `estimate_from_history()` convenience function with graduated logic: 3+ samples → historical average, 1-2 → blended, 0 → prefix match fallback → fallback value.
+- `py/tests/test_claude_wrapper.py`: Added autouse fixture to suppress token logging in existing tests. Added `TestLogTokenUsage` (4 tests) and `TestRunClaudeTokenLogging` (3 tests).
+- `py/tests/test_general_estimates.py`: Added `TestQueryEstimateActualsWrapperRecords` (5 tests) and `TestEstimateFromHistory` (7 tests).
+
+**What was NOT changed**: No changes to `build_loop.py` or any other callers — only added the `activity_type` parameter with default value. No changes to `general-estimates.jsonl`.
+
+**Verification**:
+- mypy --strict: both source files pass
+- pytest: 42 claude_wrapper tests pass, 54 general_estimates tests pass (96 total)
+- Full suite: 1 pre-existing failure in test_eval_sidecar.py (git branch naming issue), unrelated
+- git diff --stat: only 4 allowed Python files modified
+
 ---
 ## Questions?
 

@@ -10,6 +10,7 @@ from auto_sdd.lib.general_estimates import (
     _find_most_recent_session_jsonl,
     _int_from,
     append_general_estimate,
+    estimate_from_history,
     estimate_general_tokens,
     get_session_actual_tokens,
     query_estimate_actuals,
@@ -487,3 +488,250 @@ class TestFindMostRecentSessionJsonl:
 
         result = _find_most_recent_session_jsonl()
         assert result == new_file
+
+
+# ── query_estimate_actuals — wrapper source records ──────────────────────────
+
+
+class TestQueryEstimateActualsWrapperRecords:
+    """Tests for query_estimate_actuals with claude_wrapper source records."""
+
+    def test_wrapper_records_without_estimated_tokens_pre(
+        self, tmp_path: Path
+    ) -> None:
+        path = tmp_path / "est.jsonl"
+        record = {
+            "activity_type": "build_feature",
+            "source": "claude_wrapper",
+            "active_tokens": 15000,
+            "cost_usd": 0.05,
+            "duration_ms": 45000,
+            "model": "claude-3-opus",
+        }
+        path.write_text(json.dumps(record) + "\n")
+
+        result = query_estimate_actuals("build_feature", path)
+        assert result["sample_count"] == 1
+        assert result["avg_active_tokens"] == 15000
+        # No estimated_tokens_pre → no estimation error
+        assert result["avg_estimation_error_pct"] is None
+
+    def test_avg_cost_usd_present(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        records = [
+            {
+                "activity_type": "build",
+                "source": "claude_wrapper",
+                "active_tokens": 10000,
+                "cost_usd": 0.04,
+            },
+            {
+                "activity_type": "build",
+                "source": "claude_wrapper",
+                "active_tokens": 20000,
+                "cost_usd": 0.06,
+            },
+        ]
+        path.write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+
+        result = query_estimate_actuals("build", path)
+        assert result["avg_cost_usd"] == 0.05
+
+    def test_avg_duration_ms_present(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        records = [
+            {
+                "activity_type": "build",
+                "source": "claude_wrapper",
+                "active_tokens": 10000,
+                "duration_ms": 30000,
+            },
+            {
+                "activity_type": "build",
+                "source": "claude_wrapper",
+                "active_tokens": 20000,
+                "duration_ms": 50000,
+            },
+        ]
+        path.write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+
+        result = query_estimate_actuals("build", path)
+        assert result["avg_duration_ms"] == 40000
+
+    def test_source_breakdown(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        records = [
+            {
+                "activity_type": "build",
+                "source": "claude_wrapper",
+                "active_tokens": 10000,
+            },
+            {
+                "activity_type": "build",
+                "source": "claude_wrapper",
+                "active_tokens": 20000,
+            },
+            {
+                "activity_type": "build",
+                "source": "manual",
+                "active_tokens": 5000,
+            },
+        ]
+        path.write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+
+        result = query_estimate_actuals("build", path)
+        assert result["source_breakdown"] == {
+            "claude_wrapper": 2,
+            "manual": 1,
+        }
+
+    def test_source_breakdown_no_entries_with_tokens(
+        self, tmp_path: Path
+    ) -> None:
+        """Records with 0 tokens: source_breakdown still counted."""
+        path = tmp_path / "est.jsonl"
+        record = {
+            "activity_type": "build",
+            "source": "claude_wrapper",
+            "active_tokens": 0,
+        }
+        path.write_text(json.dumps(record) + "\n")
+
+        result = query_estimate_actuals("build", path)
+        assert result["sample_count"] == 0
+        assert result["source_breakdown"] == {"claude_wrapper": 1}
+
+
+# ── estimate_from_history tests ──────────────────────────────────────────────
+
+
+class TestEstimateFromHistory:
+    """Tests for estimate_from_history."""
+
+    def test_zero_samples_returns_fallback(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        result = estimate_from_history(
+            "build_feature", fallback=30000, estimates_file=path
+        )
+        assert result["estimated_tokens"] == 30000
+        assert result["basis"] == "no historical data, using fallback"
+        assert result["sample_count"] == 0
+        assert result["avg_actual"] == 0
+        assert result["avg_cost_usd"] is None
+
+    def test_one_sample_blended(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        path.write_text(
+            json.dumps(
+                {"activity_type": "build_feature", "active_tokens": 10000}
+            )
+            + "\n"
+        )
+
+        result = estimate_from_history(
+            "build_feature", fallback=30000, estimates_file=path
+        )
+        # 1 sample: 20% * 10000 + 80% * 30000 = 2000 + 24000 = 26000
+        assert result["estimated_tokens"] == 26000
+        assert "blended" in result["basis"]
+        assert result["sample_count"] == 1
+
+    def test_three_samples_historical_average(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        records = [
+            {"activity_type": "build_feature", "active_tokens": 10000},
+            {"activity_type": "build_feature", "active_tokens": 20000},
+            {"activity_type": "build_feature", "active_tokens": 15000},
+        ]
+        path.write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+
+        result = estimate_from_history(
+            "build_feature", fallback=30000, estimates_file=path
+        )
+        assert result["estimated_tokens"] == 15000
+        assert "historical average" in result["basis"]
+        assert result["sample_count"] == 3
+
+    def test_five_samples_historical_average(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        records = [
+            {"activity_type": "eval", "active_tokens": 8000}
+            for _ in range(5)
+        ]
+        path.write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+
+        result = estimate_from_history(
+            "eval", fallback=30000, estimates_file=path
+        )
+        assert result["estimated_tokens"] == 8000
+        assert "5 samples" in result["basis"]
+        assert result["sample_count"] == 5
+
+    def test_prefix_matching_for_similar_types(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        # No exact match for "build_new", but "build_feature" shares prefix
+        records = [
+            {"activity_type": "build_feature", "active_tokens": 12000},
+            {"activity_type": "build_retry", "active_tokens": 8000},
+        ]
+        path.write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+
+        result = estimate_from_history(
+            "build_new", fallback=30000, estimates_file=path
+        )
+        assert result["estimated_tokens"] == 10000  # (12000 + 8000) / 2
+        assert "similar activity prefix" in result["basis"]
+        assert result["sample_count"] == 0
+
+    def test_no_prefix_match_returns_fallback(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        records = [
+            {"activity_type": "review_code", "active_tokens": 5000},
+        ]
+        path.write_text(json.dumps(records[0]) + "\n")
+
+        result = estimate_from_history(
+            "build_feature", fallback=25000, estimates_file=path
+        )
+        assert result["estimated_tokens"] == 25000
+        assert "fallback" in result["basis"]
+
+    def test_includes_avg_cost_usd(self, tmp_path: Path) -> None:
+        path = tmp_path / "est.jsonl"
+        records = [
+            {
+                "activity_type": "build",
+                "active_tokens": 10000,
+                "cost_usd": 0.04,
+            },
+            {
+                "activity_type": "build",
+                "active_tokens": 20000,
+                "cost_usd": 0.06,
+            },
+            {
+                "activity_type": "build",
+                "active_tokens": 15000,
+                "cost_usd": 0.05,
+            },
+        ]
+        path.write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+
+        result = estimate_from_history(
+            "build", fallback=30000, estimates_file=path
+        )
+        assert result["avg_cost_usd"] == 0.05
