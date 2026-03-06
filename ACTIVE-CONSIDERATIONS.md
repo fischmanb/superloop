@@ -6,27 +6,32 @@
 
 ---
 
-### Priority stack (updated 2026-03-05, afternoon)
+### Priority stack (updated 2026-03-06, afternoon)
 
 Ordered by efficiency gain per complexity added:
 
-1. **Auto-QA validation against CRE lease tracker — SECOND RUN SUCCESS. 3/3 bugs fixed autonomously.**
-   - Plan: `WIP/auto-qa-cre-validation.md` (updated with both run results + all post-run fixes)
-   - **Run 2 (val-20260306-004027)**: 36 min, $6.95. 29/32 pass, 3 fail, 0 blocked. **3/3 fix agents succeeded.** All fixes committed to CRE, builds clean.
-   - **Fixes verified live** via Chrome browser: filtered export (22 Manhattan results), 404 page renders, login page clean.
-   - Proof deck: `Brians-Notes/superloop-deck-2026-03-05.pdf`
-   - **Repo renamed to `superloop`** on GitHub (unforked from Adrian's repo). Local path unchanged (`~/auto-sdd`).
-   - **Next action**: Talk to Adrian about IP/collaboration. Run larger campaign (28-feature). Write Medium article once system is proven at scale.
-2. **Campaign intelligence system — design complete, implementation blocked on #1.**
-   - Full plan: `WIP/campaign-intelligence-system.md` (pressure-tested, revised)
-   - CIS value depends on auto-QA producing validated runtime signals. Build-only CIS is just a fancier eval sidecar.
-   - 3 Phase 1 rounds: (1) vector store + wire writers, (2) analysis framework + intra-campaign injection, (3) convention eval signals
-   - Phase 2 (after real campaign): auto-QA feature attribution, cross-campaign ML model
-   - Phase 3 (after 3+ campaigns): meta-learner
-3. **Investigate Playwright validation granularity — COMPLETED, findings inform Round 4 if needed.**
-   - Investigation complete (agent prompt #2). Rating: DEGRADED — 60-70% of failure modes covered.
-   - Cheap fixes already landed: networkidle waits, multi-step interaction patterns, retry parity.
-   - Heavier improvements (visual regression, console monitoring, screenshot-on-every-assertion) deferred to Round 4 of `WIP/auto-qa-cre-validation.md`, triggered only if CRE full-pipeline run exposes gaps.
+1. **SitDeck build campaign — BLOCKED on roadmap generation prompt.**
+   - Adrian asked Brian to run the full SitDeck vision through Superloop
+   - Vision file: `vision.md` (committed at repo root, also copied to `~/compstak-sitdeck/.specs/vision.md`)
+   - `~/compstak-sitdeck/.specs/` directory exists, waiting for roadmap + spec stubs
+   - **Blocker**: Agent prompts degraded in quality. Need proper prompt following PROMPT-ENGINEERING-GUIDE.md to decompose vision into ~70-feature roadmap.
+   - Roadmap format: `| # | Feature | Source | Jira | Complexity | Dependencies | Status |` (parsed by `reliability.py:_parse_roadmap_rows`)
+   - After roadmap: initialize Next.js project, copy CompStak CSV data, run `build_loop.py`
+   - This campaign produces CIS training data for Rounds 5-6 AND demonstrates Superloop to Adrian
+2. **CIS Rounds 1-4 COMPLETE. Rounds 5-6 need campaign data from #1.**
+   - **Round 1a** ✅: Vector store + JSONL backend + schema (32 tests)
+   - **Round 1b** ✅: Wire writers into build_loop, eval_sidecar, prompt_builder, overnight_autonomous (26 tests)
+   - **Round 2** ✅: Pattern analysis — 4 rules (co-occurrence, temporal decay, retry effectiveness, shared module risk). Feature-flagged `ENABLE_PATTERN_ANALYSIS`. Risk context injection. (41 tests)
+   - **Round 3** ✅: Convention checks — 4 mechanical static analysis checks (import boundaries, type safety, code duplication, error handling). Project-configurable. 2 new pattern rules. (46 tests)
+   - **Round 4** ✅: Runtime attribution — `backfill_runtime_signals()` joins auto-QA failures to feature vectors via file path intersection. `files_touched` in build_signals. 3 new runtime pattern rules. 9 total rules. (20 tests)
+   - **Token measurement fix** ✅: Project-scoped session discovery, compaction-safe summing, auto-logging from `run_claude()`, `estimate_from_history()`, `source_breakdown`
+   - **Round 5** (blocked on campaign data): Cross-campaign ML model (scikit-learn classifier)
+   - **Round 6** (needs 3+ campaigns): Meta-learner (injection effectiveness, adaptive weighting)
+   - Full plan: `WIP/campaign-intelligence-system.md`
+3. **Auto-QA validation — PROVEN. Second run 3/3 fixes succeeded.**
+   - Run 2 (val-20260306-004027): 36 min, $6.95. 29/32 pass, 3 fail, 0 blocked. 3/3 fix agents succeeded.
+   - Verified live via Chrome browser. All fixes committed to CRE.
+   - Plan: `WIP/auto-qa-cre-validation.md`
 4. **Seed data & distribution strategy — V1 plan: ship curated seed packs.**
    - Full plan: `WIP/seed-data-distribution.md`
    - New users cold-start with zero campaign data; seed packs provide immediate value from Brian's campaigns

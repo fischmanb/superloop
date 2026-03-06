@@ -521,3 +521,22 @@
 **Decision:** Unfork from Adrian Rogowski's original auto-sdd repo on GitHub, rename to `superloop`. Local directory path unchanged (`~/auto-sdd`).
 **Why:** The project has diverged significantly from Adrian's original architecture. Brian built the reliability engineering, eval sidecar, auto-QA pipeline (Phases 0-5), learnings system, prompt methodology, and all operational infrastructure. Unforking establishes independent provenance. The name "Superloop" captures the closed-loop nature of the system.
 **Rejected:** Keeping the fork relationship (confuses provenance). Renaming local directory (too many references to update across CLAUDE.md, ONBOARDING.md, memory, agent prompts).
+
+
+## 2026-03-06 — CIS Rounds 1-4 implemented sequentially, merged to main immediately
+
+**Decision:** Implement CIS rounds as individual agent prompts on feature branches, merge each to main immediately after verification. No batching, no staging branch.
+**Why:** Each round depends on the previous round's code. Sequential merge means each prompt starts from a clean, verified base. Agent prompts are scoped to one round each, keeping context manageable. 4 rounds completed in one session: vector store, wire writers, pattern analysis, convention checks + runtime attribution.
+**Rejected:** Batching multiple rounds into one prompt (too large, L-00197 pattern). Staging branch accumulating all rounds before merge (unnecessary complexity, delays validation).
+
+## 2026-03-06 — Token measurement: auto-log from claude_wrapper, not session file discovery
+
+**Decision:** Replace broken session-file-based token measurement with automatic logging from `run_claude()`. Every agent call logs tokens, cost, model, duration to `general-estimates.jsonl` via `_log_token_usage()`.
+**Why:** Code tab agents (Claude for Mac desktop app) don't write session JSONL files to `~/.claude/projects/`. The old approach found random stale files or returned 0. The wrapper already has reliable token data parsed from agent output. Single canonical estimates file at repo root.
+**Rejected:** Fixing session file discovery for desktop app (files don't exist). Removing token tracking entirely (need data for CIS and estimation calibration).
+
+## 2026-03-06 — SitDeck vision as first CIS-instrumented build campaign
+
+**Decision:** Run Adrian's SitDeck vision through Superloop as the first campaign with full CIS vector population. ~70 features.
+**Why:** Produces CIS training data for Rounds 5-6. Demonstrates Superloop to Adrian on his own product vision. Professionally relevant (CompStak's product). Fresh project avoids stakd's known architecture issues.
+**Rejected:** Re-running stakd (known transitive import bug, 28 features already built without vectors). Backfilling CRE data (only 3 features, ~40% vector coverage, insufficient for ML model). Synthetic data (validates code but not real-world signal quality).
