@@ -318,6 +318,7 @@ class TestFullDryRun:
         tracked_dirty = [
             l for l in result.stdout.splitlines()
             if l.strip() and not l.startswith("??")
+            and ".sdd-state/" not in l
         ]
         assert tracked_dirty == []
 

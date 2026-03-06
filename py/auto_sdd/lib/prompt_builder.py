@@ -202,7 +202,7 @@ def build_feature_prompt(
     config: BuildConfig,
     *,
     mistake_tracker: MistakeTracker | None = None,
-) -> str:
+) -> tuple[str, list[str]]:
     """Construct the build agent prompt for a specific feature.
 
     Calls ``generate_codebase_summary()`` and ``read_latest_eval_feedback()``
@@ -216,8 +216,11 @@ def build_feature_prompt(
         mistake_tracker: Optional tracker for repeated mistakes.
 
     Returns:
-        The complete prompt string for the build agent.
+        A tuple of (prompt, injections_list) where injections_list contains
+        string labels describing what was injected into the prompt.
     """
+    injections: list[str] = []
+
     # Generate codebase summary
     codebase_summary = ""
     try:
@@ -288,14 +291,17 @@ def build_feature_prompt(
     if codebase_summary:
         parts.append("## Codebase Summary (auto-generated)")
         parts.append(codebase_summary)
+        injections.append("codebase_summary")
 
     if eval_feedback:
         parts.append("## Sidecar Eval Feedback (from previous build)")
         parts.append(eval_feedback)
+        injections.append("eval_feedback")
 
     if cumulative_mistakes:
         parts.append("## Known Mistakes (accumulated across this campaign)")
         parts.append(cumulative_mistakes)
+        injections.append("repeated_mistakes")
 
     # Build spec signal for output signals section
     if resolved_spec is not None:
@@ -318,9 +324,12 @@ def build_feature_prompt(
         "They are used by the automated drift-check that runs after your build.",
     ])
 
+    if resolved_spec is not None:
+        injections.append("resolved_spec")
+
     result = "\n".join(parts)
     _warn_prompt_size(result)
-    return result
+    return result, injections
 
 
 # ── Retry prompt ─────────────────────────────────────────────────────────────

@@ -30,6 +30,7 @@ from auto_sdd.scripts.build_loop import (
     _parse_signal,
     _parse_token_usage,
     _validate_required_signals,
+    derive_component_types,
 )
 
 
@@ -914,7 +915,7 @@ class TestIndependentPassUsesPromptBuilder:
         tmp_path: Path,
     ) -> None:
         loop = _make_loop(tmp_path)
-        mock_prompt.return_value = "generated prompt"
+        mock_prompt.return_value = ("generated prompt", [])
 
         # Mock subprocess.run for worktree creation/cleanup
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -937,7 +938,7 @@ class TestIndependentPassRunsPostBuildGates:
     """Fix 4: _run_independent_pass should run _run_post_build_gates."""
 
     @patch("auto_sdd.scripts.build_loop.run_claude")
-    @patch("auto_sdd.scripts.build_loop.build_feature_prompt", return_value="prompt")
+    @patch("auto_sdd.scripts.build_loop.build_feature_prompt", return_value=("prompt", []))
     @patch("subprocess.run")
     def test_independent_pass_calls_post_build_gates_on_success(
         self,
@@ -965,7 +966,7 @@ class TestIndependentPassRunsPostBuildGates:
         assert ".build-worktrees" in str(call_kwargs[1]["project_dir"])
 
     @patch("auto_sdd.scripts.build_loop.run_claude")
-    @patch("auto_sdd.scripts.build_loop.build_feature_prompt", return_value="prompt")
+    @patch("auto_sdd.scripts.build_loop.build_feature_prompt", return_value=("prompt", []))
     @patch("subprocess.run")
     def test_independent_pass_fails_when_gates_fail(
         self,
@@ -1041,3 +1042,186 @@ class TestPostBuildGatesProjectDirOverride:
                 )
 
         mock_wt.assert_called_once_with(tmp_path)
+
+
+# ── VectorStore wiring tests ─────────────────────────────────────────────
+
+
+class TestVectorStoreWiring:
+    """Tests for CIS VectorStore integration in BuildLoop."""
+
+    def test_init_creates_campaign_id(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        assert loop.campaign_id.startswith("campaign-")
+        assert loop.vector_store is not None
+
+    def test_init_creates_vector_store(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        assert loop.vector_store is not None
+
+    def test_record_build_result_updates_vector(
+        self, tmp_path: Path
+    ) -> None:
+        loop = _make_loop(tmp_path)
+        # Create a vector first
+        vid = loop.vector_store.create_vector({
+            "feature_id": 1,
+            "feature_name": "auth",
+            "campaign_id": loop.campaign_id,
+            "build_order_position": 0,
+            "timestamp": "2026-03-06T00:00:00Z",
+        })
+        with patch(
+            "auto_sdd.scripts.build_loop.derive_component_types",
+            return_value=["client", "test"],
+        ):
+            loop._record_build_result(
+                "auth", "built", "opus", 120, "auto/chained-123",
+                vector_id=vid,
+                injections_received=["codebase_summary"],
+                retry_count=0,
+            )
+        vec = loop.vector_store.get_vector(vid)
+        assert vec is not None
+        signals = vec.sections.get("build_signals_v1", {})
+        assert signals["build_success"] is True
+        assert signals["agent_model"] == "opus"
+        assert signals["injections_received"] == ["codebase_summary"]
+        assert signals["component_types"] == ["client", "test"]
+
+    def test_record_build_result_no_vector_id_skips(
+        self, tmp_path: Path
+    ) -> None:
+        """When vector_id is empty, no vector store update happens."""
+        loop = _make_loop(tmp_path)
+        # Should not raise even with empty vector_id
+        loop._record_build_result(
+            "auth", "built", "opus", 120, "auto/chained-123",
+            vector_id="",
+        )
+
+    def test_vector_store_error_does_not_abort(
+        self, tmp_path: Path
+    ) -> None:
+        loop = _make_loop(tmp_path)
+        with patch.object(
+            loop.vector_store, "update_section",
+            side_effect=RuntimeError("store failure"),
+        ):
+            # Should not raise
+            loop._record_build_result(
+                "auth", "built", "opus", 120, "auto/chained-123",
+                vector_id="nonexistent-id",
+            )
+        # Build still recorded
+        assert loop.loop_built == 1
+
+
+# ── derive_component_types tests ─────────────────────────────────────────
+
+
+class TestDeriveComponentTypes:
+    """Tests for derive_component_types."""
+
+    @patch("subprocess.run")
+    def test_categorizes_client_files(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="src/components/Button.tsx\nclient/App.tsx\n",
+        )
+        result = derive_component_types(tmp_path)
+        assert "client" in result
+
+    @patch("subprocess.run")
+    def test_categorizes_server_files(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="server/api.ts\nsrc/api/handler.ts\nsrc/routes/index.ts\n",
+        )
+        result = derive_component_types(tmp_path)
+        assert "server" in result
+
+    @patch("subprocess.run")
+    def test_categorizes_database_files(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="src/db/schema.ts\nlib/models/user.ts\n",
+        )
+        result = derive_component_types(tmp_path)
+        assert "database" in result
+
+    @patch("subprocess.run")
+    def test_categorizes_test_files(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="src/auth.test.ts\ntests/login.spec.ts\n",
+        )
+        result = derive_component_types(tmp_path)
+        assert "test" in result
+
+    @patch("subprocess.run")
+    def test_categorizes_style_files(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="src/styles/main.css\ntheme.scss\n",
+        )
+        result = derive_component_types(tmp_path)
+        assert "style" in result
+
+    @patch("subprocess.run")
+    def test_categorizes_other_files(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="README.md\npackage.json\n",
+        )
+        result = derive_component_types(tmp_path)
+        assert "other" in result
+
+    @patch("subprocess.run")
+    def test_deduplicates(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="client/a.tsx\nclient/b.tsx\n",
+        )
+        result = derive_component_types(tmp_path)
+        assert result.count("client") == 1
+
+    @patch("subprocess.run")
+    def test_returns_empty_on_failure(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        result = derive_component_types(tmp_path)
+        assert result == []
+
+    @patch("subprocess.run")
+    def test_mixed_types(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                "client/App.tsx\n"
+                "server/api.ts\n"
+                "src/db/schema.ts\n"
+                "src/auth.test.ts\n"
+                "styles.css\n"
+                "README.md\n"
+            ),
+        )
+        result = derive_component_types(tmp_path)
+        assert sorted(result) == ["client", "database", "other", "server", "style", "test"]

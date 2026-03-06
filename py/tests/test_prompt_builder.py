@@ -64,7 +64,7 @@ class TestBuildFeaturePrompt:
         mock_summary.return_value = ""
         mock_feedback.return_value = ""
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(1, "Auth Login", tmp_path, config)
+        prompt, injections = build_feature_prompt(1, "Auth Login", tmp_path, config)
 
         assert "Build feature #1: Auth Login" in prompt
         assert "FEATURE_BUILT: Auth Login" in prompt
@@ -83,7 +83,7 @@ class TestBuildFeaturePrompt:
         mock_summary.return_value = "## Component Registry\nApp.tsx"
         mock_feedback.return_value = ""
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
 
         assert "Codebase Summary" in prompt
         assert "Component Registry" in prompt
@@ -102,7 +102,7 @@ class TestBuildFeaturePrompt:
             project_dir=tmp_path,
             eval_output_dir=tmp_path / "evals",
         )
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
 
         assert "Sidecar Eval Feedback" in prompt
         assert "FRAMEWORK COMPLIANCE" in prompt
@@ -119,7 +119,7 @@ class TestBuildFeaturePrompt:
         mock_feedback.return_value = ""
         tracker = MistakeTracker(mistakes=["missing error handling"])
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(
+        prompt, _ = build_feature_prompt(
             1, "Auth", tmp_path, config, mistake_tracker=tracker
         )
 
@@ -137,7 +137,7 @@ class TestBuildFeaturePrompt:
         mock_summary.return_value = ""
         mock_feedback.return_value = ""
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
 
         assert "Codebase Summary" not in prompt
         assert "Sidecar Eval Feedback" not in prompt
@@ -152,7 +152,7 @@ class TestBuildFeaturePrompt:
         mock_summary.side_effect = ValueError("bad dir")
         config = BuildConfig(project_dir=tmp_path)
         # Should not raise
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
         assert "Build feature #1: Auth" in prompt
 
     @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
@@ -166,7 +166,7 @@ class TestBuildFeaturePrompt:
         mock_summary.return_value = ""
         mock_feedback.return_value = ""
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
 
         assert "NO stub functions" in prompt
         assert "NO placeholder UI" in prompt
@@ -183,7 +183,7 @@ class TestBuildFeaturePrompt:
         mock_summary.return_value = ""
         mock_feedback.return_value = ""
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
 
         assert "/spec-first" not in prompt
         assert "generate-mapping.sh" not in prompt
@@ -202,7 +202,7 @@ class TestBuildFeaturePrompt:
         features_dir.mkdir(parents=True)
         (features_dir / "auth.feature.md").write_text("Feature: Auth")
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
 
         assert ".specs/features/auth.feature.md" in prompt
         assert "Read the feature spec at" in prompt
@@ -219,7 +219,7 @@ class TestBuildFeaturePrompt:
         mock_summary.return_value = ""
         mock_feedback.return_value = ""
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
 
         assert "Read the feature spec in .specs/features/" in prompt
         assert "CLAUDE.md" in prompt
@@ -361,7 +361,7 @@ class TestResolveSpecFile:
         config = BuildConfig(project_dir=tmp_path)
         with patch("auto_sdd.lib.prompt_builder.generate_codebase_summary", return_value=""), \
              patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback", return_value=""):
-            prompt = build_feature_prompt(
+            prompt, _ = build_feature_prompt(
                 1, "auth-and-dashboard-shell", tmp_path, config,
             )
         assert "SPEC_FILE: .specs/features/auth-and-dashboard-shell.feature" in prompt
@@ -373,7 +373,7 @@ class TestResolveSpecFile:
         config = BuildConfig(project_dir=tmp_path)
         with patch("auto_sdd.lib.prompt_builder.generate_codebase_summary", return_value=""), \
              patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback", return_value=""):
-            prompt = build_feature_prompt(1, "nonexistent", tmp_path, config)
+            prompt, _ = build_feature_prompt(1, "nonexistent", tmp_path, config)
         assert "SPEC_FILE: {path to the .feature.md file you created/updated}" in prompt
 
 
@@ -395,7 +395,8 @@ class TestPromptSizeLimits:
             "auto_sdd.lib.prompt_builder.read_latest_eval_feedback",
             return_value=eval_fb,
         ):
-            return build_feature_prompt(1, "test-feature", tmp_path, config)
+            prompt, _ = build_feature_prompt(1, "test-feature", tmp_path, config)
+            return prompt
 
     def test_base_prompt_under_total_limit(self, tmp_path: Path) -> None:
         prompt = self._make_prompt(tmp_path)
@@ -478,7 +479,7 @@ class TestQaSeedPromptInjection:
         mock_summary.return_value = ""
         mock_feedback.return_value = ""
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
         assert "qa-seed" in prompt
         assert "qa-test@test.local" in prompt
         assert "--teardown" in prompt
@@ -494,7 +495,7 @@ class TestQaSeedPromptInjection:
         mock_summary.return_value = ""
         mock_feedback.return_value = ""
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(2, "Dashboard", tmp_path, config)
+        prompt, _ = build_feature_prompt(2, "Dashboard", tmp_path, config)
         assert "qa-seed" not in prompt
         assert "qa-test@test.local" not in prompt
 
@@ -509,5 +510,109 @@ class TestQaSeedPromptInjection:
         mock_summary.return_value = ""
         mock_feedback.return_value = ""
         config = BuildConfig(project_dir=tmp_path)
-        prompt = build_feature_prompt(1, "Auth", tmp_path, config)
+        prompt, _ = build_feature_prompt(1, "Auth", tmp_path, config)
         assert "authentication" in prompt.lower() or "auth" in prompt.lower()
+
+
+# ── build_feature_prompt returns tuple ────────────────────────────────────
+
+
+class TestBuildFeaturePromptReturnType:
+    """Tests for build_feature_prompt returning (prompt, injections_list)."""
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_returns_tuple(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        config = BuildConfig(project_dir=tmp_path)
+        result = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        prompt, injections = result
+        assert isinstance(prompt, str)
+        assert isinstance(injections, list)
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_injections_empty_when_no_sections(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        config = BuildConfig(project_dir=tmp_path)
+        _, injections = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert injections == []
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_injections_include_codebase_summary(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = "summary content"
+        mock_feedback.return_value = ""
+        config = BuildConfig(project_dir=tmp_path)
+        _, injections = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert "codebase_summary" in injections
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_injections_include_eval_feedback(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = "feedback content"
+        config = BuildConfig(
+            project_dir=tmp_path,
+            eval_output_dir=tmp_path / "evals",
+        )
+        _, injections = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert "eval_feedback" in injections
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_injections_include_repeated_mistakes(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        tracker = MistakeTracker(mistakes=["missing error handling"])
+        config = BuildConfig(project_dir=tmp_path)
+        _, injections = build_feature_prompt(
+            1, "Auth", tmp_path, config, mistake_tracker=tracker
+        )
+        assert "repeated_mistakes" in injections
+
+    @patch("auto_sdd.lib.prompt_builder.generate_codebase_summary")
+    @patch("auto_sdd.lib.prompt_builder.read_latest_eval_feedback")
+    def test_injections_include_resolved_spec(
+        self,
+        mock_feedback: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_summary.return_value = ""
+        mock_feedback.return_value = ""
+        features_dir = tmp_path / ".specs" / "features"
+        features_dir.mkdir(parents=True)
+        (features_dir / "auth.feature.md").write_text("Feature: Auth")
+        config = BuildConfig(project_dir=tmp_path)
+        _, injections = build_feature_prompt(1, "Auth", tmp_path, config)
+        assert "resolved_spec" in injections

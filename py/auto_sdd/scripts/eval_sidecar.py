@@ -62,6 +62,7 @@ from auto_sdd.lib.claude_wrapper import (
     ClaudeOutputError,
     run_claude,
 )
+from auto_sdd.lib.vector_store import VectorStore
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -373,10 +374,15 @@ def _evaluate_commit(
     config: EvalSidecarConfig,
     state: CampaignState,
     commit_hash: str,
+    *,
+    vector_store: VectorStore | None = None,
+    vector_id: str | None = None,
 ) -> None:
     """Evaluate a single commit: mechanical + optional agent eval.
 
     Updates *state* counters in place. Never raises — logs and records errors.
+    If *vector_store* and *vector_id* are provided, updates the vector's
+    ``eval_signals_v1`` section with eval results.
     """
     commit_short = commit_hash[:8]
     commit_msg = _get_commit_message(config.project_dir, commit_hash)
@@ -479,6 +485,48 @@ def _evaluate_commit(
             "Failed to write eval result for %s: %s", commit_short, exc
         )
         state.eval_errors += 1
+
+    # ── CIS: update eval_signals_v1 ──────────────────────────────────
+    if vector_store is not None and vector_id is not None:
+        try:
+            diff_stats = mechanical.diff_stats
+            # Parse agent eval signals individually
+            fw_compliance = ""
+            scope_assess = ""
+            integ_quality = ""
+            repeated = ""
+            if agent_output:
+                fw_compliance = parse_eval_signal(
+                    "EVAL_FRAMEWORK_COMPLIANCE", agent_output
+                )
+                scope_assess = parse_eval_signal(
+                    "EVAL_SCOPE_ASSESSMENT", agent_output
+                )
+                integ_quality = parse_eval_signal(
+                    "EVAL_INTEGRATION_QUALITY", agent_output
+                )
+                repeated = parse_eval_signal(
+                    "EVAL_REPEATED_MISTAKES", agent_output
+                )
+
+            vector_store.update_section(
+                vector_id,
+                "eval_signals_v1",
+                {
+                    "files_added": int(str(diff_stats.get("files_added", 0))),
+                    "files_modified": int(str(diff_stats.get("files_modified", 0))),
+                    "lines_added": int(str(diff_stats.get("lines_added", 0))),
+                    "lines_removed": int(str(diff_stats.get("lines_removed", 0))),
+                    "framework_compliance": fw_compliance,
+                    "scope_assessment": scope_assess,
+                    "integration_quality": integ_quality,
+                    "repeated_mistakes": repeated,
+                },
+            )
+        except Exception:
+            logger.debug(
+                "Vector store error in eval sidecar", exc_info=True
+            )
 
 
 # ── Polling loop ──────────────────────────────────────────────────────────────
