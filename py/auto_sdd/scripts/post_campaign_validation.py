@@ -341,11 +341,9 @@ def detect_dev_command(project_dir: Path) -> str | dict[str, str] | None:
     if root_result is not None:
         return root_result
 
-    # No root package.json — check immediate subdirectories
-    if (project_dir / "package.json").exists():
-        # Root package.json exists but has no dev/start/serve script
-        return None
-
+    # No root dev command — search subdirectories regardless of whether
+    # root package.json exists (it may have no dev/start/serve script,
+    # e.g., only playwright deps from a previous Phase 1 agent run)
     subdir_commands: dict[str, str] = {}
     for child in sorted(project_dir.iterdir()):
         if not child.is_dir() or child.name.startswith("."):
