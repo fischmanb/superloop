@@ -725,11 +725,12 @@ class TestVectorStoreIntegration:
             vector_store=mock_vs,
             vector_id="test-vec-1",
         )
-        mock_vs.update_section.assert_called_once()
-        call_args = mock_vs.update_section.call_args
-        assert call_args[0][0] == "test-vec-1"
-        assert call_args[0][1] == "eval_signals_v1"
-        data = call_args[0][2]
+        # update_section called for eval_signals_v1 + convention_signals_v1
+        assert mock_vs.update_section.call_count >= 1
+        eval_call = mock_vs.update_section.call_args_list[0]
+        assert eval_call[0][0] == "test-vec-1"
+        assert eval_call[0][1] == "eval_signals_v1"
+        data = eval_call[0][2]
         assert data["files_added"] == 1
         assert data["files_modified"] == 1
 
@@ -800,4 +801,161 @@ class TestVectorStoreIntegration:
             vector_store=mock_vs,
             vector_id="test-vec-1",
         )
+        assert state.eval_count == 1
+
+
+# ── Convention checks integration ─────────────────────────────────────────
+
+
+class TestConventionChecksIntegration:
+    """Tests for convention checks wired into _evaluate_commit."""
+
+    @patch("auto_sdd.scripts.eval_sidecar.run_convention_checks")
+    @patch("auto_sdd.scripts.eval_sidecar.run_mechanical_eval")
+    def test_convention_checks_called(
+        self,
+        mock_mech: MagicMock,
+        mock_conv: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Convention checks are called during _evaluate_commit."""
+        from auto_sdd.lib.convention_checks import ConventionCheckResult
+
+        repo = _create_test_repo(tmp_path)
+        eval_dir = tmp_path / "evals"
+        eval_dir.mkdir()
+
+        config = EvalSidecarConfig(
+            project_dir=repo,
+            eval_agent=False,
+            eval_output_dir=eval_dir,
+        )
+        state = CampaignState()
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        mock_mech.return_value = MechanicalEvalResult(
+            diff_stats={
+                "feature_name": "test",
+                "files_changed": 2,
+                "files": ["a.py", "b.py"],
+            },
+            type_exports_changed=[],
+            redeclarations=[],
+            test_files_touched=[],
+            passed=True,
+        )
+        mock_conv.return_value = ConventionCheckResult(
+            compliance="followed",
+            checks_run=["import_boundaries", "type_safety"],
+        )
+
+        _evaluate_commit(config, state, commit)
+        mock_conv.assert_called_once()
+        call_args = mock_conv.call_args
+        assert call_args[0][0] == repo
+        assert call_args[0][1] == ["a.py", "b.py"]
+
+    @patch("auto_sdd.scripts.eval_sidecar.run_convention_checks")
+    @patch("auto_sdd.scripts.eval_sidecar.run_mechanical_eval")
+    def test_convention_signals_written_to_vector(
+        self,
+        mock_mech: MagicMock,
+        mock_conv: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """convention_signals_v1 is written to vector store."""
+        from auto_sdd.lib.convention_checks import (
+            ConventionCheckResult,
+            ConventionViolation,
+        )
+
+        repo = _create_test_repo(tmp_path)
+        eval_dir = tmp_path / "evals"
+        eval_dir.mkdir()
+
+        config = EvalSidecarConfig(
+            project_dir=repo,
+            eval_agent=False,
+            eval_output_dir=eval_dir,
+        )
+        state = CampaignState()
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        mock_mech.return_value = MechanicalEvalResult(
+            diff_stats={
+                "feature_name": "test",
+                "files_changed": 1,
+                "files": ["bad.py"],
+                "files_added": 1,
+                "files_modified": 0,
+                "lines_added": 10,
+                "lines_removed": 0,
+            },
+            type_exports_changed=[],
+            redeclarations=[],
+            test_files_touched=[],
+            passed=True,
+        )
+        mock_conv.return_value = ConventionCheckResult(
+            compliance="violated",
+            violations=[
+                ConventionViolation(
+                    pattern="error_handling",
+                    assessment="violated",
+                    evidence="bad.py:3: bare except",
+                    severity="correctness",
+                )
+            ],
+            checks_run=["error_handling"],
+        )
+
+        mock_vs = MagicMock()
+        _evaluate_commit(
+            config, state, commit,
+            vector_store=mock_vs,
+            vector_id="test-vec-conv",
+        )
+
+        # Should have 2 update_section calls: eval_signals_v1 + convention_signals_v1
+        assert mock_vs.update_section.call_count == 2
+        conv_call = mock_vs.update_section.call_args_list[1]
+        assert conv_call[0][0] == "test-vec-conv"
+        assert conv_call[0][1] == "convention_signals_v1"
+        data = conv_call[0][2]
+        assert data["compliance"] == "violated"
+        assert len(data["violations"]) == 1
+        assert data["violations"][0]["pattern"] == "error_handling"
+        assert data["checks_run"] == ["error_handling"]
+
+    @patch("auto_sdd.scripts.eval_sidecar.run_convention_checks")
+    @patch("auto_sdd.scripts.eval_sidecar.run_mechanical_eval")
+    def test_convention_check_failure_does_not_abort(
+        self,
+        mock_mech: MagicMock,
+        mock_conv: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Convention check failure does not abort the eval."""
+        repo = _create_test_repo(tmp_path)
+        eval_dir = tmp_path / "evals"
+        eval_dir.mkdir()
+
+        config = EvalSidecarConfig(
+            project_dir=repo,
+            eval_agent=False,
+            eval_output_dir=eval_dir,
+        )
+        state = CampaignState()
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        mock_mech.return_value = MechanicalEvalResult(
+            diff_stats={"feature_name": "test", "files_changed": 1, "files": []},
+            type_exports_changed=[],
+            redeclarations=[],
+            test_files_touched=[],
+            passed=True,
+        )
+        mock_conv.side_effect = RuntimeError("convention checks exploded")
+
+        _evaluate_commit(config, state, commit)
         assert state.eval_count == 1

@@ -372,6 +372,179 @@ RULES.append(PatternRule(
 ))
 
 
+# ── Rule 5: Import boundary correlation ───────────────────────────────────
+
+
+def _get_convention_signal(vec: FeatureVector, key: str) -> Any:
+    """Return a convention_signals_v1 field or None if missing."""
+    section = vec.sections.get("convention_signals_v1")
+    if isinstance(section, dict):
+        return section.get(key)
+    return None
+
+
+def _get_runtime_signal(vec: FeatureVector, key: str) -> Any:
+    """Return a runtime_signals_v1 field or None if missing."""
+    section = vec.sections.get("runtime_signals_v1")
+    if isinstance(section, dict):
+        return section.get(key)
+    return None
+
+
+def detect_import_boundary_correlation(
+    vectors: list[FeatureVector],
+) -> list[Finding]:
+    """Flag correlation between import boundary violations and failures."""
+    with_violations: list[FeatureVector] = []
+    without_violations: list[FeatureVector] = []
+
+    for vec in vectors:
+        violations = _get_convention_signal(vec, "violations")
+        if not isinstance(violations, list):
+            continue
+        has_import_violation = any(
+            isinstance(v, dict) and v.get("pattern") == "import_boundaries"
+            for v in violations
+        )
+        if has_import_violation:
+            with_violations.append(vec)
+        else:
+            without_violations.append(vec)
+
+    if not with_violations or not without_violations:
+        return []
+
+    # Check failure rates (build failure or runtime failure)
+    def _has_failure(vec: FeatureVector) -> bool:
+        if _is_failure(vec):
+            return True
+        runtime_failures = _get_runtime_signal(vec, "runtime_failures_caused")
+        if isinstance(runtime_failures, int) and runtime_failures > 0:
+            return True
+        return False
+
+    with_fail = sum(1 for v in with_violations if _has_failure(v))
+    without_fail = sum(1 for v in without_violations if _has_failure(v))
+
+    with_rate = with_fail / len(with_violations)
+    without_rate = without_fail / len(without_violations) if without_violations else 0
+
+    if without_rate == 0 and with_fail > 0:
+        return [Finding(
+            rule_name="IMPORT_BOUNDARY_CORRELATION",
+            confidence=round(min(1.0, 0.5 + with_rate * 0.5), 2),
+            evidence=[
+                f"Features with import boundary violations: "
+                f"{with_fail}/{len(with_violations)} failed ({with_rate:.0%})",
+                f"Features without: "
+                f"{without_fail}/{len(without_violations)} failed ({without_rate:.0%})",
+            ] + [v.feature_name for v in with_violations if _has_failure(v)][:5],
+            recommendation=(
+                "Import boundary violations correlate with higher failure rates. "
+                "Check server/client boundaries and transitive imports before building."
+            ),
+        )]
+
+    if without_rate > 0 and with_rate > 2 * without_rate:
+        return [Finding(
+            rule_name="IMPORT_BOUNDARY_CORRELATION",
+            confidence=round(min(1.0, with_rate / (2 * without_rate) * 0.5 + 0.3), 2),
+            evidence=[
+                f"Features with import boundary violations: "
+                f"{with_fail}/{len(with_violations)} failed ({with_rate:.0%})",
+                f"Features without: "
+                f"{without_fail}/{len(without_violations)} failed ({without_rate:.0%})",
+            ] + [v.feature_name for v in with_violations if _has_failure(v)][:5],
+            recommendation=(
+                "Import boundary violations correlate with higher failure rates. "
+                "Check server/client boundaries and transitive imports before building."
+            ),
+        )]
+
+    return []
+
+
+RULES.append(PatternRule(
+    name="IMPORT_BOUNDARY_CORRELATION",
+    min_samples=5,
+    detect=detect_import_boundary_correlation,
+))
+
+
+# ── Rule 6: Type safety trend ────────────────────────────────────────────────
+
+
+def detect_type_safety_trend(vectors: list[FeatureVector]) -> list[Finding]:
+    """Flag if type safety compliance degrades over the campaign."""
+    sorted_vecs = sorted(vectors, key=lambda v: v.build_order_position)
+
+    # Collect compliance assessments in order
+    assessments: list[tuple[int, str]] = []
+    for vec in sorted_vecs:
+        compliance = _get_convention_signal(vec, "compliance")
+        if isinstance(compliance, str) and compliance:
+            assessments.append((vec.build_order_position, compliance))
+
+    if len(assessments) < 4:
+        return []
+
+    mid = len(assessments) // 2
+    first_half = assessments[:mid]
+    second_half = assessments[mid:]
+
+    def _violation_rate(items: list[tuple[int, str]]) -> float:
+        if not items:
+            return 0.0
+        bad = sum(1 for _, c in items if c in ("violated", "partial"))
+        return bad / len(items)
+
+    first_rate = _violation_rate(first_half)
+    second_rate = _violation_rate(second_half)
+
+    if first_rate == 0 and second_rate > 0.3:
+        return [Finding(
+            rule_name="TYPE_SAFETY_TREND",
+            confidence=round(min(1.0, 0.5 + second_rate * 0.5), 2),
+            evidence=[
+                f"First half ({len(first_half)} features): "
+                f"{first_rate:.0%} convention issues",
+                f"Second half ({len(second_half)} features): "
+                f"{second_rate:.0%} convention issues",
+            ],
+            recommendation=(
+                "Convention compliance is degrading over the campaign. "
+                "Later features show more type safety and convention issues. "
+                "Review recent code for accumulated technical debt."
+            ),
+        )]
+
+    if first_rate > 0 and second_rate > 2 * first_rate:
+        return [Finding(
+            rule_name="TYPE_SAFETY_TREND",
+            confidence=round(min(1.0, second_rate / (2 * first_rate) * 0.5 + 0.2), 2),
+            evidence=[
+                f"First half ({len(first_half)} features): "
+                f"{first_rate:.0%} convention issues",
+                f"Second half ({len(second_half)} features): "
+                f"{second_rate:.0%} convention issues",
+            ],
+            recommendation=(
+                "Convention compliance is degrading over the campaign. "
+                "Later features show more type safety and convention issues. "
+                "Review recent code for accumulated technical debt."
+            ),
+        )]
+
+    return []
+
+
+RULES.append(PatternRule(
+    name="TYPE_SAFETY_TREND",
+    min_samples=5,
+    detect=detect_type_safety_trend,
+))
+
+
 # ── Analysis runner ─────────────────────────────────────────────────────────
 
 

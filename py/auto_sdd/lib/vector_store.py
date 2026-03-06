@@ -53,6 +53,12 @@ EVAL_SIGNALS_V1_FIELDS: list[str] = [
     "eval_notes",
 ]
 
+CONVENTION_SIGNALS_V1_FIELDS: list[str] = [
+    "compliance",
+    "violations",
+    "checks_run",
+]
+
 RUNTIME_SIGNALS_V1_FIELDS: list[str] = [
     "runtime_failures_caused",
     "failure_types",

@@ -62,6 +62,7 @@ from auto_sdd.lib.claude_wrapper import (
     ClaudeOutputError,
     run_claude,
 )
+from auto_sdd.lib.convention_checks import run_convention_checks
 from auto_sdd.lib.vector_store import VectorStore
 
 
@@ -486,6 +487,17 @@ def _evaluate_commit(
         )
         state.eval_errors += 1
 
+    # ── CIS: convention checks ───────────────────────────────────────
+    try:
+        diff_files: list[str] = []
+        raw_files = mechanical.diff_stats.get("files", [])
+        if isinstance(raw_files, list):
+            diff_files = [str(f) for f in raw_files]
+        convention_result = run_convention_checks(config.project_dir, diff_files)
+    except Exception:
+        convention_result = None
+        logger.debug("Convention checks failed", exc_info=True)
+
     # ── CIS: update eval_signals_v1 ──────────────────────────────────
     if vector_store is not None and vector_id is not None:
         try:
@@ -527,6 +539,31 @@ def _evaluate_commit(
             logger.debug(
                 "Vector store error in eval sidecar", exc_info=True
             )
+
+        # ── CIS: update convention_signals_v1 ────────────────────────
+        if convention_result is not None:
+            try:
+                vector_store.update_section(
+                    vector_id,
+                    "convention_signals_v1",
+                    {
+                        "compliance": convention_result.compliance,
+                        "violations": [
+                            {
+                                "pattern": v.pattern,
+                                "assessment": v.assessment,
+                                "evidence": v.evidence,
+                                "severity": v.severity,
+                            }
+                            for v in convention_result.violations
+                        ],
+                        "checks_run": convention_result.checks_run,
+                    },
+                )
+            except Exception:
+                logger.debug(
+                    "Convention signals vector store error", exc_info=True
+                )
 
 
 # ── Polling loop ──────────────────────────────────────────────────────────────

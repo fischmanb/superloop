@@ -11,9 +11,11 @@ from auto_sdd.lib.pattern_analysis import (
     Finding,
     PatternRule,
     detect_cooccurrence,
+    detect_import_boundary_correlation,
     detect_retry_effectiveness,
     detect_shared_module_risk,
     detect_temporal_decay,
+    detect_type_safety_trend,
     generate_campaign_findings,
     generate_risk_context,
     run_analysis,
@@ -31,6 +33,8 @@ def _make_vector(
     build_order_position: int = 1,
     build_signals: dict[str, Any] | None = None,
     eval_signals: dict[str, Any] | None = None,
+    convention_signals: dict[str, Any] | None = None,
+    runtime_signals: dict[str, Any] | None = None,
 ) -> FeatureVector:
     """Create a FeatureVector with controlled section data."""
     sections: dict[str, Any] = {}
@@ -38,6 +42,10 @@ def _make_vector(
         sections["build_signals_v1"] = build_signals
     if eval_signals is not None:
         sections["eval_signals_v1"] = eval_signals
+    if convention_signals is not None:
+        sections["convention_signals_v1"] = convention_signals
+    if runtime_signals is not None:
+        sections["runtime_signals_v1"] = runtime_signals
     return FeatureVector(
         feature_id=feature_id,
         feature_name=feature_name,
@@ -533,14 +541,165 @@ class TestGenerateCampaignFindings:
 # ── Rule registry ───────────────────────────────────────────────────────────
 
 
+# ── detect_import_boundary_correlation ────────────────────────────────────
+
+
+class TestDetectImportBoundaryCorrelation:
+    def test_correlation_detected(self) -> None:
+        """Features with import boundary violations have higher failure rate."""
+        vectors = []
+        # 3 features with import violations, all fail
+        for i in range(3):
+            vectors.append(_make_vector(
+                feature_id=i,
+                feature_name=f"bad-import-{i}",
+                convention_signals={
+                    "compliance": "violated",
+                    "violations": [
+                        {"pattern": "import_boundaries", "assessment": "violated"},
+                    ],
+                },
+                build_signals={"build_success": False, "drift_check_passed": True},
+            ))
+        # 3 features without import violations, all succeed
+        for i in range(3, 6):
+            vectors.append(_make_vector(
+                feature_id=i,
+                feature_name=f"clean-{i}",
+                convention_signals={
+                    "compliance": "followed",
+                    "violations": [],
+                },
+                build_signals={"build_success": True, "drift_check_passed": True},
+            ))
+        findings = detect_import_boundary_correlation(vectors)
+        assert len(findings) == 1
+        assert findings[0].rule_name == "IMPORT_BOUNDARY_CORRELATION"
+
+    def test_no_correlation(self) -> None:
+        """No finding when failure rates are equal."""
+        vectors = []
+        # All succeed, some with import violations
+        for i in range(6):
+            has_violation = i < 3
+            vectors.append(_make_vector(
+                feature_id=i,
+                convention_signals={
+                    "compliance": "violated" if has_violation else "followed",
+                    "violations": (
+                        [{"pattern": "import_boundaries", "assessment": "violated"}]
+                        if has_violation else []
+                    ),
+                },
+                build_signals={"build_success": True, "drift_check_passed": True},
+            ))
+        findings = detect_import_boundary_correlation(vectors)
+        assert findings == []
+
+    def test_no_convention_data(self) -> None:
+        """No findings when convention signals are absent."""
+        vectors = [_make_vector(feature_id=i) for i in range(6)]
+        findings = detect_import_boundary_correlation(vectors)
+        assert findings == []
+
+    def test_runtime_failures_counted(self) -> None:
+        """Runtime failures also count as failures for correlation."""
+        vectors = []
+        # 3 features with import violations, runtime failures
+        for i in range(3):
+            vectors.append(_make_vector(
+                feature_id=i,
+                feature_name=f"runtime-bad-{i}",
+                convention_signals={
+                    "violations": [
+                        {"pattern": "import_boundaries", "assessment": "violated"},
+                    ],
+                },
+                build_signals={"build_success": True, "drift_check_passed": True},
+                runtime_signals={"runtime_failures_caused": 2},
+            ))
+        # 3 clean features, no runtime failures
+        for i in range(3, 6):
+            vectors.append(_make_vector(
+                feature_id=i,
+                convention_signals={"violations": []},
+                build_signals={"build_success": True, "drift_check_passed": True},
+                runtime_signals={"runtime_failures_caused": 0},
+            ))
+        findings = detect_import_boundary_correlation(vectors)
+        assert len(findings) == 1
+
+
+# ── detect_type_safety_trend ─────────────────────────────────────────────
+
+
+class TestDetectTypeSafetyTrend:
+    def test_degradation_detected(self) -> None:
+        """Type safety degrades over the campaign."""
+        vectors = []
+        # First half: clean
+        for i in range(4):
+            vectors.append(_make_vector(
+                feature_id=i,
+                build_order_position=i,
+                convention_signals={"compliance": "followed"},
+            ))
+        # Second half: violated
+        for i in range(4, 8):
+            vectors.append(_make_vector(
+                feature_id=i,
+                build_order_position=i,
+                convention_signals={"compliance": "violated"},
+            ))
+        findings = detect_type_safety_trend(vectors)
+        assert len(findings) == 1
+        assert findings[0].rule_name == "TYPE_SAFETY_TREND"
+
+    def test_stable_compliance(self) -> None:
+        """No finding when compliance is stable throughout."""
+        vectors = []
+        for i in range(8):
+            vectors.append(_make_vector(
+                feature_id=i,
+                build_order_position=i,
+                convention_signals={"compliance": "followed"},
+            ))
+        findings = detect_type_safety_trend(vectors)
+        assert findings == []
+
+    def test_too_few_samples(self) -> None:
+        """No findings with fewer than 4 assessments."""
+        vectors = [
+            _make_vector(
+                feature_id=i,
+                build_order_position=i,
+                convention_signals={"compliance": "violated"},
+            )
+            for i in range(3)
+        ]
+        findings = detect_type_safety_trend(vectors)
+        assert findings == []
+
+    def test_no_convention_data(self) -> None:
+        """No findings when convention signals are absent."""
+        vectors = [_make_vector(feature_id=i, build_order_position=i) for i in range(8)]
+        findings = detect_type_safety_trend(vectors)
+        assert findings == []
+
+
+# ── Rule registry ───────────────────────────────────────────────────────────
+
+
 class TestRuleRegistry:
-    def test_four_rules_registered(self) -> None:
+    def test_six_rules_registered(self) -> None:
         rule_names = [r.name for r in RULES]
         assert "CO_OCCURRENCE" in rule_names
         assert "TEMPORAL_DECAY" in rule_names
         assert "RETRY_EFFECTIVENESS" in rule_names
         assert "SHARED_MODULE_RISK" in rule_names
-        assert len(RULES) == 4
+        assert "IMPORT_BOUNDARY_CORRELATION" in rule_names
+        assert "TYPE_SAFETY_TREND" in rule_names
+        assert len(RULES) == 6
 
     def test_min_samples_values(self) -> None:
         by_name = {r.name: r for r in RULES}
@@ -548,3 +707,5 @@ class TestRuleRegistry:
         assert by_name["TEMPORAL_DECAY"].min_samples == 6
         assert by_name["RETRY_EFFECTIVENESS"].min_samples == 3
         assert by_name["SHARED_MODULE_RISK"].min_samples == 5
+        assert by_name["IMPORT_BOUNDARY_CORRELATION"].min_samples == 5
+        assert by_name["TYPE_SAFETY_TREND"].min_samples == 5

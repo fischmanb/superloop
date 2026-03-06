@@ -1692,6 +1692,27 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - pytest tests/ -q: 1 pre-existing failure (test_eval_sidecar::test_merge_commit_skipped — unrelated git branch issue)
 - git diff --stat: only allowed files modified
 
+### CIS Round 3: Mechanical Convention Checks (branch: claude/setup-file-constraints-CtSGq)
+
+**What was asked**: Add mechanical convention checks (import boundaries, type safety, code duplication, error handling) to the Campaign Intelligence System. Wire into eval_sidecar. Add convention_signals_v1 schema. Add 2 new pattern analysis rules (import boundary correlation, type safety trend). All checks mechanical — no agent judgment.
+
+**What changed**:
+- NEW: `py/auto_sdd/lib/convention_checks.py` — 4 static analysis checks with project-configurable thresholds via `.sdd-config/eval-dimensions.yaml` (or JSON). Defaults if absent.
+- MODIFIED: `py/auto_sdd/lib/vector_store.py` — added `CONVENTION_SIGNALS_V1_FIELDS` schema constant
+- MODIFIED: `py/auto_sdd/scripts/eval_sidecar.py` — wired convention checks into `_evaluate_commit()`, writes `convention_signals_v1` section to vector store
+- MODIFIED: `py/auto_sdd/lib/pattern_analysis.py` — 2 new rules: `IMPORT_BOUNDARY_CORRELATION` (min_samples=5), `TYPE_SAFETY_TREND` (min_samples=5). Registry now has 6 rules.
+- NEW: `py/tests/test_convention_checks.py` — 35 tests covering all 4 checks, config loading, integration
+- MODIFIED: `py/tests/test_eval_sidecar.py` — 3 new tests for convention checks integration, updated vector store assertion
+- MODIFIED: `py/tests/test_pattern_analysis.py` — 8 new tests for the 2 new rules, updated registry assertions
+
+**What was NOT changed**: eval_lib.py (no changes needed), no package installs, no file deletions.
+
+**Verification**:
+- mypy --strict: all 4 source files pass
+- pytest target tests: 112 passed (1 deselected pre-existing)
+- pytest tests/ -q: 930 passed (1 deselected pre-existing test_merge_commit_skipped)
+- git diff --stat: only allowed files modified
+
 ---
 ## Questions?
 
