@@ -89,6 +89,7 @@ from auto_sdd.lib.prompt_builder import (
     build_retry_prompt,
     show_preflight_summary,
 )
+from auto_sdd.lib.vector_store import VectorStore, generate_campaign_id
 from auto_sdd.lib.reliability import (
     AutoSddError,
     DriftPair,
@@ -202,6 +203,54 @@ def _detect_dep_excludes(project_dir: Path) -> list[str]:
         if (project_dir / d).is_dir():
             excludes.extend(["-e", d])
     return excludes
+
+
+def derive_component_types(project_dir: Path) -> list[str]:
+    """Categorize files changed in the last commit into component types.
+
+    Runs ``git diff --name-only HEAD~1`` and classifies each path.
+
+    Returns:
+        Deduplicated list of component type strings.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD~1"],
+            capture_output=True,
+            text=True,
+            cwd=str(project_dir),
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return []
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+
+    types: set[str] = set()
+    for line in result.stdout.strip().splitlines():
+        path = line.strip()
+        if not path:
+            continue
+        if path.endswith(".css") or path.endswith(".scss"):
+            types.add("style")
+        elif "/test" in path or ".test." in path or ".spec." in path:
+            types.add("test")
+        elif "/db/" in path or "/models/" in path or "/migrations/" in path:
+            types.add("database")
+        elif (
+            path.startswith("client/")
+            or path.startswith("src/components/")
+        ):
+            types.add("client")
+        elif (
+            path.startswith("server/")
+            or path.startswith("src/api/")
+            or path.startswith("src/routes/")
+        ):
+            types.add("server")
+        else:
+            types.add("other")
+    return sorted(types)
 
 
 def _load_env_local(project_dir: Path) -> None:
@@ -427,6 +476,15 @@ class BuildLoop:
         self._loop_limit: int = 0
         self._current_strategy: str = ""
 
+        # ── Campaign Intelligence System ────────────────────────────────
+        self.campaign_id = generate_campaign_id(
+            strategy=self.branch_strategy,
+            model=self.build_model or self.agent_model or "unknown",
+        )
+        self.vector_store = VectorStore(
+            self.project_dir / ".sdd-state" / "feature-vectors.jsonl"
+        )
+
         # ── Acquire lock ─────────────────────────────────────────────────
         lock_dir = Path(tempfile.gettempdir())
         safe_name = str(self.project_dir).replace("/", "_").replace(
@@ -575,6 +633,11 @@ class BuildLoop:
         source_files: str = "",
         test_count: int | None = None,
         build_output: str = "",
+        vector_id: str = "",
+        injections_received: list[str] | None = None,
+        retry_count: int = 0,
+        drift_check_passed: bool = True,
+        test_check_passed: bool = True,
     ) -> None:
         """Record the result of a feature build attempt.
 
@@ -590,6 +653,30 @@ class BuildLoop:
             token_usage=_parse_token_usage(build_output),
         )
         self.feature_records.append(record)
+
+        # ── CIS: update build_signals_v1 ────────────────────────────────
+        if vector_id:
+            try:
+                comp_types = derive_component_types(self.project_dir)
+                self.vector_store.update_section(
+                    vector_id,
+                    "build_signals_v1",
+                    {
+                        "build_success": status == "built",
+                        "retry_count": retry_count,
+                        "agent_model": model,
+                        "build_duration_seconds": duration,
+                        "drift_check_passed": drift_check_passed,
+                        "test_check_passed": test_check_passed,
+                        "injections_received": injections_received or [],
+                        "component_types": comp_types,
+                        "touches_shared_modules": "database" in comp_types,
+                    },
+                )
+            except Exception:
+                logger.debug(
+                    "Vector store error at build end", exc_info=True
+                )
 
         if status == "built":
             self.loop_built += 1
@@ -680,6 +767,30 @@ class BuildLoop:
 
             feature_start = int(time.time())
 
+            # ── CIS: create feature vector ──────────────────────────────
+            current_vector_id = ""
+            try:
+                current_vector_id = self.vector_store.create_vector({
+                    "feature_id": feature.id,
+                    "feature_name": feature.name,
+                    "campaign_id": self.campaign_id,
+                    "build_order_position": idx,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                self.vector_store.update_section(
+                    current_vector_id,
+                    "pre_build_v1",
+                    {
+                        "complexity_tier": feature.complexity or "unknown",
+                        "dependency_count": 0,
+                        "branch_strategy": self.branch_strategy,
+                    },
+                )
+            except Exception:
+                logger.debug(
+                    "Vector store error at feature start", exc_info=True
+                )
+
             self._print_progress(
                 loop_limit,
                 feature_name=feature.name,
@@ -760,8 +871,9 @@ class BuildLoop:
                     )
 
                 # Build the prompt
+                injections_received: list[str] = []
                 if attempt == 0:
-                    prompt = build_feature_prompt(
+                    prompt, injections_received = build_feature_prompt(
                         feature.id,
                         feature.name,
                         self.project_dir,
@@ -869,6 +981,9 @@ class BuildLoop:
                             current_feature_branch,
                             source_files=drift_targets.source_files,
                             build_output=build_result,
+                            vector_id=current_vector_id,
+                            injections_received=injections_received,
+                            retry_count=attempt,
                         )
                         feature_done = True
                         break
@@ -913,6 +1028,9 @@ class BuildLoop:
                                         duration,
                                         current_feature_branch,
                                         build_output=build_result,
+                                        vector_id=current_vector_id,
+                                        injections_received=injections_received,
+                                        retry_count=attempt,
                                     )
                                     feature_done = True
                                     break
@@ -954,6 +1072,9 @@ class BuildLoop:
                                     duration,
                                     current_feature_branch,
                                     build_output=build_result,
+                                    vector_id=current_vector_id,
+                                    injections_received=injections_received,
+                                    retry_count=attempt,
                                 )
                                 feature_done = True
                                 break
@@ -989,6 +1110,9 @@ class BuildLoop:
                     duration,
                     current_feature_branch,
                     build_output=build_result if build_result else "",
+                    vector_id=current_vector_id,
+                    injections_received=injections_received,
+                    retry_count=self.max_retries,
                 )
                 clean_working_tree(self.project_dir)
                 self._cleanup_failed_branch(
@@ -1225,7 +1349,7 @@ class BuildLoop:
 
             # Build in the worktree — reuse the same prompt builder
             # as the main loop (feature_id=0 since we only have names)
-            prompt = build_feature_prompt(
+            prompt, indep_injections = build_feature_prompt(
                 0,
                 fn,
                 worktree_path,

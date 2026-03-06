@@ -1194,3 +1194,51 @@ class TestResumePersistence:
             "FEATURE_BUILT: auth\n", 1000.0,
         )
         mock_write.assert_called_once()
+
+
+# ── VectorStore wiring tests ─────────────────────────────────────────────
+
+
+class TestVectorStoreWiring:
+    """Tests for CIS VectorStore integration in OvernightRunner."""
+
+    def test_init_creates_campaign_id(self, tmp_path: Path) -> None:
+        runner = _make_runner(tmp_path)
+        assert runner.campaign_id.startswith("campaign-")
+
+    def test_init_creates_vector_store(self, tmp_path: Path) -> None:
+        runner = _make_runner(tmp_path)
+        assert runner.vector_store is not None
+
+    @patch("auto_sdd.scripts.overnight_autonomous.generate_codebase_summary", return_value="mock summary")
+    @patch("auto_sdd.scripts.overnight_autonomous._run_git")
+    @patch("auto_sdd.scripts.overnight_autonomous.run_agent_with_backoff")
+    def test_vector_created_at_feature_start(
+        self,
+        mock_agent: MagicMock,
+        mock_git: MagicMock,
+        mock_summary: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        runner = _make_runner(tmp_path)
+        runner.main_branch = "main"
+
+        def agent_side_effect(
+            output_file: Path, cmd: list[str], **kw: Any
+        ) -> int:
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            output_file.write_text("BUILD_FAILED: test\n")
+            return 1
+
+        mock_agent.side_effect = agent_side_effect
+        mock_git.return_value = MagicMock(returncode=0, stdout="abc123\n")
+
+        with patch.object(runner.vector_store, "create_vector") as mock_create:
+            mock_create.return_value = "test-vector-id"
+            with patch.object(runner.vector_store, "update_section"):
+                runner._build_single_feature("1", "auth", 0, 1)
+
+        mock_create.assert_called_once()
+        call_args = mock_create.call_args[0][0]
+        assert call_args["feature_name"] == "auth"
+        assert call_args["campaign_id"] == runner.campaign_id

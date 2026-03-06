@@ -677,3 +677,127 @@ class TestPollingLoop:
             # The stale sentinel was cleaned; the drain sentinel was also
             # cleaned after drain completed
             assert not sentinel.exists(), "Sentinel should be cleaned after drain"
+
+
+# ── Vector store integration ──────────────────────────────────────────────
+
+
+class TestVectorStoreIntegration:
+    """Tests for _evaluate_commit with vector_store parameter."""
+
+    @patch("auto_sdd.scripts.eval_sidecar.run_mechanical_eval")
+    def test_updates_vector_when_provided(
+        self,
+        mock_mech: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """_evaluate_commit calls vector_store.update_section when both provided."""
+        repo = _create_test_repo(tmp_path)
+        eval_dir = tmp_path / "evals"
+        eval_dir.mkdir()
+
+        config = EvalSidecarConfig(
+            project_dir=repo,
+            eval_agent=False,
+            eval_output_dir=eval_dir,
+        )
+        state = CampaignState()
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        mock_mech.return_value = MechanicalEvalResult(
+            diff_stats={
+                "feature_name": "test",
+                "files_changed": 2,
+                "files_added": 1,
+                "files_modified": 1,
+                "lines_added": 50,
+                "lines_removed": 10,
+            },
+            type_exports_changed=[],
+            redeclarations=[],
+            test_files_touched=[],
+            passed=True,
+        )
+
+        mock_vs = MagicMock()
+        _evaluate_commit(
+            config, state, commit,
+            vector_store=mock_vs,
+            vector_id="test-vec-1",
+        )
+        mock_vs.update_section.assert_called_once()
+        call_args = mock_vs.update_section.call_args
+        assert call_args[0][0] == "test-vec-1"
+        assert call_args[0][1] == "eval_signals_v1"
+        data = call_args[0][2]
+        assert data["files_added"] == 1
+        assert data["files_modified"] == 1
+
+    @patch("auto_sdd.scripts.eval_sidecar.run_mechanical_eval")
+    def test_works_without_vector_store(
+        self,
+        mock_mech: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """_evaluate_commit works normally when vector_store is None."""
+        repo = _create_test_repo(tmp_path)
+        eval_dir = tmp_path / "evals"
+        eval_dir.mkdir()
+
+        config = EvalSidecarConfig(
+            project_dir=repo,
+            eval_agent=False,
+            eval_output_dir=eval_dir,
+        )
+        state = CampaignState()
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        mock_mech.return_value = MechanicalEvalResult(
+            diff_stats={"feature_name": "test", "files_changed": 1},
+            type_exports_changed=[],
+            redeclarations=[],
+            test_files_touched=[],
+            passed=True,
+        )
+
+        # Should not raise — backward compatible
+        _evaluate_commit(config, state, commit)
+        assert state.eval_count == 1
+
+    @patch("auto_sdd.scripts.eval_sidecar.run_mechanical_eval")
+    def test_vector_store_error_does_not_abort(
+        self,
+        mock_mech: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Vector store errors don't abort the eval."""
+        repo = _create_test_repo(tmp_path)
+        eval_dir = tmp_path / "evals"
+        eval_dir.mkdir()
+
+        config = EvalSidecarConfig(
+            project_dir=repo,
+            eval_agent=False,
+            eval_output_dir=eval_dir,
+        )
+        state = CampaignState()
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        mock_mech.return_value = MechanicalEvalResult(
+            diff_stats={"feature_name": "test", "files_changed": 1},
+            type_exports_changed=[],
+            redeclarations=[],
+            test_files_touched=[],
+            passed=True,
+        )
+
+        mock_vs = MagicMock()
+        mock_vs.update_section.side_effect = RuntimeError("store failure")
+
+        # Should not raise
+        _evaluate_commit(
+            config, state, commit,
+            vector_store=mock_vs,
+            vector_id="test-vec-1",
+        )
+        assert state.eval_count == 1

@@ -86,6 +86,8 @@ from auto_sdd.lib.reliability import (
     run_agent_with_backoff,
     write_state,
 )
+from auto_sdd.lib.vector_store import VectorStore, generate_campaign_id
+from auto_sdd.scripts.build_loop import derive_component_types
 
 logger = logging.getLogger(__name__)
 
@@ -335,6 +337,15 @@ class OvernightRunner:
 
         # Resume mode
         self.resume_mode: bool = False
+
+        # ── Campaign Intelligence System ────────────────────────────────
+        self.campaign_id = generate_campaign_id(
+            strategy=config.branch_strategy,
+            model=config.build_model or config.agent_model or "unknown",
+        )
+        self.vector_store = VectorStore(
+            self.project_dir / ".sdd-state" / "feature-vectors.jsonl"
+        )
 
     def run(self) -> None:
         """Execute the full overnight flow: sync → rebase → triage → build → report."""
@@ -685,6 +696,30 @@ class OvernightRunner:
             _format_duration(elapsed_so_far),
         )
 
+        # ── CIS: create feature vector ──────────────────────────────────
+        current_vector_id = ""
+        try:
+            current_vector_id = self.vector_store.create_vector({
+                "feature_id": int(feature_id),
+                "feature_name": feature_name,
+                "campaign_id": self.campaign_id,
+                "build_order_position": idx,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            self.vector_store.update_section(
+                current_vector_id,
+                "pre_build_v1",
+                {
+                    "complexity_tier": "unknown",
+                    "dependency_count": 0,
+                    "branch_strategy": self.config.branch_strategy,
+                },
+            )
+        except Exception:
+            logger.debug(
+                "Vector store error at feature start", exc_info=True
+            )
+
         # Create branch
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         branch_name = f"auto/feature-{timestamp}"
@@ -819,6 +854,33 @@ class OvernightRunner:
             self.feature_timings.append(
                 f"✗ {feature_name}: {_format_duration(feature_duration)}"
             )
+            # ── CIS: record failure ─────────────────────────────────
+            if current_vector_id:
+                try:
+                    comp_types = derive_component_types(self.project_dir)
+                    self.vector_store.update_section(
+                        current_vector_id,
+                        "build_signals_v1",
+                        {
+                            "build_success": False,
+                            "retry_count": self.config.max_retries,
+                            "agent_model": (
+                                self.config.build_model
+                                or self.config.agent_model
+                                or "default"
+                            ),
+                            "build_duration_seconds": feature_duration,
+                            "drift_check_passed": False,
+                            "test_check_passed": False,
+                            "injections_received": [],
+                            "component_types": comp_types,
+                            "touches_shared_modules": "database" in comp_types,
+                        },
+                    )
+                except Exception:
+                    logger.debug(
+                        "Vector store error at build end", exc_info=True
+                    )
             _run_git(["checkout", self.main_branch], self.project_dir)
             _run_git(["branch", "-D", branch_name], self.project_dir)
             return False
@@ -834,6 +896,7 @@ class OvernightRunner:
             feature_id,
             build_result,
             feature_start,
+            vector_id=current_vector_id,
         )
 
     def _post_build(
@@ -843,6 +906,8 @@ class OvernightRunner:
         feature_id: str,
         build_result: str,
         feature_start: float,
+        *,
+        vector_id: str = "",
     ) -> bool:
         """Handle post-build: commit, gates, push, PR. Returns True if successful."""
         # Post-agent commit: if uncommitted changes exist, commit them
@@ -973,6 +1038,34 @@ class OvernightRunner:
                 f"✓ {feature_name}: {_format_duration(feature_duration)}"
             )
             self.built_feature_names.append(feature_name)
+
+            # ── CIS: record success ─────────────────────────────────
+            if vector_id:
+                try:
+                    comp_types = derive_component_types(self.project_dir)
+                    self.vector_store.update_section(
+                        vector_id,
+                        "build_signals_v1",
+                        {
+                            "build_success": True,
+                            "retry_count": 0,
+                            "agent_model": (
+                                self.config.build_model
+                                or self.config.agent_model
+                                or "default"
+                            ),
+                            "build_duration_seconds": feature_duration,
+                            "drift_check_passed": True,
+                            "test_check_passed": True,
+                            "injections_received": [],
+                            "component_types": comp_types,
+                            "touches_shared_modules": "database" in comp_types,
+                        },
+                    )
+                except Exception:
+                    logger.debug(
+                        "Vector store error at build end", exc_info=True
+                    )
 
             # Track branch for chained mode
             if self.config.branch_strategy == "chained":
