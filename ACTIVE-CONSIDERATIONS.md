@@ -6,18 +6,18 @@
 
 ---
 
-### Priority stack (updated 2026-03-06, afternoon)
+### Priority stack (updated 2026-03-07)
 
 Ordered by efficiency gain per complexity added:
 
 1. **SitDeck build campaign — BLOCKED on roadmap generation prompt.**
-   - Adrian asked Brian to run the full SitDeck vision through Superloop
-   - Vision file: `vision.md` (committed at repo root, also copied to `~/compstak-sitdeck/.specs/vision.md`)
-   - `~/compstak-sitdeck/.specs/` directory exists, waiting for roadmap + spec stubs
-   - **Blocker**: Agent prompts degraded in quality. Need proper prompt following PROMPT-ENGINEERING-GUIDE.md to decompose vision into ~70-feature roadmap.
+   - **Purpose**: Head-to-head comparison — same `vision.md` input, Adrian's simpler system (74 features, no verification loops, no learning layer) vs. Superloop (full CIS, auto-QA, verified output). Demonstrates Superloop capability AND generates CIS training data for Rounds 5-6.
+   - Vision file exists in TWO locations: `~/auto-sdd/vision.md` (committed at fc5f36d, repo root) AND `~/compstak-sitdeck/.specs/vision.md` (copy). Either is usable by agent.
+   - `~/compstak-sitdeck/.specs/` directory exists, waiting for roadmap + feature stubs.
+   - **Blocker**: Agent prompts degraded in quality last session. Multiple failed attempts. Need proper prompt following PROMPT-ENGINEERING-GUIDE.md to decompose vision into ~70-feature roadmap.
    - Roadmap format: `| # | Feature | Source | Jira | Complexity | Dependencies | Status |` (parsed by `reliability.py:_parse_roadmap_rows`)
-   - After roadmap: initialize Next.js project, copy CompStak CSV data, run `build_loop.py`
-   - This campaign produces CIS training data for Rounds 5-6 AND demonstrates Superloop to Adrian
+   - **Sequence after roadmap**: (1) Initialize Next.js project at `~/compstak-sitdeck/` — project dir does NOT exist yet, build command will fail without this step. (2) Copy CompStak CSV data to `~/compstak-sitdeck/_shared-csv-data/`. (3) Run `cd ~/auto-sdd/py && PROJECT_DIR=~/compstak-sitdeck .venv/bin/python -m auto_sdd.scripts.build_loop`
+   - Record of breakthrough context: `Brians-Notes/itsalive.md` and `Brians-Notes/records/itsalive.md` (two copies, local only)
 2. **CIS Rounds 1-4 COMPLETE. Rounds 5-6 need campaign data from #1.**
    - **Round 1a** ✅: Vector store + JSONL backend + schema (32 tests)
    - **Round 1b** ✅: Wire writers into build_loop, eval_sidecar, prompt_builder, overnight_autonomous (26 tests)
@@ -52,9 +52,11 @@ Ordered by efficiency gain per complexity added:
 ### Completed (archive — remove when no longer useful for context)
 
 - **stakd 28-feature campaign**: v2 COMPLETE (28/28 Sonnet 4.6, post-build import error known), v3 STALLED at 11/28 Haiku 4.5. Key finding: token speed ≠ build speed (infra bottlenecks dominate). Data in `campaign-results/`.
-- **Bash→Python conversion**: ALL PHASES COMPLETE (0-6). Post-conversion audit complete (30 findings, 16 resolved, 7 INFO-only). 740 tests, 15.86s.
-- **auto-QA pipeline**: ALL PHASES COMPLETE (0-5). 96 tests. Next: live validation run against real project.
-- **Learnings system**: IMPLEMENTED. 191+ entries (L-00001–L-00191, M-00001–M-00087+), 17 curated in core.md.
+- **Repo rename + unfork (2026-03-06)**: Renamed to `superloop` on GitHub, unforked from Adrian's repo. Local path `~/auto-sdd` unchanged. Remote: `https://github.com/fischmanb/superloop.git`.
+- **IP scrub (2026-03-07)**: `Brians-Notes/IP-UTILITY-SIGNIFICANCE.md` removed from all git history via filter-repo. Force-pushed to all branches.
+- **Bash→Python conversion**: ALL PHASES COMPLETE (0-6). Post-conversion audit complete (30 findings, 16 resolved, 7 INFO-only). 970 tests, ~17s.
+- **auto-QA pipeline**: ALL PHASES COMPLETE (0-5). Run 2: 29/32 pass, 3/3 fix agents succeeded, verified live. Next: SitDeck campaign for scale proof.
+- **Learnings system**: IMPLEMENTED. L-00001–L-00198, M-00001–M-00090+, 17 curated in core.md.
 - **Test suite reliability (2026-03-04)**: Orphan cleanup, hang fixes (generate_codebase_summary mock), build_loop 162s→0.1s. 740 tests, 15.86s, zero hangs.
 - **L-00178 enforcement (2026-03-04)**: 300-line prompt rule across 5 surfaces (tests, runtime, CLAUDE.md, core.md, process-rules).
 - **Next.js detection fix (2026-03-04)**: `detect_build_check()` priority ordering + package.json validation.
