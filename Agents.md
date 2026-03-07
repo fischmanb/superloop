@@ -1753,6 +1753,21 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - git diff --stat: only 4 allowed Python files modified
 
 ---
+
+### Round — SitDeck Roadmap Generation (2026-03-07)
+
+**What was asked**: Generated SitDeck roadmap.md from vision.md — transcribe all 44 widgets into a phased roadmap with dependencies, complexity, and status tracking.
+
+**What was changed**: `compstak-sitdeck/.specs/roadmap.md` — populated with 3 phases (Phase 1: 26 core data widgets, Phase 2: 13 AI/portfolio/advanced analytics widgets, Phase 3: 5 external feed widgets), implementation rules, progress summary, status and complexity legends.
+
+**What was NOT changed**: `compstak-sitdeck/.specs/vision.md`, `compstak-sitdeck/.specs/features/` (all feature stubs), all scripts, all Python source files.
+
+**Verification**:
+- Widget count: 44 (26 Phase 1 + 13 Phase 2 + 5 Phase 3)
+- All 3 phase headers present
+- git diff --stat: only compstak-sitdeck/.specs/roadmap.md and Agents.md modified
+
+---
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
