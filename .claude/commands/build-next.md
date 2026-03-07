@@ -199,15 +199,13 @@ No additional action needed here - learnings are already extracted.
 
 ### Required Output Signals
 
-You MUST output these signals at the end (each on its own line):
+You MUST output these exact lines verbatim at the very end of your response, after all markdown, tables, and prose. Do NOT embed them in a table, code block, or list. They must appear as bare lines:
 
-```
 FEATURE_BUILT: {feature name}
 SPEC_FILE: {path to .feature.md file}
 SOURCE_FILES: {comma-separated source file paths}
-```
 
-These are parsed by the build loop to run automated drift-checking.
+These are parsed by the build loop regex `^FEATURE_BUILT:` — any surrounding markdown characters (|, `, #, *) will break parsing and skip the drift check.
 
 ### If Feature Built Successfully
 
@@ -220,13 +218,11 @@ Components: [list of components]
 Jira: PROJ-105 → Done
 
 Roadmap progress: 5/18 features (28%)
+```
 
 FEATURE_BUILT: Dashboard
 SPEC_FILE: .specs/features/dashboard/dashboard.feature.md
 SOURCE_FILES: app/(protected)/dashboard/page.tsx, components/dashboard-stats.tsx
-
-Run /build-next again to continue, or wait for overnight automation.
-```
 
 ### If Build Failed
 
