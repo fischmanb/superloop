@@ -14,3 +14,4 @@
 {"timestamp":"2026-03-06T12:56:23Z","activity_type":"cis-round-1a-vector-store","estimated_tokens_pre":12000,"active_tokens":572,"cumulative_tokens":1775024}
 {"timestamp":"2026-03-06T14:56:22Z","activity_type":"cis-round-2-pattern-analysis","estimated_tokens_pre":18000,"active_tokens":54663,"cumulative_tokens":6598169}
 {"timestamp":"2026-03-06T15:15:52Z","activity_type":"cis-round-3-convention-checks","estimated_tokens_pre":20000,"active_tokens":7264,"cumulative_tokens":6435042}
+{"timestamp":"2026-03-07T18:55:55Z","activity_type":"sitdeck-roadmap-gen","estimated_tokens_pre":12000,"active_tokens":365,"cumulative_tokens":1227535}
