@@ -399,7 +399,9 @@ class BuildLoop:
                     self.main_branch = "main"
 
         self.branch_strategy = _env_str("BRANCH_STRATEGY", "chained")
-        self.max_features = _env_int("MAX_FEATURES", 25)
+        self.max_features: int | None = (
+            int(os.environ["MAX_FEATURES"]) if "MAX_FEATURES" in os.environ else None
+        )
         self.max_retries = _env_int("MAX_RETRIES", 1)
         self.min_retry_delay = _env_int("MIN_RETRY_DELAY", 30)
         self.build_mode = _env_str("BUILD_MODE", "single")
@@ -811,7 +813,7 @@ class BuildLoop:
         current_feature_branch = ""
         current_worktree_path: Path | None = None
 
-        loop_limit = min(len(features), self.max_features)
+        loop_limit = len(features) if self.max_features is None else min(len(features), self.max_features)
         self._loop_limit = loop_limit
         self._current_strategy = strategy
 

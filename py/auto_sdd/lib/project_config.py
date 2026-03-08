@@ -20,7 +20,7 @@ YAML format (flat key: value, no nesting required):
     test_cmd: npx vitest run --passWithNoTests
     lint_cmd: npm run lint
     build_model: claude-sonnet-4-6
-    max_features: 100
+    max_features: 10  # optional — omit to build all pending features
     max_retries: 2
     agent_timeout: 1800
     auto_approve: true

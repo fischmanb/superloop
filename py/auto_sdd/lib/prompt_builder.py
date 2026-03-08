@@ -138,7 +138,7 @@ class BuildConfig:
     drift_model: str | None = None
     review_model: str | None = None
     post_build_steps: str = ""
-    max_features: int = 999
+    max_features: int | None = None
     max_retries: int = 3
     auto_approve: bool = False
     eval_output_dir: Path | None = None
@@ -152,7 +152,7 @@ class BuildConfig:
 def show_preflight_summary(
     features: list[Feature],
     strategy: str,
-    max_features: int,
+    max_features: int | None,
     config: BuildConfig,
 ) -> None:
     """Log the pre-build summary of features to be built.
@@ -185,9 +185,9 @@ def show_preflight_summary(
 
     logger.info("")
     logger.info(
-        "  Total features: %d (capped at MAX_FEATURES=%d)",
+        "  Total features: %d%s",
         len(features),
-        max_features,
+        f" (capped at MAX_FEATURES={max_features})" if max_features is not None else " (building all)",
     )
     logger.info("")
 
