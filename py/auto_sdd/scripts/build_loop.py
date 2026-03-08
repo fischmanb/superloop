@@ -84,6 +84,7 @@ from auto_sdd.lib.drift import (
     run_code_review,
     update_repeated_mistakes,
 )
+from auto_sdd.lib.learnings_writer import write_learning
 from auto_sdd.lib.prompt_builder import (
     BuildConfig,
     build_feature_prompt,
@@ -1096,6 +1097,28 @@ class BuildLoop:
                                 logger.debug(
                                     "Failed to write retry context", exc_info=True
                                 )
+                            # Also write retry learning to both locations
+                            failed_list: list[dict[str, str]] = retry_context["failed_attempts"]  # type: ignore[assignment]
+                            failure_summaries = "\n".join(
+                                f"Attempt {fa['attempt']}: "
+                                + fa["build_output"].strip()[-300:]
+                                for fa in failed_list
+                            )
+                            write_learning(
+                                summary=(
+                                    f"{feature_name or feature.name} required "
+                                    f"{attempt + 1} attempts before passing gates"
+                                ),
+                                detail=(
+                                    f"Feature passed on attempt {attempt + 1}. "
+                                    f"Earlier attempt(s) failed:\n\n{failure_summaries}"
+                                ),
+                                category="retry",
+                                project_name=self.project_dir.name,
+                                feature_name=feature_name or feature.name,
+                                project_dir=self.project_dir,
+                                repo_dir=Path(__file__).resolve().parents[3],
+                            )
                         feature_done = True
                         break
                     else:
@@ -1226,6 +1249,36 @@ class BuildLoop:
                     injections_received=injections_received,
                     retry_count=self.max_retries,
                 )
+                # Best-effort drift check on failure path: if the agent
+                # emitted SPEC_FILE/SOURCE_FILES signals, run drift regardless
+                # of gate outcome so misalignment is captured in learnings.
+                if build_result and self.drift_check:
+                    _fail_targets = extract_drift_targets(
+                        build_result, self.project_dir
+                    )
+                    if _fail_targets.spec_file:
+                        logger.info(
+                            "Running best-effort drift check on failed feature: %s",
+                            feature.name,
+                        )
+                        try:
+                            check_drift(
+                                _fail_targets.spec_file,
+                                _fail_targets.source_files,
+                                self.project_dir,
+                                model=self.drift_model or None,
+                                max_retries=0,  # no retries on failure path
+                                drift_enabled=True,
+                                test_cmd=self.test_cmd,
+                                cost_log_path=self.cost_log_path,
+                                project_name=self.project_dir.name,
+                                feature_name=feature.name,
+                                repo_dir=Path(__file__).resolve().parents[3],
+                            )
+                        except Exception:
+                            logger.debug(
+                                "Best-effort drift check failed", exc_info=True
+                            )
                 clean_working_tree(self.project_dir)
                 self._cleanup_failed_branch(
                     strategy,
@@ -1255,6 +1308,8 @@ class BuildLoop:
                     drift_enabled=self.drift_check,
                     test_cmd=self.test_cmd,
                     cost_log_path=self.cost_log_path,
+                    project_name=self.project_dir.name,
+                    repo_dir=Path(__file__).resolve().parents[3],
                 )
                 return result.passed
 
@@ -1348,6 +1403,9 @@ class BuildLoop:
                     drift_enabled=self.drift_check,
                     test_cmd=self.test_cmd,
                     cost_log_path=self.cost_log_path,
+                    project_name=self.project_dir.name,
+                    feature_name=feature_name,
+                    repo_dir=Path(__file__).resolve().parents[3],
                 )
                 if not drift_result.passed:
                     logger.warning(
@@ -1549,6 +1607,8 @@ class BuildLoop:
                     drift_enabled=self.drift_check,
                     test_cmd=self.test_cmd,
                     cost_log_path=self.cost_log_path,
+                    project_name=self.project_dir.name,
+                    repo_dir=Path(__file__).resolve().parents[3],
                 )
                 return r.passed
 

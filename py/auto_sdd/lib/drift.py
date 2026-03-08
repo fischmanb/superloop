@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from auto_sdd.lib.claude_wrapper import ClaudeResult, run_claude
+from auto_sdd.lib.learnings_writer import write_learning
 from auto_sdd.lib.reliability import AutoSddError
 
 logger = logging.getLogger(__name__)
@@ -300,6 +301,9 @@ def check_drift(
     test_cmd: str = "",
     cost_log_path: Path | None = None,
     timeout: int = 600,
+    project_name: str = "",
+    feature_name: str = "",
+    repo_dir: Path | None = None,
 ) -> DriftCheckResult:
     """Run a drift check via a fresh Claude agent.
 
@@ -313,10 +317,16 @@ def check_drift(
         test_cmd: Test command for the drift agent to run.
         cost_log_path: Optional path for cost logging.
         timeout: Agent timeout in seconds.
+        project_name: Project name for learnings attribution. Defaults to
+            project_dir.name if not provided.
+        feature_name: Feature name for learnings attribution.
+        repo_dir: Superloop repo root for repo-level learnings. Defaults to
+            auto-derived from module path.
 
     Returns:
         DriftCheckResult with passed flag and summary.
     """
+    _pname = project_name or project_dir.name
     if not drift_enabled:
         logger.info("Drift check disabled (set DRIFT_CHECK=true to enable)")
         return DriftCheckResult(passed=True, summary="disabled")
@@ -382,6 +392,18 @@ def check_drift(
 
         if "NO_DRIFT" in output:
             logger.info("✓ Drift check passed — spec and code are aligned")
+            write_learning(
+                summary=f"Drift check: no drift detected for {feature_name or spec_file}",
+                detail=(
+                    f"Spec and implementation are aligned.\n"
+                    f"Spec: {spec_file}\nSource files: {source_files}"
+                ),
+                category="drift",
+                project_name=_pname,
+                feature_name=feature_name,
+                project_dir=project_dir,
+                repo_dir=repo_dir,
+            )
             return DriftCheckResult(passed=True, summary="no drift")
 
         if "DRIFT_FIXED" in output:
@@ -389,11 +411,37 @@ def check_drift(
             logger.info(
                 "✓ Drift detected and auto-fixed: %s", fix_summary
             )
+            write_learning(
+                summary=f"Drift auto-fixed for {feature_name or spec_file}: {fix_summary}",
+                detail=(
+                    f"Spec/code misalignment was detected and auto-reconciled.\n"
+                    f"Fix summary: {fix_summary}\n"
+                    f"Spec: {spec_file}\nSource files: {source_files}"
+                ),
+                category="drift",
+                project_name=_pname,
+                feature_name=feature_name,
+                project_dir=project_dir,
+                repo_dir=repo_dir,
+            )
             return DriftCheckResult(passed=True, summary=f"fixed: {fix_summary}")
 
         if "DRIFT_UNRESOLVABLE" in output:
             reason = _parse_signal("DRIFT_UNRESOLVABLE", output)
             logger.warning("Unresolvable drift: %s", reason)
+            write_learning(
+                summary=f"Drift UNRESOLVABLE for {feature_name or spec_file} — needs human review",
+                detail=(
+                    f"Drift agent could not reconcile spec and code.\n"
+                    f"Reason: {reason}\n"
+                    f"Spec: {spec_file}\nSource files: {source_files}"
+                ),
+                category="drift-unresolvable",
+                project_name=_pname,
+                feature_name=feature_name,
+                project_dir=project_dir,
+                repo_dir=repo_dir,
+            )
             return DriftCheckResult(
                 passed=False, summary=f"unresolvable: {reason}"
             )
