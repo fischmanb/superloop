@@ -192,14 +192,20 @@ def _parse_token_usage(output: str) -> int | None:
 
 
 _CREDIT_RE = re.compile(
-    r"credit|billing|insufficient_quota|quota exceeded|"
-    r"402 Payment|429 Too Many|payment required",
+    r"credit.{0,30}(balance|exhaust|insuffici|too low)|"
+    r"insufficient_quota|quota.{0,10}exceeded|"
+    r"402 Payment Required|payment required|"
+    r"credit_balance_too_low|your (api )?credit",
     re.IGNORECASE,
 )
 
 
 def _is_credit_exhaustion(output: str) -> bool:
-    """Return True if output contains credit/billing exhaustion keywords."""
+    """Return True if output contains credit/billing exhaustion signals.
+
+    Uses tight patterns to avoid false positives from feature names that
+    contain the word 'credit' (e.g. 'Tenant Credit Indicators').
+    """
     return bool(_CREDIT_RE.search(output))
 
 
