@@ -44,7 +44,7 @@ For each candidate, check: is this already captured by an existing L- or M-entry
 For each new learning, output in graph schema format:
 
 ```
-## L-NNNNN
+## L-NNNNN — [title]
 Type: [type]
 Tags: [concrete, searchable, space-separated tags]
 Confidence: [high/medium/low] — [one-line justification]
@@ -54,6 +54,22 @@ Related: [L-NNNNN, M-NNNNN references]
 
 [Body text. Be specific. Include concrete details from the session — commands, numbers, exact failure modes. A learning that could apply to any project is too vague.]
 ```
+
+### Title field — critical authoring rule
+
+The title appears in the header line and is the primary navigational surface for any agent that has never encountered this learning. It must work standalone — an agent skimming `## L-NNNNN — [title]` lines must be able to determine relevance without reading the body.
+
+**Formula:** [specific component/flag/file] + [what it did wrong or what happened] + [consequence, if not already implied]
+
+**Wrong:** `flag-conflation`, `AUTO_APPROVE issue`, `config problem`  
+These name the category of mistake. A future agent encountering the same symptom won't find them.
+
+**Right:** `AUTO_APPROVE flag in project.yaml silently bypasses human pre-flight review`  
+Names the exact artifact, what it did, and what that caused. Recognizable from the symptom side.
+
+**Test:** Read only the header line. Can a future agent encountering the same symptom for the first time determine in under 3 seconds whether to read this entry? If not, rewrite the title.
+
+**Generalizability check:** Does the title apply only to this exact one-time bug, or to a pattern that could recur? If one-time-only, broaden the title slightly while keeping it specific (e.g., not "the April 8 build failure" but "build loop silently swallows SIGTERM before cleanup completes").
 
 ### Tags field — critical authoring rule
 

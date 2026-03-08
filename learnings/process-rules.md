@@ -825,7 +825,7 @@ Related: L-00003 (related_to)
 
 When fixing a detection gap, do not add the specific missing filename or tool to an enumeration list. Enumerate-by-config-file is a pattern that is always one ecosystem version behind. The correct fix is to read what the project itself declares: `package.json` scripts for JS/TS ecosystems, `pyproject.toml` tool sections for Python, `Cargo.toml` for Rust. If the project says `"lint": "next lint"`, run `npm run lint` — that is the project's own declaration of how it lints itself, and it will remain correct across tool version changes. This generalizes to all ecosystem-level detection: prefer reading the project's own build/test/lint declarations over inferring from config file presence.
 
-## L-00209
+## L-00209 — hardcoding pending feature count in project.yaml silently caps campaign when roadmap changes
 ID: L-00209
 Type: node
 Tags: max_features, project-yaml, sdd-config, hardcoded-count, roadmap, runtime-vs-config, campaign-cap

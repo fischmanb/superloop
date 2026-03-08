@@ -29,6 +29,7 @@ Single command to ensure all context management files are current. Prevents cont
 
 ### 4. Learnings
 - **Default assumption: something to capture.** Find reasons to skip, not reasons to include. A scan that finds zero candidates in a session with agent completions, corrections, or system changes is evidence of the scan failing. (L-00116)
+- **Read build agent candidates first**: Check `logs/learning-candidates.txt`. If it exists and is non-empty, read it. Each line is a `LEARNING_CANDIDATE:` signal emitted by a build agent during a prior campaign run. These are raw flags — one line each — that the agent couldn't promote itself. Review each for promotion to a full learning entry. After processing, move the file to `logs/learning-candidates-processed/learning-candidates-{DATE}.txt` (create dir if needed). This is the Human | Agent | External Memory pipeline: agents flag, humans promote.
 - Active scan — review the session for learnable moments. Do not rely on recall; check each category:
   - **Agent completions**: Did an agent finish this session? What worked, failed, or surprised? Does the outcome validate or contradict existing learnings?
   - **Corrections**: Did Brian correct something? Each correction is a candidate learning.

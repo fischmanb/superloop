@@ -79,6 +79,29 @@ These principles apply unevenly across contexts. The goal is precision, not blan
 
 Defined here, enforced in all `learnings/` files. Same philosophy as the edge type schema — small fixed sets, specificity belongs in tags and body text.
 
+### Title — authoring rule
+
+Every learning entry uses title-in-header format, matching the convention already established in `core.md`:
+
+```
+## L-NNNNN — [title]
+```
+
+The title is the primary navigational surface for any agent that has never encountered this learning before. It is the first thing scanned when skimming a file. It must work standalone — without reading the body, without reading the tags.
+
+**Title must be:** specific enough that an ignorant future agent encountering the same symptom can recognize it from the title alone; generalizable enough that it applies beyond the exact one-time circumstance.
+
+**Formula:** [specific component/flag/file] + [what it did wrong or what happened] + [consequence, if not already implied]
+
+- **Wrong:** `flag-conflation`, `AUTO_APPROVE issue`, `config problem`  
+  These describe the *category* of mistake, not the mistake. A future agent won't find them.
+- **Right:** `AUTO_APPROVE flag in project.yaml silently bypasses human pre-flight review`  
+  Names the exact artifact, what it did, and what it caused. A future agent who finds pre-flight being skipped will recognize this entry.
+
+**Test:** Read only the `## L-NNNNN — [title]` line. Can a future agent encountering the same symptom for the first time determine in under 3 seconds whether this entry is relevant? If not, rewrite the title.
+
+---
+
 ### Tags — authoring rule
 
 Tags are the primary searchable surface of a learning. They must name the **actual things involved**: flag names, file names, commands, system components, specific APIs. Abstract category words (`bad-abstraction`, `conflation`, `static-count`) are not tags — they describe the type of mistake but not the mistake itself. A future reader searching for what broke must be able to find the entry via its tags.

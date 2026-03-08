@@ -370,7 +370,7 @@ Related: L-00205 (related_to)
 
 The lint miss was observed in the build log while diagnosing the EVAL_OUTPUT_DIR stall. The cause was correctly identified internally. It was then mentally filed as secondary and not surfaced. This is wrong. A silently skipped gate is a correctness problem that compounds across every feature in the campaign — it is not secondary to anything. The correct behavior: when a second bug is identified during diagnosis of a first bug, flag it immediately before continuing, even if it will be addressed after the primary fix. Defer the fix, not the flag.
 
-## L-00208
+## L-00208 — AUTO_APPROVE flag in project.yaml silently bypasses human pre-flight review
 ID: L-00208
 Type: node
 Tags: AUTO_APPROVE, SKIP_PREFLIGHT, pre-flight-review, project-yaml, human-gate, flag-scope, campaign-config

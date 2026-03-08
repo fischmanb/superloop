@@ -370,6 +370,31 @@ Feature-specific learnings remain in each spec's `## Learnings` section.
 
 Learnings are captured during checkpoint protocol (see `.claude/commands/checkpoint.md` step 4), not via `/compound`.
 
+### Cross-Interface Learning Capture: LEARNING_CANDIDATE signal
+
+Build agents (any interface — Claude Code CLI, API, desktop app) may flag learning candidates during execution. This is the formal bridge between the agent interface and the external memory system. You cannot write to `learnings/` directly. Use this signal instead.
+
+To flag a candidate, emit this as a **bare line** in your output (same protocol as other signals):
+
+```
+LEARNING_CANDIDATE: [one-line description of the pattern, failure, or unexpected behavior]
+```
+
+**Rules:**
+- One line only. This is a flag, not an entry body.
+- Only emit for non-obvious failures a future agent would not predict
+- Be specific: name the actual file, flag, command, or component involved
+- **Wrong:** `LEARNING_CANDIDATE: config issue found`
+- **Right:** `LEARNING_CANDIDATE: NEXT_PUBLIC_ prefix required for env vars accessed in client components — missing prefix silently returns undefined at runtime`
+
+**What happens next:** The build loop captures these signals to `logs/learning-candidates.txt`. Chat sessions read that file during checkpoint step 4 and decide which candidates to promote to full L-entries. This is the Human | Agent | External Memory pipeline operating as designed.
+
+**When to emit:**
+- A build failed due to a non-obvious framework behavior
+- A constraint was violated that wasn't in any existing learning
+- Something worked differently than the spec or existing learnings predicted
+- A retry succeeded on a fix that is generalizable beyond this feature
+
 ---
 
 ## Roadmap System
