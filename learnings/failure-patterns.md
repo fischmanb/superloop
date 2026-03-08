@@ -320,3 +320,52 @@ When wrapping existing code in a new `with` block, the entire body must be re-in
 - **Related:** L-00182 (same root cause)
 
 As of 4pm March 4th, 2026 in auto-sdd, `generate_codebase_summary` is the single highest-impact unmocked function in the test suite. It spawns real `subprocess.run(["claude",...])` via `run_claude`. Any test exercising `build_feature_prompt` (from prompt_builder) or `_build_feature_prompt` (from overnight_autonomous) hangs without it mocked. Mock target depends on import chain: mock where the symbol is *used*, not where it's *defined*. Two independent fixes (L-00182) took 740 tests from hanging/162s to 15.86s.
+
+---
+
+## L-00203
+Type: failure_pattern
+Tags: build-loop, env-vars, scope, silent-data-loss, eval-sidecar
+Confidence: high
+Status: active
+Date: 2026-03-08T00:00:00-05:00
+Related: L-00204 (related_to)
+
+EVAL_OUTPUT_DIR was set only as an inline env var scoped to the sidecar subprocess (`EVAL_OUTPUT_DIR="$LOGS_DIR/evals" bash eval-sidecar.sh`). It was never exported into the build loop's own shell scope. All four call sites fell back to `${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}`, which resolved to a path that does not exist. The `ls` returned empty string, `awk ""` read from stdin on macOS, and hung indefinitely. Fix: set EVAL_OUTPUT_DIR as a proper shell variable immediately after LOGS_DIR is derived. The hang was the symptom; the silent data loss (zero repeated_mistakes injection across the entire campaign) was the actual failure.
+
+---
+
+## L-00204
+Type: failure_pattern
+Tags: debugging, symptom-suppression, silent-failure, guard-clauses
+Confidence: high
+Status: active
+Date: 2026-03-08T00:00:00-05:00
+Related: L-00203 (related_to)
+
+When a visible failure (hang) was found, a guard clause was proposed as the fix. This converted a debuggable failure into an invisible one. A hang surfaces immediately and blocks progress — it forces investigation. Silent empty string means the feedback loop emits no signal and no error: `repeated_mistakes` is never injected, the eval sidecar module produces zero value, and nothing indicates this. The standard is: fix the root cause, then add a guard for the legitimate edge case (first feature, no evals written yet). Guarding *instead of* fixing root cause is strictly worse than the original bug from a debuggability standpoint.
+
+---
+
+## L-00205
+Type: failure_pattern
+Tags: build-loop, lint, detection, generalization, project-agnostic
+Confidence: high
+Status: active
+Date: 2026-03-08T00:00:00-05:00
+Related: L-00206 (related_to)
+Related: L-00207 (requires)
+
+The lint gate used config-file enumeration (`.eslintrc.js`, `eslint.config.mjs`, etc.) to detect whether linting was available. Next.js 15 scaffolds without any of these files — `next lint` is declared in `package.json` scripts and requires no separate config file. Detection fell through to "No linter config detected" and the gate was silently skipped for every feature in the campaign. The fix is not adding more filenames — it is reading `package.json` scripts first, since that is how the project declares its own lint contract. This is the same pattern already used correctly in the build gate for `detect_build_check`.
+
+---
+
+## L-00206
+Type: failure_pattern
+Tags: triage, context-switching, incomplete-findings, surface-all-bugs
+Confidence: high
+Status: active
+Date: 2026-03-08T00:00:00-05:00
+Related: L-00205 (related_to)
+
+The lint miss was observed in the build log while diagnosing the EVAL_OUTPUT_DIR stall. The cause was correctly identified internally. It was then mentally filed as secondary and not surfaced. This is wrong. A silently skipped gate is a correctness problem that compounds across every feature in the campaign — it is not secondary to anything. The correct behavior: when a second bug is identified during diagnosis of a first bug, flag it immediately before continuing, even if it will be addressed after the primary fix. Defer the fix, not the flag.

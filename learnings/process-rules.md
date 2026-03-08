@@ -811,3 +811,16 @@ Related: L-00200 (instance_of)
 Related: L-00199 (requires)
 
 Implementation order for knowledge graph: write path first (knowledge_store.py + sidecar extension), read path second (spec_preprocessor.py). A preprocessor with an empty knowledge base is a no-op. Get data accumulating before building the read path. BFS on dependency chain + semantic similarity + BM25 keyword pass → synthesis call → inject as "Build Intelligence" section in spec.
+
+---
+
+## L-00207
+Type: process_rule
+Tags: generalization, lint, build-gates, project-agnostic, package-json
+Confidence: high
+Status: active
+Date: 2026-03-08T00:00:00-05:00
+Related: L-00205 (instance_of)
+Related: L-00003 (related_to)
+
+When fixing a detection gap, do not add the specific missing filename or tool to an enumeration list. Enumerate-by-config-file is a pattern that is always one ecosystem version behind. The correct fix is to read what the project itself declares: `package.json` scripts for JS/TS ecosystems, `pyproject.toml` tool sections for Python, `Cargo.toml` for Rust. If the project says `"lint": "next lint"`, run `npm run lint` — that is the project's own declaration of how it lints itself, and it will remain correct across tool version changes. This generalizes to all ecosystem-level detection: prefer reading the project's own build/test/lint declarations over inferring from config file presence.
