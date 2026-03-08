@@ -1,0 +1,19 @@
+# .sdd-config/project.yaml
+# Project-declared build loop configuration for compstak-sitdeck.
+# Values here are defaults — any env var set at launch time overrides them.
+# Priority: env var > this file > auto-detection > hardcoded default.
+#
+# See superloop/docs/sdd-config-schema.md for full key reference.
+
+build_cmd: NODE_ENV=production next build
+test_cmd: npx vitest run --passWithNoTests
+lint_cmd: npm run lint
+build_model: claude-sonnet-4-6
+max_features: 100
+max_retries: 2
+agent_timeout: 1800
+auto_approve: true
+branch_strategy: chained
+min_retry_delay: 30
+drift_check: true
+post_build_steps: test,dead-code,lint

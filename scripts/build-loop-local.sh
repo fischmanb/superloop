@@ -177,6 +177,43 @@ if [ "$RESUME_MODE" = true ]; then
     fi
 fi
 
+# ── Load .sdd-config/project.yaml ────────────────────────────────────────────
+# Sets env var defaults from the project's own config declaration.
+# Priority: existing env var > project.yaml > auto-detection > hardcoded default.
+# Parsing: flat YAML only (key: value). Uses Python for correctness.
+load_sdd_config() {
+    local config_file="$PROJECT_DIR/.sdd-config/project.yaml"
+    [ -f "$config_file" ] || return 0
+    # Read each key: value pair. Only set env vars that are not already set.
+    while IFS=': ' read -r key value; do
+        # Skip comments and blank lines
+        [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+        # Strip inline comments from value
+        value="${value%%#*}"
+        # Strip surrounding quotes
+        value="${value#\"}" value="${value%\"}"
+        value="${value#\'}" value="${value%\'}"
+        value="${value// /}"  # trim whitespace
+        case "$key" in
+            build_cmd)       [[ -z "${BUILD_CHECK_CMD:-}" ]]   && export BUILD_CHECK_CMD="$value" ;;
+            test_cmd)        [[ -z "${TEST_CHECK_CMD:-}" ]]    && export TEST_CHECK_CMD="$value" ;;
+            lint_cmd)        [[ -z "${LINT_CHECK_CMD:-}" ]]    && export LINT_CHECK_CMD="$value" ;;
+            build_model)     [[ -z "${BUILD_MODEL:-}" ]]       && export BUILD_MODEL="$value" ;;
+            agent_model)     [[ -z "${AGENT_MODEL:-}" ]]       && export AGENT_MODEL="$value" ;;
+            max_features)    [[ -z "${MAX_FEATURES:-}" ]]      && export MAX_FEATURES="$value" ;;
+            max_retries)     [[ -z "${MAX_RETRIES:-}" ]]       && export MAX_RETRIES="$value" ;;
+            agent_timeout)   [[ -z "${AGENT_TIMEOUT:-}" ]]     && export AGENT_TIMEOUT="$value" ;;
+            auto_approve)    [[ -z "${AUTO_APPROVE:-}" ]]      && export AUTO_APPROVE="$value" ;;
+            branch_strategy) [[ -z "${BRANCH_STRATEGY:-}" ]]   && export BRANCH_STRATEGY="$value" ;;
+            min_retry_delay) [[ -z "${MIN_RETRY_DELAY:-}" ]]   && export MIN_RETRY_DELAY="$value" ;;
+            drift_check)     [[ -z "${DRIFT_CHECK:-}" ]]       && export DRIFT_CHECK="$value" ;;
+            post_build_steps)[[ -z "${POST_BUILD_STEPS:-}" ]]  && export POST_BUILD_STEPS="$value" ;;
+        esac
+    done < "$config_file"
+    log "Loaded project config: $config_file"
+}
+load_sdd_config
+
 MAX_FEATURES="${MAX_FEATURES:-${MAX_FEATURES_PER_RUN:-25}}"
 MAX_RETRIES="${MAX_RETRIES:-1}"
 MIN_RETRY_DELAY="${MIN_RETRY_DELAY:-30}"
@@ -602,9 +639,11 @@ check_dead_exports() {
 # Always returns 0 (non-blocking, warn-only).
 
 detect_lint_check() {
-    # Package.json lint script takes precedence — the project declares how it lints itself.
-    # This generalizes across any ecosystem (Next.js, Vite, Rust, Go, Python, etc.)
-    # without enumerating tool-specific config filenames.
+    # LINT_CHECK_CMD from .sdd-config/project.yaml (or env var) takes highest precedence.
+    if [ -n "${LINT_CHECK_CMD:-}" ]; then
+        echo "$LINT_CHECK_CMD"; return
+    fi
+    # Package.json lint script — project declares how it lints itself.
     if [ -f "package.json" ] && grep -qE '"lint"\s*:' package.json 2>/dev/null; then
         echo "npm run lint"; return
     fi

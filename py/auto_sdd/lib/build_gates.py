@@ -190,6 +190,12 @@ def detect_lint_check(project_dir: Path) -> str:
     Returns:
         Command string, or empty string if none detected.
     """
+    # LINT_CHECK_CMD env var (set by project.yaml or caller) takes highest precedence.
+    import os as _os
+    lint_override = _os.environ.get("LINT_CHECK_CMD", "")
+    if lint_override:
+        return lint_override
+
     # package.json lint script takes precedence — the project declares how it lints itself.
     # This generalizes across any ecosystem without enumerating tool-specific config filenames.
     pkg = project_dir / "package.json"

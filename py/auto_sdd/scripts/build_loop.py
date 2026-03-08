@@ -47,6 +47,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from auto_sdd.lib.project_config import load_project_config
 from auto_sdd.lib.branch_manager import (
     BranchSetupResult,
     cleanup_all_worktrees,
@@ -365,6 +366,10 @@ class BuildLoop:
             self.project_dir = Path.cwd().resolve()
 
         _load_env_local(self.project_dir)
+
+        # Load .sdd-config/project.yaml — sets env var defaults before any
+        # _env_str() reads. Env vars already set in environment take precedence.
+        load_project_config(self.project_dir)
 
         # ── Configuration ────────────────────────────────────────────────
         self.main_branch = _env_str("MAIN_BRANCH", "")
