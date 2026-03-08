@@ -16,7 +16,8 @@ Ordered by efficiency gain per complexity added:
    - `~/compstak-sitdeck/.specs/` directory exists, waiting for roadmap + feature stubs.
    - **Blocker**: Agent prompts degraded in quality last session. Multiple failed attempts. Need proper prompt following PROMPT-ENGINEERING-GUIDE.md to decompose vision into ~70-feature roadmap.
    - Roadmap format: `| # | Feature | Source | Jira | Complexity | Dependencies | Status |` (parsed by `reliability.py:_parse_roadmap_rows`)
-   - **Sequence after roadmap**: (1) Initialize Next.js project at `~/compstak-sitdeck/` — project dir does NOT exist yet, build command will fail without this step. (2) Copy CompStak CSV data to `~/compstak-sitdeck/_shared-csv-data/`. (3) Run `cd ~/auto-sdd/py && PROJECT_DIR=~/compstak-sitdeck .venv/bin/python -m auto_sdd.scripts.build_loop`
+   - **Run command**: `caffeinate -diw $$ & cd ~/auto-sdd/py && AUTO_APPROVE=true PROJECT_DIR=~/auto-sdd/compstak-sitdeck .venv/bin/python -m auto_sdd.scripts.build_loop`
+   - **Do NOT use** `bash scripts/build-loop-local.sh` — bash loop is archived dead code post-migration.
    - Record of breakthrough context: `Brians-Notes/itsalive.md` and `Brians-Notes/records/itsalive.md` (two copies, local only)
 2. **CIS Rounds 1-4 COMPLETE. Rounds 5-6 need campaign data from #1.**
    - **Round 1a** ✅: Vector store + JSONL backend + schema (32 tests)

@@ -886,3 +886,16 @@ Date: 2026-03-08
 Related: L-00163 (related_to), L-00212 (instance_of)
 
 A learnings body that describes what happened — the incident, the sequence, the context — is malformed. The body must be the rule that prevents the failure in the broadest possible set of future cases. L-00163 requires a concrete countermeasure; this extends it: the countermeasure must generalize across cases, not just fix the instance that prompted it. Test: read only the body. Does it tell a future instance what to do in any situation where this failure mode could occur? Or does it describe a past situation? If the latter, rewrite it. The incident that surfaced the rule belongs in a comment or Related field at most — not in the body.
+
+---
+
+## L-00214 — Handoff run commands must reference the canonical entry point or the archived path will be invoked
+ID: L-00214
+Type: process_rule
+Tags: handoff.md, build-loop-local.sh, build_loop.py, python-migration, dead-code, run-command, ACTIVE-CONSIDERATIONS.md
+Confidence: high
+Status: active
+Date: 2026-03-08
+Related: L-00130 (related_to), L-00125 (related_to)
+
+When a handoff or ACTIVE-CONSIDERATIONS.md entry includes a run command, it must reference the current canonical entry point — not the path that was valid at time of writing. The bash loop (`scripts/build-loop-local.sh`) was archived as dead code after the bash→Python migration. A handoff written before or during that transition propagated the bash command forward, and the next session launched the archived loop without noticing. The correct entry point is `py/auto_sdd/scripts/build_loop.py` via `.venv/bin/python -m auto_sdd.scripts.build_loop`. Rule: before writing any run command into a handoff or ACTIVE-CONSIDERATIONS.md, verify the entry point against INDEX.md or the current codebase. If the entry point changed during the session, update every location that references the old one before closing.
