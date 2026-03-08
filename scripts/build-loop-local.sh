@@ -1453,7 +1453,8 @@ run_build_loop() {
 
                                 # Queue sidecar feedback for next build
                                 local _eval_rm
-                                _eval_rm=$(awk -F'"' '{for(i=1;i<=NF;i++) if($i=="repeated_mistakes"){print $(i+2); exit}}' "$(ls -t "${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}"/eval-*.json 2>/dev/null | grep -v 'eval-campaign-' | head -1)" 2>/dev/null || echo "")
+                                local _latest_eval_f; _latest_eval_f=$(ls -t "${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}"/eval-*.json 2>/dev/null | grep -v 'eval-campaign-' | head -1)
+                                _eval_rm=$([[ -n "$_latest_eval_f" ]] && awk -F'"' '{for(i=1;i<=NF;i++) if($i=="repeated_mistakes"){print $(i+2); exit}}' "$_latest_eval_f" 2>/dev/null || echo "")
                                 update_repeated_mistakes "$_eval_rm"
                                 log "Sidecar feedback queued for next build agent"
 
@@ -1512,7 +1513,8 @@ run_build_loop() {
 
                                 # Queue sidecar feedback for next build
                                 local _eval_rm_drift
-                                _eval_rm_drift=$(awk -F'"' '{for(i=1;i<=NF;i++) if($i=="repeated_mistakes"){print $(i+2); exit}}' "$(ls -t "${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}"/eval-*.json 2>/dev/null | grep -v 'eval-campaign-' | head -1)" 2>/dev/null || echo "")
+                                local _latest_eval_d; _latest_eval_d=$(ls -t "${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}"/eval-*.json 2>/dev/null | grep -v 'eval-campaign-' | head -1)
+                                _eval_rm_drift=$([[ -n "$_latest_eval_d" ]] && awk -F'"' '{for(i=1;i<=NF;i++) if($i=="repeated_mistakes"){print $(i+2); exit}}' "$_latest_eval_d" 2>/dev/null || echo "")
                                 update_repeated_mistakes "$_eval_rm_drift"
                                 log "Sidecar feedback queued for next build agent"
 
@@ -1563,7 +1565,8 @@ run_build_loop() {
 
                             # Queue sidecar feedback for next build
                             local _eval_rm_retry
-                            _eval_rm_retry=$(awk -F'"' '{for(i=1;i<=NF;i++) if($i=="repeated_mistakes"){print $(i+2); exit}}' "$(ls -t "${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}"/eval-*.json 2>/dev/null | grep -v 'eval-campaign-' | head -1)" 2>/dev/null || echo "")
+                            local _latest_eval_r; _latest_eval_r=$(ls -t "${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}"/eval-*.json 2>/dev/null | grep -v 'eval-campaign-' | head -1)
+                            _eval_rm_retry=$([[ -n "$_latest_eval_r" ]] && awk -F'"' '{for(i=1;i<=NF;i++) if($i=="repeated_mistakes"){print $(i+2); exit}}' "$_latest_eval_r" 2>/dev/null || echo "")
                             update_repeated_mistakes "$_eval_rm_retry"
                             log "Sidecar feedback queued for next build agent"
 
@@ -1610,7 +1613,8 @@ run_build_loop() {
 
             # Queue sidecar feedback for next build
             local _eval_rm_fail
-            _eval_rm_fail=$(awk -F'"' '{for(i=1;i<=NF;i++) if($i=="repeated_mistakes"){print $(i+2); exit}}' "$(ls -t "${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}"/eval-*.json 2>/dev/null | grep -v 'eval-campaign-' | head -1)" 2>/dev/null || echo "")
+            local _latest_eval_fail; _latest_eval_fail=$(ls -t "${EVAL_OUTPUT_DIR:-$PROJECT_DIR/logs/evals}"/eval-*.json 2>/dev/null | grep -v 'eval-campaign-' | head -1)
+            _eval_rm_fail=$([[ -n "$_latest_eval_fail" ]] && awk -F'"' '{for(i=1;i<=NF;i++) if($i=="repeated_mistakes"){print $(i+2); exit}}' "$_latest_eval_fail" 2>/dev/null || echo "")
             update_repeated_mistakes "$_eval_rm_fail"
             log "Sidecar feedback queued for next build agent"
 
