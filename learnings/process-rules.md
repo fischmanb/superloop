@@ -774,3 +774,40 @@ Every `git push` to origin and every `git merge` to main requires Brian's explic
 - **Related:** L-00196 (same class — push discipline)
 
 When Brian says "stash" or "push it" during imminent context loss (compaction warning), default to the least-destructive interpretation: save locally, not push to remote. Disambiguate before acting. On 2026-03-05, "you are about to get compacted push it" was interpreted as `git push origin main` instead of "persist the work locally so it survives." A confidential IP assessment was pushed to a public repository visible to Brian's boss. The correct action was to write the file locally and confirm before any remote operation. General rule: when a directive is ambiguous between a reversible action (local save) and an irreversible action (public push), always choose reversible and confirm.
+
+---
+
+## L-00199
+Type: process_rule
+Tags: build-loop, knowledge-system, async, critical-path
+Confidence: high
+Status: active
+Date: 2026-03-07T23:00:00-05:00
+Related: L-00001 (related_to)
+
+Knowledge extraction from builds must be entirely async and post-hoc. The build loop's critical path is sacred. Any extraction added to the critical path (even lightweight) compounds across a 45-feature campaign into meaningful wall-time loss. The correct insertion point is the eval sidecar — it already runs async after each commit.
+
+---
+
+## L-00200
+Type: process_rule
+Tags: knowledge-graph, architecture, sqlite, graphrag
+Confidence: high
+Status: active
+Date: 2026-03-07T23:00:00-05:00
+Related: L-00199 (requires)
+
+The typed knowledge graph uses SQLite + FTS5 + embeddings, NOT Microsoft GraphRAG. GraphRAG discovers structure via community detection on unknown corpora. Superloop's structure is already known (universal → framework → technology → instance). Typed edges (instance_of, generalizes_to, requires, conflicts_with, supersedes, caused_by) are written explicitly at extraction time, not discovered. SQLite is portable, zero-infra, and continuously writable without reindexing.
+
+---
+
+## L-00201
+Type: process_rule
+Tags: knowledge-graph, synthesis, preprocessing, build-loop
+Confidence: medium
+Status: planned
+Date: 2026-03-07T23:00:00-05:00
+Related: L-00200 (instance_of)
+Related: L-00199 (requires)
+
+Implementation order for knowledge graph: write path first (knowledge_store.py + sidecar extension), read path second (spec_preprocessor.py). A preprocessor with an empty knowledge base is a no-op. Get data accumulating before building the read path. BFS on dependency chain + semantic similarity + BM25 keyword pass → synthesis call → inject as "Build Intelligence" section in spec.

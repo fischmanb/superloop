@@ -1,3 +1,62 @@
+# SitDeck — Prompt 1: Generate Roadmap
+
+> Paste this entire prompt into the Claude for Mac Code tab.
+> Run this first. Do not run Prompt 2 until roadmap.md has content and this prompt's commit exists.
+
+---
+
+## Hard Constraints
+
+- These instructions override any conflicting guidance in CLAUDE.md or other repo-level files.
+- Follow the numbered steps IN ORDER. Do not explore or investigate files speculatively.
+- You may ONLY modify these files: compstak-sitdeck/.specs/roadmap.md, Agents.md, py/auto_sdd/data/general-estimates.jsonl
+- You may ONLY create these new files: none
+- You may NOT run npm, yarn, pip, brew, or any package manager command
+- You may NOT delete any files
+- You may read any file necessary for this task. Before reading, state which file and why.
+- If you encounter ANYTHING unexpected — files not matching descriptions, missing paths, structure differences — STOP IMMEDIATELY. Report exactly what you found. Take no further action.
+- If ANY verification step fails, STOP IMMEDIATELY. Do not commit. Report the failure.
+- Before committing, run `git diff --stat` and verify ONLY the allowed files appear. If ANY other file appears, STOP.
+
+---
+
+## Preconditions
+
+```bash
+cd ~/auto-sdd
+git checkout main
+git log --oneline -1
+# Expected HEAD: f74fcda add: compstak-sitdeck project scaffold
+# If HEAD does not match, STOP IMMEDIATELY.
+
+git fetch origin
+git log --oneline origin/main..main
+# Expected: empty. If any commits appear, STOP. Brian must push before proceeding.
+
+git checkout -b claude/sitdeck-roadmap-$(openssl rand -hex 3)
+
+ls compstak-sitdeck/.specs/vision.md
+wc -l compstak-sitdeck/.specs/vision.md
+# Expected: file exists, ~497 lines. If missing or empty, STOP.
+
+ls compstak-sitdeck/.specs/roadmap.md
+wc -l compstak-sitdeck/.specs/roadmap.md
+# Expected: file exists. Contents may be blank — that is correct. Do not STOP for a blank file.
+```
+
+Report: branch forked from, HEAD hash confirmed.
+
+---
+
+## Implementation
+
+1. Read `compstak-sitdeck/.specs/vision.md` in full.
+2. Locate the Widget Catalog section. Confirm all 44 named widgets are present. If fewer than 44 are found, STOP and report.
+3. Do NOT invent, decompose, or rename widgets. Transcribe the widget list exactly as written in vision.md.
+4. Write `compstak-sitdeck/.specs/roadmap.md` using exactly this structure:
+
+---
+
 # SitDeck Product Roadmap
 
 > A widget-based CRE intelligence dashboard built on CompStak lease, sales, and property data.
@@ -15,12 +74,12 @@
 
 | Status | Count |
 |--------|-------|
-| ✅ Completed | 2 |
+| ✅ Completed | 0 |
 | 🔄 In Progress | 0 |
-| ⬜ Pending | 43 |
+| ⬜ Pending | 44 |
 | ⏸️ Blocked | 0 |
 
-**Last updated**: 2026-03-07
+**Last updated**: [today's date]
 
 ---
 
@@ -28,8 +87,7 @@
 
 | # | Widget | Category | Data | Complexity | Deps | Status |
 |---|--------|----------|------|------------|------|--------|
-| 0 | Project Setup | Infrastructure | - | L | - | ✅ |
-| 1 | CRE Property Map | Map | Leases + Sales | L | - | ✅ |
+| 1 | CRE Property Map | Map | Leases + Sales | L | - | ⬜ |
 | 2 | Market Map | Map | Leases | M | 1 | ⬜ |
 | 3 | Portfolio Map | Map | Leases + Sales | M | 1 | ⬜ |
 | 4 | Rent Optimizer | Rent & Pricing | Leases | L | - | ⬜ |
@@ -87,7 +145,6 @@
 ---
 
 ## Status Legend
-
 | Symbol | Meaning |
 |--------|---------|
 | ✅ | Completed |
@@ -96,7 +153,6 @@
 | ⏸️ | Blocked |
 
 ## Complexity Legend
-
 | Size | Scope |
 |------|-------|
 | S | 1–3 files, single component |
@@ -104,7 +160,79 @@
 | L | 7–15 files, full feature |
 
 ## Notes
-
 - Phase 1: DuckDB queries against snowflake-full-leases and snowflake-full-sales CSVs
 - Phase 2: AI widgets call OpenAI gpt-4.1-nano via tRPC routes
 - Phase 3: External feed integrations — implement stubs with placeholder data first
+
+---
+
+5. Add a round entry to `Agents.md`:
+   - What was asked: generated SitDeck roadmap.md from vision.md
+   - What was changed: compstak-sitdeck/.specs/roadmap.md
+   - What was NOT changed: vision.md, features/, all scripts, all lib/, all tests/
+   - Verification: counts below
+
+---
+
+## Verification
+
+```bash
+grep -c "^| [0-9]" compstak-sitdeck/.specs/roadmap.md
+# Expected: 44
+
+grep "Phase 1\|Phase 2\|Phase 3" compstak-sitdeck/.specs/roadmap.md
+# Expected: all 3 phase headers present
+
+git diff --stat
+# Expected: compstak-sitdeck/.specs/roadmap.md and Agents.md only
+# If ANY other file appears, STOP. Do not commit.
+```
+
+---
+
+## Token Usage Report
+
+```bash
+cd py && .venv/bin/python -c "
+from auto_sdd.lib.general_estimates import get_session_actual_tokens, append_general_estimate
+from datetime import datetime, timezone
+t = get_session_actual_tokens()
+est = 12000
+active = t['active_tokens']
+cumulative = t['cumulative_tokens']
+err = round((est - active) / active * 100, 1) if active else 0
+print('=== TOKEN USAGE REPORT ===')
+print(f'activity_type: sitdeck-roadmap-gen')
+print(f'estimated_tokens_pre: {est}')
+print(f'actual_tokens_data: {t}')
+print(f'active_tokens (input+output): {active}')
+print(f'cumulative_tokens (incl cache): {cumulative}')
+print(f'estimation_error_pct: {err}')
+print(f'source: {t[\"source\"]}')
+append_general_estimate({
+    'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+    'activity_type': 'sitdeck-roadmap-gen',
+    'estimated_tokens_pre': est,
+    'active_tokens': active,
+    'cumulative_tokens': cumulative,
+})
+print('=== END REPORT ===')
+" && cd ..
+```
+
+---
+
+## Commit
+
+```bash
+git add compstak-sitdeck/.specs/roadmap.md Agents.md py/auto_sdd/data/general-estimates.jsonl
+# Do NOT use git add -A or git add .
+git commit -m "feat: generate SitDeck roadmap.md — 44 widgets across 3 phases"
+# Do NOT merge to main. Do NOT push.
+```
+
+Report: branch name and commit hash.
+
+---
+
+Report your findings immediately upon completion. Do not wait for a follow-up question.

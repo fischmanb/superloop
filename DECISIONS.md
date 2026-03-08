@@ -540,3 +540,15 @@
 **Decision:** Run Adrian's SitDeck vision through Superloop as the first campaign with full CIS vector population. ~70 features.
 **Why:** Produces CIS training data for Rounds 5-6. Demonstrates Superloop to Adrian on his own product vision. Professionally relevant (CompStak's product). Fresh project avoids stakd's known architecture issues.
 **Rejected:** Re-running stakd (known transitive import bug, 28 features already built without vectors). Backfilling CRE data (only 3 features, ~40% vector coverage, insufficient for ML model). Synthetic data (validates code but not real-world signal quality).
+
+## 2026-03-07 — Knowledge graph: typed explicit graph over GraphRAG, SQLite over vector-only store
+
+**Decision:** The inter-build knowledge system uses a typed knowledge graph (SQLite + FTS5 + Anthropic embeddings) with explicit edge types written at extraction time. NOT Microsoft GraphRAG, NOT flat RAG.
+**Why:** Flat RAG retrieves similar mistakes (purely reactive). GraphRAG does community detection on unknown document structure (overkill — our structure is already known: universal → framework → technology → instance). Typed edges (instance_of, generalizes_to, requires, conflicts_with, supersedes, caused_by) encode structural relationships that vector search cannot. SQLite is portable, zero-infra, continuously writable without reindexing. BFS on known dependency chain + semantic similarity + BM25 keyword → synthesis call produces prescriptive, not just reactive, injection.
+**Alternatives rejected:** Flat RAG (reactive only, no structural relationships). GraphRAG (designed for unknown structure, community detection overkill). Pure vector store (loses structural edges, can't traverse known dependency graph). Neo4j / graph DB (external infra, adds operational burden for marginal benefit at current scale).
+
+## 2026-03-07 — Write path before read path (knowledge graph implementation order)
+
+**Decision:** Implement knowledge_store.py (write path via eval sidecar extension) before spec_preprocessor.py (read path). Ship write path first, read path second.
+**Why:** A preprocessor with an empty knowledge base is a no-op. Getting data accumulating first means the read path launches with real signal, not synthetic examples. Both paths are independent — write path adds zero latency (async sidecar), read path is a pre-build hook. The write path is also simpler: structured extraction → SQLite writes → embedding calls. The read path requires BFS + semantic + BM25 merge + synthesis call and is more complex to test without real data.
+**Alternatives rejected:** Read path first (nothing to read). Both simultaneously (overcomplicates first agent prompt). Synthetic seeding for read path validation (delays real signal).

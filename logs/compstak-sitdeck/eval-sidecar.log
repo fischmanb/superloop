@@ -1,0 +1,196 @@
+[15:54:44] [eval-sidecar] === Eval Sidecar Starting ===
+[15:54:44] [eval-sidecar] PROJECT_DIR:    /Users/brianfischman/auto-sdd/compstak-sitdeck
+[15:54:44] [eval-sidecar] EVAL_INTERVAL:  30s
+[15:54:44] [eval-sidecar] EVAL_AGENT:     true
+[15:54:44] [eval-sidecar] EVAL_MODEL:     <default>
+[15:54:44] [eval-sidecar] EVAL_OUTPUT_DIR: /Users/brianfischman/auto-sdd/logs/compstak-sitdeck/evals
+[15:54:44] [eval-sidecar] ==============================
+[15:54:44] [eval-sidecar] Starting from commit: b9614e2b
+[16:13:46] [eval-sidecar] Evaluating 07d6baad: feat(F-000): Project Setup — Next.js 15 + DuckDB + SQLite + tRPC scaffold
+[16:13:47] [eval-sidecar] Running agent eval for 07d6baad...
+## Commit Evaluation: F-000 Project Setup
+
+### Framework Compliance
+
+**Spec:** Present and well-formed with correct YAML frontmatter, Gherkin scenarios, and ASCII mockup. Roadmap updated correctly. Mapping regenerated.
+
+**Tests:** Zero test files in the diff. The `tests` frontmatter field lists `scripts/generate-mapping.sh` — a utility script, not a test suite. CLAUDE.md workflow requires failing tests before implementation. Status is marked `implemented` without a `tested` phase.
+
+**Implementation Rules Violations:**
+- `WidgetGrid.tsx` is explicitly a placeholder ("Add widgets to your deck") with no `react-grid-layout` wiring — CLAUDE.md: *"NO placeholder UI. Components must be wired to real data sources."*
+- `DeckFilterBar.tsx` maintains its own local `useState` for market/propertyType/dateRange but never reads from or writes to the Zustand `useDeckStore` — the component is disconnected from the state layer.
+- `initDuckDBViews()` is defined but never called from any server component or startup path.
+
+### Integration Quality
+
+**Issues found:**
+1. `lib/db/duckdb.ts:10` hardcodes a machine-specific fallback: `process.env.HOME ?? "/Users/brianfischman"` — will fail on any other machine or CI.
+2. `DeckFilterBar` has its own isolated state; deck filter changes are never propagated to the store or any data layer.
+3. `pages/_document.tsx` + `pages/_error.tsx` introduce Pages Router files into an App Router project — acknowledged as a build workaround in Agents.md, but fragile.
+4. `next-env.d.ts` references `.next/types/routes.d.ts` (build artifact) which is gitignored — type-check in CI may fail on clean checkout.
+5. `WidgetGrid` imports `"use client"` but provides zero widget functionality.
+
+**Positives:** `serverExternalPackages` correctly configured, tRPC + client boundary handled properly, SQLite schema migration is solid, Tailwind CSS 4 design tokens match the token spec.
+
+### Repeated Mistakes
+
+- Placeholder UI committed despite explicit CLAUDE.md prohibition — this is a known failure pattern from `learnings/`.
+
+---
+
+EVAL_COMPLETE: true
+EVAL_FRAMEWORK_COMPLIANCE: warn
+EVAL_SCOPE_ASSESSMENT: focused
+EVAL_INTEGRATION_QUALITY: minor_issues
+EVAL_REPEATED_MISTAKES: placeholder_ui
+EVAL_NOTES: Spec and build verified but no tests written, WidgetGrid is prohibited placeholder UI, DeckFilterBar state is disconnected from Zustand store, and duckdb.ts hardcodes a machine-specific fallback path that will break on other environments.
+[16:14:54] [eval-sidecar] ✓ Eval complete for 07d6baad → /Users/brianfischman/auto-sdd/logs/compstak-sitdeck/evals/eval-project-setup-u2014-next.js-15-duckdb-sqlite-trpc-scaffold.json
+[16:57:59] [eval-sidecar] Evaluating 1db35d82: fix: replace hardcoded HOME fallback in duckdb.ts with SITDECK_DATA_DIR env var
+[16:57:59] [eval-sidecar] Running agent eval for 1db35d82...
+Reviewing commit `1db35d8` against project standards.
+
+**What changed:**
+- `lib/db/duckdb.ts`: Replaced `process.env.HOME ?? "/Users/brianfischman"` with `SITDECK_DATA_DIR` env var + HOME fallback that throws if neither is available
+- `.specs/features/infrastructure/F-000-project-setup.feature.md`: Implementation notes updated to match new behavior
+
+**Assessment:**
+
+**Framework Compliance**: Spec and code are updated together — the implementation note in the feature spec now accurately describes the env var resolution logic. No new behavior was introduced without a spec update.
+
+**Scope Discipline**: Single atomic fix — one code change, one corresponding spec update. No scope creep.
+
+**Integration Quality**: The IIFE pattern `(() => { ... })()` is functional but slightly unusual — a named helper or a simple conditional block would be more idiomatic. The error message is descriptive. The logic is correct: `SITDECK_DATA_DIR` takes priority, then HOME-based default, then throw. No import changes needed.
+
+**Repeated Mistakes**: None. The original hardcode of `/Users/brianfischman` was the anti-pattern; this commit removes it. The fix aligns with L-00130 (design for context loss / portability across environments).
+
+---
+
+EVAL_COMPLETE: true
+EVAL_FRAMEWORK_COMPLIANCE: pass
+EVAL_SCOPE_ASSESSMENT: focused
+EVAL_INTEGRATION_QUALITY: clean
+EVAL_REPEATED_MISTAKES: none
+EVAL_NOTES: Tight, correct fix — removes hardcoded developer path, adds env var with safe fallback and clear error; spec updated in sync.
+[16:58:18] [eval-sidecar] ✓ Eval complete for 1db35d82 → /Users/brianfischman/auto-sdd/logs/compstak-sitdeck/evals/eval-replace-hardcoded-home-fallback-in-duckdb.ts-with-sitdeck_data_dir-env-var.json
+[16:59:18] [eval-sidecar] Shutting down (evaluated 2 commits, 0 errors)...
+[16:59:18] [eval-sidecar] Generating campaign summary...
+
+[16:59:18] [eval-sidecar] ╔══════════════════════════════════════════════╗
+[16:59:18] [eval-sidecar] ║         EVAL CAMPAIGN SUMMARY                ║
+[16:59:18] [eval-sidecar] ╠══════════════════════════════════════════════╣
+[16:59:18] [eval-sidecar] ║ Total features evaluated: 2
+[16:59:18] [eval-sidecar] ║ Type redeclarations:      0
+[16:59:18] [eval-sidecar] ╠══════════════════════════════════════════════╣
+[16:59:18] [eval-sidecar] ║ Framework Compliance:
+[16:59:18] [eval-sidecar] ║   pass: 1  warn: 1  fail: 0
+[16:59:18] [eval-sidecar] ║ Scope Assessment:
+[16:59:18] [eval-sidecar] ║   focused: 2  moderate: 0  sprawling: 0
+[16:59:18] [eval-sidecar] ║ Integration Quality:
+[16:59:18] [eval-sidecar] ║   clean: 1  minor: 1  major: 0
+[16:59:18] [eval-sidecar] ╠══════════════════════════════════════════════╣
+[16:59:19] [eval-sidecar] ║ Features with issues: 1
+[16:59:19] [eval-sidecar] ║   - Project Setup \\u2014 Next.js 15 + DuckDB + SQLite + tRPC scaffold
+[16:59:19] [eval-sidecar] ╚══════════════════════════════════════════════╝
+[16:59:19] [eval-sidecar] Campaign file: /Users/brianfischman/auto-sdd/logs/compstak-sitdeck/evals/eval-campaign-20260307-215918.json
+[16:59:27] [eval-sidecar] === Eval Sidecar Starting ===
+[16:59:27] [eval-sidecar] PROJECT_DIR:    /Users/brianfischman/auto-sdd/compstak-sitdeck
+[16:59:27] [eval-sidecar] EVAL_INTERVAL:  30s
+[16:59:27] [eval-sidecar] EVAL_AGENT:     true
+[16:59:27] [eval-sidecar] EVAL_MODEL:     <default>
+[16:59:27] [eval-sidecar] EVAL_OUTPUT_DIR: /Users/brianfischman/auto-sdd/logs/compstak-sitdeck/evals
+[16:59:27] [eval-sidecar] ==============================
+[16:59:27] [eval-sidecar] Starting from commit: 1db35d82
+[17:00:27] [eval-sidecar] Evaluating 57ca15f1: feat(F-000): Project Setup — Next.js 15 + DuckDB + SQLite + tRPC scaffold
+[17:00:27] [eval-sidecar] Running agent eval for 57ca15f1...
+## Commit Review: `57ca15f` — F-000 Project Setup Scaffold
+
+### Framework Compliance (SDD Workflow)
+
+**Positive:**
+- Feature spec created at `.specs/features/infrastructure/F-000-project-setup.feature.md` with proper Gherkin scenarios, YAML frontmatter, and ASCII mockup ✅
+- `.specs/roadmap.md` updated to mark F-000 as ✅ completed ✅
+- `.specs/mapping.md` regenerated with F-000 entry ✅
+- `Agents.md` round log included with verification results ✅
+- Build verification documented: `npx tsc --noEmit` passes, `NODE_ENV=production npm run build` passes ✅
+
+**Concern:**
+- Per CLAUDE.md: spec → **failing tests** → implement → tests pass. The spec's `tests:` frontmatter lists only `scripts/generate-mapping.sh` (a shell utility, not a test), and no actual test files were written. The feature was committed at `status: implemented` without a testing step. This skips the middle layer of SDD entirely. **WARN**
+
+---
+
+### Scope Assessment
+
+All files are legitimately part of "project setup": Next.js config, app shell, DB modules, tRPC, Zustand, PostCSS, `.gitignore`, `pages/` router compatibility shims. No unrelated concerns mixed in. **FOCUSED**
+
+---
+
+### Integration Quality
+
+**Issues found:**
+
+1. **`components/DeckFilterBar.tsx` — disconnected state**: The component maintains its own `useState` for `market`, `propertyType`, and `dateRange`, but `lib/store/deck.ts` (`useDeckStore`) already defines exactly these same fields and provides `updateDeckFilters`. The DeckFilterBar never imports or calls the store. Per CLAUDE.md: *"NO placeholder UI. Components must be wired to real data sources."* Filter changes are silently dropped; the deck store is never updated. **MINOR ISSUE**
+
+2. **`lib/db/duckdb.ts:10` — hardcoded HOME fallback**: `process.env.HOME ?? "/Users/brianfischman"`. This was caught and corrected in the immediately following commit (`3c719e4`), but it exists in this commit. Reduces portability for any other developer. **MINOR**
+
+3. **`app/not-found.tsx:1` — `export const dynamic = "force-dynamic"`**: This is technically a workaround for the SSR build issue described in `Agents.md`. Acceptable for a scaffold, but it's worth noting it disables static optimization for the 404 page.
+
+4. All client components (`DeckFilterBar`, `WidgetGrid`) use `"use client"` and correctly avoid importing server-only modules. Transitive import chain is clean. ✅
+
+5. `serverExternalPackages: ["better-sqlite3", "duckdb"]` correctly configured in `next.config.ts`. ✅
+
+---
+
+### Repeated Mistakes Check
+
+- **L-00012** (client→server import chain): No violations found ✅
+- **L-00011** (agents work around failures): The hardcoded HOME path is borderline, but was caught in the next commit, not buried
+- No other core learnings are violated
+
+---
+
+EVAL_COMPLETE: true
+EVAL_FRAMEWORK_COMPLIANCE: warn
+EVAL_SCOPE_ASSESSMENT: focused
+EVAL_INTEGRATION_QUALITY: minor_issues
+EVAL_REPEATED_MISTAKES: none
+EVAL_NOTES: Solid scaffold; SDD skipped test-writing step (status:implemented without tests); DeckFilterBar local state not wired to Zustand store; hardcoded HOME path in duckdb.ts (corrected in next commit)
+[17:01:25] [eval-sidecar] ✓ Eval complete for 57ca15f1 → /Users/brianfischman/auto-sdd/logs/compstak-sitdeck/evals/eval-project-setup-u2014-next.js-15-duckdb-sqlite-trpc-scaffold.json
+[17:10:56] [eval-sidecar] Evaluating 5f6e41e0: feat(F-001): CRE Property Map — Mapbox GL widget with DuckDB lease/sales/property layers
+[17:10:56] [eval-sidecar] Running agent eval for 5f6e41e0...
+## Evaluation
+
+### Framework Compliance: **WARN**
+
+The SDD workflow requires: Spec → Tests (failing) → Implement. This commit skips tests entirely:
+- `tests: []` in spec frontmatter — no tests written
+- Spec `status: implemented` jumps past `tested` phase
+- No test files exist anywhere in the repo
+
+The spec itself is well-formed (YAML frontmatter, 6 Gherkin scenarios, ASCII mockup, acceptance criteria, API readiness notes, learnings section). The mapping.md and roadmap.md are properly updated. The process gap is the missing test layer.
+
+### Scope: **Focused**
+
+All changes serve one feature: CRE Property Map. The DeckFilterBar refactor from local state to Zustand is necessary for the map to respond to deck filters — not scope creep.
+
+### Integration Quality: **Minor Issues**
+
+- `mapRef` typed as `any` with eslint-disable comments (6 occurrences) — acceptable workaround for dynamic import typing, but could use `mapboxgl.Map | null` with a type-only import
+- `MARKETS` array duplicated between `DeckFilterBar.tsx` and `CREPropertyMap.tsx` — should be a shared constant
+- Hardcoded hex colors (`#10b981`, `#3b82f6`, `#f97316`) for layer colors rather than design tokens — minor violation of CLAUDE.md token usage guidelines
+- Lease/sales query construction in `map.ts` is structurally repetitive (~80 lines duplicated) — acceptable for now but fragile to maintain
+- SSR boundary handled correctly: `{ ssr: false }` dynamic import for Mapbox, `initDuckDBViews()` called server-side only in tRPC router (L-00012 compliant, build confirms)
+- `keepPreviousData` imported from `@tanstack/react-query` (not deprecated v4 pattern) — correct
+
+### Repeated Mistakes: **None**
+
+No documented learnings are violated. L-00012 (client→server import chain) was correctly handled. Build verification was run and passes.
+
+---
+
+EVAL_COMPLETE: true
+EVAL_FRAMEWORK_COMPLIANCE: warn
+EVAL_SCOPE_ASSESSMENT: focused
+EVAL_INTEGRATION_QUALITY: minor_issues
+EVAL_REPEATED_MISTAKES: none
+EVAL_NOTES: Well-structured feature commit with clean SSR boundary handling; primary gap is skipped test phase (tests: [], status jumps spec→implemented), plus minor issues: duplicated MARKETS constant, hardcoded hex colors instead of design tokens, 6 eslint-disable any annotations on mapRef
+[17:11:56] [eval-sidecar] ✓ Eval complete for 5f6e41e0 → /Users/brianfischman/auto-sdd/logs/compstak-sitdeck/evals/eval-cre-property-map-u2014-mapbox-gl-widget-with-duckdb-lease-sales-property-layers.json

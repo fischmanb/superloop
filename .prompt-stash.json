@@ -1,4 +1,6 @@
 {
-  "timestamp": "2026-03-03T16:05:00Z",
-  "prompt": "Fresh onboard. Last chat reset completely, transcript appears gone. Brian updated what he could before prompting. Focus: testing (getting up to working order) the build loop and adjacent modules. Abnormal handoff."
+  "stashed_at": "2026-03-08T01:34:32.951257Z",
+  "prompt": "Great work. Checkpoint.",
+  "context": "Session: WIP knowledge-graph-build-intelligence.md written. superloop.pptx 8-slide deck created for Mag-7 ML/SW engineers dinner.",
+  "action": "checkpoint"
 }

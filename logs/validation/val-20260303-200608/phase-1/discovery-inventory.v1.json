@@ -1,0 +1,1 @@
+{"status": "DISCOVERY_COMPLETE", "routes_found": [{"url": "/"}, {"url": "/about"}], "navigation_graph": {"/": ["/about"]}, "global_issues": [], "unreachable_dead_ends": []}

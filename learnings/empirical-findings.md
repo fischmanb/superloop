@@ -229,3 +229,14 @@ Agents that recover from unmet preconditions are more robust but break dependenc
 - **Related:** L-00145, L-00148
 
 Cumulative token metrics (including cache reads) and active tokens (input + output) measure fundamentally different things and must never be compared or conflated. A 61-API-call session reported 3,174,082 cumulative tokens — 87.6% were cache reads (the same conversation context re-sent and cached on each call). Active tokens were ~31.5k. Reporting the cumulative number against a 9,380 scope estimate made the estimate look 337x wrong when it was actually 3.4x wrong. The fix: `get_session_actual_tokens()` now returns both `active_tokens` and `cumulative_tokens` as separate fields. Scope estimates compare against `active_tokens`. Billing analysis uses `cumulative_tokens`. Mixing them poisons calibration data.
+
+---
+
+## L-00202
+Type: empirical_finding
+Tags: presentation, pptx, tooling, rapid-delivery
+Confidence: high
+Status: active
+Date: 2026-03-07T23:00:00-05:00
+
+PptxGenJS via node produces a polished, dark-theme technical deck in a single response when given well-structured session context. A Mag-7-level audience (ML + SW engineers) responds better to: (1) stat callouts over prose, (2) architecture diagrams over bullets, (3) NOW vs PLANNED contrast frames over abstract future state descriptions. Deck took ~6 minutes start to finish including QA iteration.

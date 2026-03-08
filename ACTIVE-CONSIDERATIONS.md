@@ -6,7 +6,7 @@
 
 ---
 
-### Priority stack (updated 2026-03-07)
+### Priority stack (updated 2026-03-07 — post WIP + deck session)
 
 Ordered by efficiency gain per complexity added:
 
@@ -41,6 +41,14 @@ Ordered by efficiency gain per complexity added:
 6. **Extract `errors.py`/`signals.py`/`state.py` from `reliability.py` monolith** — Conventions specify these modules but Phase 1 inlined them. Low urgency.
 7. **Local model integration** — Replace cloud API with local LM Studio on Mac Studio. Reference: `archive/local-llm-pipeline/`. *Not started.*
 8. **Adaptive routing / parallelism** — Only if data from campaigns justifies complexity. *Deprioritized.*
+
+### Knowledge graph build intelligence — DESIGNED, NOT STARTED
+
+- **WIP:** `WIP/knowledge-graph-build-intelligence.md` (207 lines, committed this session)
+- **Write path (next):** `py/knowledge_store.py` — SQLite + FTS5 + embeddings, typed nodes/edges. Extend eval sidecar to write `feature_outcomes` + candidate nodes. Zero critical-path impact.
+- **Read path (after):** `py/spec_preprocessor.py` — BFS + semantic + BM25 + synthesis call → injects "Build Intelligence" into each spec before agent sees it. Wired via single line in `build-loop-local.sh`.
+- **Implementation order:** write path first (get data accumulating), read path second (preprocessor with empty DB is no-op, which is fine).
+- **Storage:** `~/.auto-sdd/knowledge.db` — global, shared across all campaigns.
 
 ### Other active items
 

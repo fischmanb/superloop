@@ -1,0 +1,24 @@
+{
+  "eval_timestamp": "2026-03-07T22:01:25Z",
+  "mechanical": {
+  "commit": "57ca15f11fc7348a4a35e798f30c9f660d6538e8",
+  "feature_name": "Project Setup \u2014 Next.js 15 + DuckDB + SQLite + tRPC scaffold",
+  "files_changed": 31,
+  "files": [".gitignore",".specs/features/infrastructure/F-000-project-setup.feature.md",".specs/mapping.md",".specs/roadmap.md","Agents.md","app/api/trpc/[trpc]/route.ts","app/dashboard/page.tsx","app/globals.css","app/layout.tsx","app/not-found.tsx","app/page.tsx","components/DeckFilterBar.tsx","components/NavBar.tsx","components/WidgetGrid.tsx","data/.gitkeep","lib/db/duckdb.ts","lib/db/sqlite.ts","lib/store/deck.ts","lib/trpc/client.ts","lib/trpc/router.ts","lib/trpc/server.ts","lib/validation.sh","next-env.d.ts","next.config.ts","package-lock.json","package.json","pages/_document.tsx","pages/_error.tsx","postcss.config.mjs","scripts/generate-mapping.sh","tsconfig.json"],
+  "lines_added": 9908,
+  "lines_removed": 3,
+  "new_type_exports": 4,
+  "type_redeclarations": 0,
+  "redeclared_type_names": [],
+  "import_count": 27,
+  "test_files_touched": true
+},
+  "agent_eval_available": true,
+  "agent_eval": {
+    "framework_compliance": "warn",
+    "scope_assessment": "focused",
+    "integration_quality": "minor_issues",
+    "repeated_mistakes": "none",
+    "eval_notes": "Solid scaffold; SDD skipped test-writing step (status:implemented without tests); DeckFilterBar local state not wired to Zustand store; hardcoded HOME path in duckdb.ts (corrected in next commit)"
+  }
+}
