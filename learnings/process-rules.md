@@ -829,7 +829,7 @@ When fixing a detection gap, do not add the specific missing filename or tool to
 ID: L-00209
 Type: node
 Tags: max_features, project-yaml, sdd-config, hardcoded-count, roadmap, runtime-vs-config, campaign-cap
-Confidence: high — hardcoded 44 matches pending count at time of writing; any roadmap change makes it stale
+Confidence: high
 Status: active
 Date: 2026-03-08T00:00:00-05:00
 Related: L-00207 (related_to)

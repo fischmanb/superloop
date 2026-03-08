@@ -46,15 +46,15 @@ For each candidate, check: is this already captured by an existing L- or M-entry
 For each new learning, output in graph schema format:
 
 ```
-## L-NNNNN — [title]
+## L-NNNNN
 Type: [type]
-Tags: [concrete, searchable, space-separated tags]
-Confidence: [high/medium/low] — [one-line justification]
+Tags: [concrete, searchable tags]
+Confidence: [high/medium/low]
 Status: active
 Date: [today]
 Related: [L-NNNNN, M-NNNNN references]
 
-[Body text. Be specific. Include concrete details from the session — commands, numbers, exact failure modes. A learning that could apply to any project is too vague.]
+[Body text. Specific. Concrete details — commands, file names, exact failure modes. No examples unless the example is code. A learning that could apply to any project is too vague.]
 ```
 
 ### Title field — critical authoring rule

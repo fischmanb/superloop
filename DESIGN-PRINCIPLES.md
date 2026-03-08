@@ -102,6 +102,10 @@ The title is the primary navigational surface for any agent that has never encou
 
 ---
 
+### Confidence
+
+`high`, `medium`, or `low` — single word only. No prose, no justification inline. Justification belongs in the body.
+
 ### Tags — authoring rule
 
 Tags are the primary searchable surface of a learning. They must name the **actual things involved**: flag names, file names, commands, system components, specific APIs. Abstract category words (`bad-abstraction`, `conflation`, `static-count`) are not tags — they describe the type of mistake but not the mistake itself. A future reader searching for what broke must be able to find the entry via its tags.
@@ -141,3 +145,9 @@ This file is a constitution, not a changelog. It should be short, stable, and au
 - **Adding a principle**: Rare. Must apply project-wide, not just to one subsystem.
 - **Adding an edge type**: Requires justification that none of the existing four cover the relationship. Brian approves.
 - **Updating "When to apply"**: As new subsystems ship (validation pipeline, learnings system), update the selective application guidance.
+
+---
+
+## 5. Command design rule
+
+Before designing any `.claude/commands/` file that wraps, replaces, or incorporates existing commands or protocols, read every file it subsumes. Designing from in-context inference about what a protocol contains produces incomplete designs that require correction. This applies to `!wrap`, `!checkpoint`, `!learn`, and any future compound commands.

@@ -374,7 +374,7 @@ The lint miss was observed in the build log while diagnosing the EVAL_OUTPUT_DIR
 ID: L-00208
 Type: node
 Tags: AUTO_APPROVE, SKIP_PREFLIGHT, pre-flight-review, project-yaml, human-gate, flag-scope, campaign-config
-Confidence: high — observed directly: auto_approve:true in project.yaml suppressed the human review prompt on every launch
+Confidence: high
 Status: active
 Date: 2026-03-08T00:00:00-05:00
 Related: L-00207 (related_to)

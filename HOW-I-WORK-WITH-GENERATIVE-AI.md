@@ -1039,7 +1039,7 @@ Brian thinks beyond the immediate run when evaluating test infrastructure decisi
 
 - **Type:** principle
 - **Tags:** learnings, tags, searchability, abstract-labels, chat-correction, knowledge-capture
-- **Confidence:** high — direct correction in chat; Brian caught it immediately and generalized it
+- **Confidence:** high
 - **Status:** active
 - **Date:** 2026-03-08
 - **Related:** L-00208 (related_to), L-00209 (related_to)
