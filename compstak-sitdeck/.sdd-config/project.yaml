@@ -9,7 +9,7 @@ build_cmd: NODE_ENV=production next build
 test_cmd: npx vitest run --passWithNoTests
 lint_cmd: npm run lint
 build_model: claude-sonnet-4-6
-max_features: 100
+max_features: 44
 max_retries: 2
 agent_timeout: 1800
 auto_approve: true
