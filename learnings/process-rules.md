@@ -828,10 +828,10 @@ When fixing a detection gap, do not add the specific missing filename or tool to
 ## L-00209
 ID: L-00209
 Type: node
-Label: static-count-in-config
-Category: process-rules
-Severity: medium
+Tags: max_features, project-yaml, sdd-config, hardcoded-count, roadmap, runtime-vs-config, campaign-cap
+Confidence: high — hardcoded 44 matches pending count at time of writing; any roadmap change makes it stale
+Status: active
 Date: 2026-03-08T00:00:00-05:00
 Related: L-00207 (related_to)
 
-`max_features: 44` was hardcoded in `.sdd-config/project.yaml` to match the current pending feature count. This is wrong: it becomes stale the moment a feature is added or completed, silently capping the campaign at an arbitrary number. `MAX_FEATURES` is a runtime cap ("only build N features today"), not a project property. It does not belong in project.yaml. The correct default behavior is to build all pending features, derived at runtime by counting the roadmap. General principle: never hardcode a count that is derivable from a source of truth. Configuration files should declare policies, not snapshot counts.
+`max_features: 44` was written into `.sdd-config/project.yaml` to match the current pending feature count. This is wrong in two ways: (1) the count goes stale the moment a feature is added or completed, silently capping future campaigns at an arbitrary number with no warning; (2) `MAX_FEATURES` is a runtime cap ("only build N features today"), not a project property — it belongs at launch time, not in version-controlled config. The correct behavior when `MAX_FEATURES` is unset is to build all pending features, which the build loop derives at runtime from the roadmap. General rule: never hardcode a count that is derivable from a source of truth. Config files declare policies (how to build, what model to use, how many retries); they do not snapshot counts that change as the project evolves.

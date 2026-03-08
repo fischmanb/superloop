@@ -45,15 +45,27 @@ For each new learning, output in graph schema format:
 
 ```
 ## L-NNNNN
-- **Type:** [type]
-- **Tags:** [relevant tags]
-- **Confidence:** [high/medium/low] — [one-line justification]
-- **Status:** active
-- **Date:** [today]
-- **Related:** [L-NNNNN, M-NNNNN references]
+Type: [type]
+Tags: [concrete, searchable, space-separated tags]
+Confidence: [high/medium/low] — [one-line justification]
+Status: active
+Date: [today]
+Related: [L-NNNNN, M-NNNNN references]
 
 [Body text. Be specific. Include concrete details from the session — commands, numbers, exact failure modes. A learning that could apply to any project is too vague.]
 ```
+
+### Tags field — critical authoring rule
+
+Tags are the primary searchable surface of a learning. They must be **concrete and specific**, not abstract categorizations.
+
+**Wrong:** `flag-conflation`, `static-count-in-config`, `bad-abstraction`
+These describe the *type* of mistake, not the mistake itself. A future reader searching for the actual problem won't find them.
+
+**Right:** `AUTO_APPROVE, SKIP_PREFLIGHT, pre-flight-review, project-yaml, human-gate`
+These are the actual tokens, flags, filenames, and concepts involved. A reader searching for any of them finds this entry.
+
+**Test:** Could someone find this learning by searching for the thing that broke? If not, the tags are wrong. Tags should answer: what were the specific flags, files, commands, or system components involved?
 
 ### 6. Confirmation
 

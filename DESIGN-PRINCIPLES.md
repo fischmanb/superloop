@@ -79,6 +79,15 @@ These principles apply unevenly across contexts. The goal is precision, not blan
 
 Defined here, enforced in all `learnings/` files. Same philosophy as the edge type schema — small fixed sets, specificity belongs in tags and body text.
 
+### Tags — authoring rule
+
+Tags are the primary searchable surface of a learning. They must name the **actual things involved**: flag names, file names, commands, system components, specific APIs. Abstract category words (`bad-abstraction`, `conflation`, `static-count`) are not tags — they describe the type of mistake but not the mistake itself. A future reader searching for what broke must be able to find the entry via its tags.
+
+- **Wrong:** `flag-conflation`, `static-count-in-config`
+- **Right:** `AUTO_APPROVE, SKIP_PREFLIGHT, pre-flight-review, project-yaml`
+
+Test: if someone searches for the specific flag, filename, or command that caused the problem, do the tags surface this entry?
+
 ### Confidence
 
 | Value | Meaning |
