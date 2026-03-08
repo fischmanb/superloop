@@ -72,7 +72,7 @@ from auto_sdd.lib.build_gates import (
     detect_test_check,
     should_run_step,
 )
-from auto_sdd.lib.claude_wrapper import ClaudeResult, run_claude
+from auto_sdd.lib.claude_wrapper import ClaudeResult, CreditExhaustionError, run_claude
 from auto_sdd.lib.drift import (
     CodeReviewResult,
     DriftCheckResult,
@@ -189,24 +189,6 @@ def _parse_token_usage(output: str) -> int | None:
         return int(total_match[-1])
 
     return None
-
-
-_CREDIT_RE = re.compile(
-    r"credit.{0,30}(balance|exhaust|insuffici|too low)|"
-    r"insufficient_quota|quota.{0,10}exceeded|"
-    r"402 Payment Required|payment required|"
-    r"credit_balance_too_low|your (api )?credit",
-    re.IGNORECASE,
-)
-
-
-def _is_credit_exhaustion(output: str) -> bool:
-    """Return True if output contains credit/billing exhaustion signals.
-
-    Uses tight patterns to avoid false positives from feature names that
-    contain the word 'credit' (e.g. 'Tenant Credit Indicators').
-    """
-    return bool(_CREDIT_RE.search(output))
 
 
 # Dependency directories to auto-detect for git clean exclusions.
@@ -1013,6 +995,9 @@ class BuildLoop:
                         cwd=self.project_dir,
                     )
                     build_result = result.output
+                except CreditExhaustionError:
+                    logger.error("API credits exhausted — halting build loop")
+                    raise SystemExit(1)
                 except Exception:
                     logger.exception("Agent invocation failed")
                     build_result = ""
@@ -1024,13 +1009,6 @@ class BuildLoop:
                 self.test_cmd = detect_test_check(self.project_dir, _env_str("TEST_CHECK_CMD", "") or None)
                 self.build_config.build_cmd = self.build_cmd
                 self.build_config.test_cmd = self.test_cmd
-
-                # Check for credit exhaustion
-                if _is_credit_exhaustion(build_result):
-                    logger.error(
-                        "API credits exhausted — halting build loop"
-                    )
-                    raise SystemExit(1)
 
                 # Check for "no features ready"
                 if "NO_FEATURES_READY" in build_result:

@@ -60,6 +60,7 @@ from auto_sdd.lib.reliability import (
 )
 from auto_sdd.lib.claude_wrapper import (
     ClaudeOutputError,
+    CreditExhaustionError,
     run_claude,
 )
 from auto_sdd.lib.convention_checks import run_convention_checks
@@ -100,25 +101,6 @@ class CampaignState:
     eval_errors: int = 0
     draining: bool = False
     shutdown_requested: bool = False
-
-
-# ── Credit exhaustion keywords ────────────────────────────────────────────────
-
-_CREDIT_KEYWORDS: list[str] = [
-    "credit",
-    "billing",
-    "insufficient_quota",
-    "quota exceeded",
-    "402 payment",
-    "429 too many",
-    "payment required",
-]
-
-
-def _is_credit_exhaustion(output: str) -> bool:
-    """Return True if *output* contains credit/billing exhaustion keywords."""
-    lower = output.lower()
-    return any(kw in lower for kw in _CREDIT_KEYWORDS)
 
 
 # ── Git helpers ───────────────────────────────────────────────────────────────
@@ -452,21 +434,20 @@ def _evaluate_commit(
                     agent_output = agent_output_file.read_text()
 
                 if agent_exit != 0:
-                    if _is_credit_exhaustion(agent_output):
-                        logger.warning(
-                            "API credits exhausted — disabling agent evals "
-                            "for remainder of run"
-                        )
-                        state.agent_evals_disabled = True
-                        agent_output = ""
-                    else:
-                        logger.warning(
-                            "Agent eval failed for %s (exit %d) — "
-                            "mechanical only",
-                            commit_short, agent_exit,
-                        )
-                        state.eval_errors += 1
-                        agent_output = ""
+                    logger.warning(
+                        "Agent eval failed for %s (exit %d) — "
+                        "mechanical only",
+                        commit_short, agent_exit,
+                    )
+                    state.eval_errors += 1
+                    agent_output = ""
+            except CreditExhaustionError:
+                logger.warning(
+                    "API credits exhausted — disabling agent evals "
+                    "for remainder of run"
+                )
+                state.agent_evals_disabled = True
+                agent_output = ""
             except AgentTimeoutError:
                 logger.warning(
                     "Agent eval timed out for %s — mechanical only",

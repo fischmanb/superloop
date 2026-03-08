@@ -26,7 +26,6 @@ from auto_sdd.scripts.build_loop import (
     FeatureRecord,
     _detect_dep_excludes,
     _format_duration,
-    _is_credit_exhaustion,
     _parse_signal,
     _parse_token_usage,
     _validate_required_signals,
@@ -123,17 +122,24 @@ class TestParseTokenUsage:
         assert _parse_token_usage("no tokens here") is None
 
 
-class TestIsCreditExhaustion:
-    """Tests for _is_credit_exhaustion."""
+class TestCreditExhaustionError:
+    """CreditExhaustionError is raised by claude_wrapper, not build_loop."""
 
-    def test_detects_credit_keyword(self) -> None:
-        assert _is_credit_exhaustion("Error: insufficient_quota reached")
+    def test_is_importable(self) -> None:
+        from auto_sdd.lib.claude_wrapper import CreditExhaustionError
+        assert issubclass(CreditExhaustionError, Exception)
 
-    def test_case_insensitive(self) -> None:
-        assert _is_credit_exhaustion("CREDIT exhausted")
+    def test_billing_regex_does_not_match_feature_names(self) -> None:
+        from auto_sdd.lib.claude_wrapper import _BILLING_RE
+        assert not _BILLING_RE.search("Tenant Credit Indicators")
+        assert not _BILLING_RE.search("FEATURE_BUILT: Tenant Credit Indicators")
 
-    def test_returns_false_for_normal_output(self) -> None:
-        assert not _is_credit_exhaustion("FEATURE_BUILT: auth")
+    def test_billing_regex_matches_api_errors(self) -> None:
+        from auto_sdd.lib.claude_wrapper import _BILLING_RE
+        assert _BILLING_RE.search("credit_balance_too_low")
+        assert _BILLING_RE.search("insufficient_quota")
+        assert _BILLING_RE.search("402 Payment Required")
+        assert _BILLING_RE.search("Your API credits are exhausted")
 
 
 class TestValidateRequiredSignals:

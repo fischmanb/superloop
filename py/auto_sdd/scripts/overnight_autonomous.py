@@ -55,6 +55,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from auto_sdd.lib.claude_wrapper import CreditExhaustionError
 from auto_sdd.lib.build_gates import (
     BuildCheckResult,
     agent_cmd,
@@ -140,16 +141,6 @@ def _validate_required_signals(build_result: str) -> bool:
 
 
 # ── Credit exhaustion detection ──────────────────────────────────────────────
-
-_CREDIT_RE = re.compile(
-    r"credit|billing|insufficient_quota|quota exceeded|402 payment|429 too many|payment required",
-    re.IGNORECASE,
-)
-
-
-def _is_credit_exhaustion(output: str) -> bool:
-    """Return True if output contains credit/billing exhaustion keywords."""
-    return bool(_CREDIT_RE.search(output))
 
 
 # ── Git helpers ──────────────────────────────────────────────────────────────
@@ -799,6 +790,8 @@ class OvernightRunner:
 
             try:
                 exit_code = run_agent_with_backoff(output_file, cmd)
+            except CreditExhaustionError:
+                raise AutoSddError("API credits exhausted — halting overnight run")
             except AgentTimeoutError:
                 logger.warning("Agent timed out for %s", feature_name)
                 exit_code = 1
@@ -813,12 +806,6 @@ class OvernightRunner:
                 logger.warning(
                     "Agent exited with code %d (will check signals for actual status)",
                     exit_code,
-                )
-
-            # Check for credit exhaustion
-            if _is_credit_exhaustion(build_result):
-                raise AutoSddError(
-                    "API credits exhausted — halting overnight run"
                 )
 
             # Check for NO_FEATURES_READY

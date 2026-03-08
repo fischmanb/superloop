@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -33,6 +34,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Billing-specific signals from the Anthropic API / Claude CLI stderr.
+# Intentionally narrow: must not match on feature names or build output.
+_BILLING_RE = re.compile(
+    r"credit_balance_too_low"
+    r"|insufficient_quota"
+    r"|quota.{0,10}exceeded"
+    r"|402 Payment Required"
+    r"|payment required"
+    r"|your (api )?credits? (are |is )?(exhausted|too low|insufficient|depleted)"
+    r"|billing.{0,20}error",
+    re.IGNORECASE,
+)
 
 # ---------------------------------------------------------------------------
 # Inline exception hierarchy (will move to errors.py in a later phase)
@@ -49,6 +63,16 @@ class AgentTimeoutError(AutoSddError):
 
 class ClaudeOutputError(AutoSddError):
     """Claude returned output that is not valid JSON or lacks a .result field."""
+
+
+class CreditExhaustionError(AutoSddError):
+    """Claude CLI exited with a billing/credit error.
+
+    Raised by ``run_claude()`` when the process exits non-zero and the
+    combined stderr+stdout contains billing-specific signals from the
+    Anthropic API (e.g. credit_balance_too_low, 402, payment required).
+    Callers should catch this explicitly and halt rather than retrying.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +269,13 @@ def run_claude(
             diag_parts.append(f"=== claude stdout ===\n{stdout}")
         diag = "\n".join(diag_parts)
         logger.error("WRAPPER_ERROR: %s", diag)
+        # Raise a dedicated error for billing failures so callers can halt
+        # without retrying, rather than scanning output text downstream.
+        combined = stderr + stdout
+        if _BILLING_RE.search(combined):
+            raise CreditExhaustionError(
+                f"API credit/billing error (exit {proc.returncode}): {combined[:300]}"
+            )
         raise subprocess.CalledProcessError(
             proc.returncode, cmd, output=stdout, stderr=stderr
         )
