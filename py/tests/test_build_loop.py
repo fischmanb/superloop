@@ -391,7 +391,7 @@ class TestBuildLoopRun:
     @patch("auto_sdd.scripts.build_loop.check_build")
     @patch("auto_sdd.scripts.build_loop.check_drift")
     @patch("auto_sdd.scripts.build_loop.extract_drift_targets")
-    @patch("auto_sdd.scripts.build_loop._get_head", side_effect=["abc123", "def456"])
+    @patch("auto_sdd.scripts.build_loop._get_head", side_effect=["abc123", "def456", "def456"])
     @patch("auto_sdd.scripts.build_loop.time")
     def test_retry_succeeds_on_second_attempt(
         self,

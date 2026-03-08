@@ -360,12 +360,18 @@ def run_mechanical_eval(
 def generate_eval_prompt(
     project_dir: Path,
     commit_hash: str,
+    retry_context_dir: Path | None = None,
 ) -> str:
     """Generate a prompt string for a fresh eval agent.
 
     Args:
         project_dir: Path to the git repository.
         commit_hash: The commit to evaluate.
+        retry_context_dir: Optional directory containing per-commit retry
+            context files (written by build_loop on features that needed
+            retries).  If a matching ``<short_hash>.retry.json`` file exists,
+            its contents are injected into the prompt so the eval agent can
+            assess what went wrong on earlier attempts.
 
     Returns:
         The prompt text for an eval agent.
@@ -412,6 +418,31 @@ def generate_eval_prompt(
     if learnings_path.is_file():
         learnings_content = learnings_path.read_text()
 
+    # Read retry context if available
+    retry_section = ""
+    if retry_context_dir is not None:
+        retry_file = retry_context_dir / f"{commit_hash[:8]}.retry.json"
+        if retry_file.is_file():
+            try:
+                import json as _json
+                ctx = _json.loads(retry_file.read_text())
+                lines = [
+                    f"## Retry Context",
+                    f"",
+                    f"This feature required **{ctx.get('total_attempts', '?')} attempt(s)** before passing all gates.",
+                    f"The following attempts failed:",
+                    f"",
+                ]
+                for fa in ctx.get("failed_attempts", []):
+                    lines.append(f"### Attempt {fa['attempt']} — build/gate output")
+                    lines.append(f"```")
+                    lines.append(fa.get("build_output", "").strip())
+                    lines.append(f"```")
+                    lines.append(f"")
+                retry_section = "\n".join(lines)
+            except Exception:
+                pass  # Silently skip malformed retry context
+
     prompt = f"""You are an eval agent reviewing commit {commit_hash}.
 
 IMPORTANT: do NOT modify any files, do NOT commit, do NOT ask for user input. You are read-only.
@@ -428,7 +459,7 @@ Review the following diff and assess the quality of this commit against the proj
 
 {learnings_content}
 
-## Diff to Review
+{retry_section}## Diff to Review
 
 {diff_content}
 
@@ -438,6 +469,7 @@ Review the following diff and assess the quality of this commit against the proj
 2. **Scope Discipline**: Is the commit focused on a single feature/fix, or does it sprawl across unrelated concerns?
 3. **Integration Quality**: Are imports clean? Are types properly used? Does the code integrate well with existing patterns?
 4. **Repeated Mistakes**: Does this commit repeat any mistakes documented in learnings?
+5. **Retry Analysis**: If retry context is present above, what caused the earlier attempt(s) to fail? Was the root cause a repeated mistake, a novel error, or an environmental issue?
 
 ## Required Output Signals
 

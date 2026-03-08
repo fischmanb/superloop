@@ -909,6 +909,7 @@ class BuildLoop:
             feature_done = False
             last_build_output = ""
             last_test_output = ""
+            failed_attempt_outputs: list[str] = []  # full output from each failed attempt
 
             for attempt in range(self.max_retries + 1):
                 if attempt > 0:
@@ -1066,10 +1067,40 @@ class BuildLoop:
                             injections_received=injections_received,
                             retry_count=attempt,
                         )
+                        # Write retry context for eval sidecar if this needed retries
+                        if attempt > 0:
+                            commit_hash = _get_head(self.project_dir) or "unknown"
+                            retry_context = {
+                                "commit_hash": commit_hash,
+                                "feature_name": feature_name or feature.name,
+                                "attempt_number": attempt + 1,
+                                "total_attempts": attempt + 1,
+                                "failed_attempts": [
+                                    {"attempt": i + 1, "build_output": out}
+                                    for i, out in enumerate(failed_attempt_outputs)
+                                ],
+                            }
+                            retry_dir = self.eval_output_dir / "retry-context"
+                            retry_dir.mkdir(parents=True, exist_ok=True)
+                            retry_file = retry_dir / f"{commit_hash[:8]}.retry.json"
+                            try:
+                                retry_file.write_text(
+                                    json.dumps(retry_context, indent=2)
+                                )
+                                logger.debug(
+                                    "Wrote retry context for %s → %s",
+                                    feature_name,
+                                    retry_file,
+                                )
+                            except OSError:
+                                logger.debug(
+                                    "Failed to write retry context", exc_info=True
+                                )
                         feature_done = True
                         break
                     else:
                         # Gates failed — will retry
+                        failed_attempt_outputs.append(build_result)
                         last_build_output = build_result[-2000:]
                         last_test_output = ""
 

@@ -418,8 +418,14 @@ def _evaluate_commit(
         logger.info("Running agent eval for %s...", commit_short)
 
         try:
+            retry_context_dir = (
+                config.eval_output_dir / "retry-context"
+                if config.eval_output_dir is not None
+                else None
+            )
             eval_prompt = generate_eval_prompt(
-                config.project_dir, commit_hash
+                config.project_dir, commit_hash,
+                retry_context_dir=retry_context_dir,
             )
         except (EvalError, AutoSddError) as exc:
             logger.warning(
