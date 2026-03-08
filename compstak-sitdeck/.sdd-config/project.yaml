@@ -3,16 +3,19 @@
 # Values here are defaults — any env var set at launch time overrides them.
 # Priority: env var > this file > auto-detection > hardcoded default.
 #
-# See superloop/docs/sdd-config-schema.md for full key reference.
+# See docs/sdd-config-schema.md for full key reference.
+#
+# Keys intentionally NOT here:
+#   max_features    — runtime cap, not a project property; omit to build all pending
+#   auto_approve    — runtime flag for agent confirmations, set at launch if needed
+#   skip_preflight  — runtime flag to bypass human pre-flight review, set at launch
 
 build_cmd: NODE_ENV=production next build
 test_cmd: npx vitest run --passWithNoTests
 lint_cmd: npm run lint
 build_model: claude-sonnet-4-6
-max_features: 44
 max_retries: 2
 agent_timeout: 1800
-auto_approve: true
 branch_strategy: chained
 min_retry_delay: 30
 drift_check: true

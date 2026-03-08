@@ -52,6 +52,7 @@ _KEY_TO_ENV: dict[str, str] = {
     "max_retries": "MAX_RETRIES",
     "agent_timeout": "AGENT_TIMEOUT",
     "auto_approve": "AUTO_APPROVE",
+    "skip_preflight": "SKIP_PREFLIGHT",
     "branch_strategy": "BRANCH_STRATEGY",
     "min_retry_delay": "MIN_RETRY_DELAY",
     "drift_check": "DRIFT_CHECK",

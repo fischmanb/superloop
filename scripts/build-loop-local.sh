@@ -211,6 +211,7 @@ load_sdd_config() {
             max_retries)     [[ -z "${MAX_RETRIES:-}" ]]       && export MAX_RETRIES="$value" ;;
             agent_timeout)   [[ -z "${AGENT_TIMEOUT:-}" ]]     && export AGENT_TIMEOUT="$value" ;;
             auto_approve)    [[ -z "${AUTO_APPROVE:-}" ]]      && export AUTO_APPROVE="$value" ;;
+            skip_preflight)  [[ -z "${SKIP_PREFLIGHT:-}" ]]     && export SKIP_PREFLIGHT="$value" ;;
             branch_strategy) [[ -z "${BRANCH_STRATEGY:-}" ]]   && export BRANCH_STRATEGY="$value" ;;
             min_retry_delay) [[ -z "${MIN_RETRY_DELAY:-}" ]]   && export MIN_RETRY_DELAY="$value" ;;
             drift_check)     [[ -z "${DRIFT_CHECK:-}" ]]       && export DRIFT_CHECK="$value" ;;
@@ -1123,7 +1124,11 @@ cleanup_branch_sequential() {
 
 # show_preflight_summary <topo_lines>
 # Prints the sorted feature list with t-shirt sizes and total count.
-# If AUTO_APPROVE is not "true", prompts user for confirmation.
+# SKIP_PREFLIGHT=true skips the human confirmation prompt (for unattended runs).
+# AUTO_APPROVE controls agent-level confirmations only — it does NOT skip
+# this gate. These are intentionally separate concerns:
+#   SKIP_PREFLIGHT  → bypass the human pre-flight review
+#   AUTO_APPROVE    → bypass per-agent confirmation prompts during the build
 show_preflight_summary() {
     local topo_lines="$1"
     local count=0
@@ -1152,15 +1157,15 @@ show_preflight_summary() {
     echo "  Total features: $count (capped at MAX_FEATURES=$MAX_FEATURES)"
     echo ""
 
-    if [ "${AUTO_APPROVE:-false}" != "true" ]; then
+    if [ "${SKIP_PREFLIGHT:-false}" = "true" ]; then
+        log "SKIP_PREFLIGHT=true — skipping pre-flight confirmation"
+    else
         printf "  Proceed with build? [Y/n] "
         read -r answer </dev/tty
         if [ -n "$answer" ] && [[ ! "$answer" =~ ^[Yy] ]]; then
             log "Build cancelled by user"
             exit 0
         fi
-    else
-        log "AUTO_APPROVE=true — skipping confirmation"
     fi
 }
 

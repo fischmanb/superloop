@@ -824,3 +824,14 @@ Related: L-00205 (instance_of)
 Related: L-00003 (related_to)
 
 When fixing a detection gap, do not add the specific missing filename or tool to an enumeration list. Enumerate-by-config-file is a pattern that is always one ecosystem version behind. The correct fix is to read what the project itself declares: `package.json` scripts for JS/TS ecosystems, `pyproject.toml` tool sections for Python, `Cargo.toml` for Rust. If the project says `"lint": "next lint"`, run `npm run lint` — that is the project's own declaration of how it lints itself, and it will remain correct across tool version changes. This generalizes to all ecosystem-level detection: prefer reading the project's own build/test/lint declarations over inferring from config file presence.
+
+## L-00209
+ID: L-00209
+Type: node
+Label: static-count-in-config
+Category: process-rules
+Severity: medium
+Date: 2026-03-08T00:00:00-05:00
+Related: L-00207 (related_to)
+
+`max_features: 44` was hardcoded in `.sdd-config/project.yaml` to match the current pending feature count. This is wrong: it becomes stale the moment a feature is added or completed, silently capping the campaign at an arbitrary number. `MAX_FEATURES` is a runtime cap ("only build N features today"), not a project property. It does not belong in project.yaml. The correct default behavior is to build all pending features, derived at runtime by counting the roadmap. General principle: never hardcode a count that is derivable from a source of truth. Configuration files should declare policies, not snapshot counts.

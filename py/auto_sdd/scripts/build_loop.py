@@ -567,6 +567,20 @@ class BuildLoop:
             self.build_config,
         )
 
+        # Human pre-flight gate — separate from AUTO_APPROVE.
+        # SKIP_PREFLIGHT=true bypasses this (for unattended/CI runs).
+        # AUTO_APPROVE controls agent-level confirmations only.
+        # Also skipped if stdin is not a TTY (e.g. subprocess, CI, tests).
+        if os.environ.get("SKIP_PREFLIGHT", "").lower() != "true":
+            import sys as _sys
+            if _sys.stdin.isatty():
+                answer = input("  Proceed with build? [Y/n] ").strip()
+                if answer and not answer.lower().startswith("y"):
+                    logger.info("Build cancelled by user.")
+                    return
+            else:
+                logger.info("Non-interactive stdin — skipping pre-flight prompt")
+
         self.start_eval_sidecar()
 
         if self.branch_strategy == "both":
