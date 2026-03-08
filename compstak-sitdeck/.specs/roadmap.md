@@ -15,9 +15,9 @@
 
 | Status | Count |
 |--------|-------|
-| ✅ Completed | 1 |
+| ✅ Completed | 0 |
 | 🔄 In Progress | 0 |
-| ⬜ Pending | 44 |
+| ⬜ Pending | 45 |
 | ⏸️ Blocked | 0 |
 
 **Last updated**: 2026-03-07
@@ -28,7 +28,7 @@
 
 | # | Widget | Category | Data | Complexity | Deps | Status |
 |---|--------|----------|------|------------|------|--------|
-| 0 | Project Setup | Infrastructure | - | L | - | ✅ |
+| 0 | Project Setup | Infrastructure | - | L | - | ⬜ |
 | 1 | CRE Property Map | Map | Leases + Sales | L | - | ⬜ |
 | 2 | Market Map | Map | Leases | M | 1 | ⬜ |
 | 3 | Portfolio Map | Map | Leases + Sales | M | 1 | ⬜ |
