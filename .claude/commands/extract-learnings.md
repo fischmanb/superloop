@@ -14,7 +14,7 @@ Scan this session for uncaptured learnings and output them in graph schema forma
 ```bash
 cat learnings/process-rules.md learnings/empirical-findings.md learnings/core.md learnings/architecture-decisions.md | grep "^## [LM]-" | sort
 ```
-Get the highest L-number and M-number currently in use.
+Get the highest L-number and M-number currently in use. Stash the output to `/tmp/sdd-scratch.md` — the next tool call will discard anything held only in context.
 
 ### 2. Read HOW-I-WORK accumulation section
 ```bash

@@ -1,6 +1,6 @@
 {
   "last_check_ts": "2026-03-08T04:08:46.642817Z",
   "last_check_hash": "1bbeb5bdd7cdae7f438772e7caa30dae",
-  "prompt_count": 0,
-  "pending_captures": []
+  "prompt_count": 3,
+  "pending_captures": ["L-00212 added (process-rules.md + core.md): files authoritative over context; read+stash immediately on tool access. L-00211 tightened. ONBOARDING.md fresh onboard + continuing session + extract-learnings.md updated with stash step. Core count now 18 — demotion review needed."]
 }

@@ -1,1 +1,4 @@
-{"stashed_at": null, "prompt": null, "context": null, "action": null}
+{
+  "stashed_at": "2026-03-07",
+  "prompt": "You are picking up an ongoing project. Before doing anything else: 1. Read ~/auto-sdd/ONBOARDING.md (full read — this is a fresh onboard). 2. Read ~/auto-sdd/DESIGN-PRINCIPLES.md. 3. Do NOT read any other files yet besides those which are prescribed in ONBOARDING.md. - List each active consideration (topic: status) in priority order. Today's focus (now top priorities): 1) Validate and improve learning system for larger, current 3-in-1 Human|AI|Repo/Memory system, leaving extensibility for knowledge graph and semantic search. 2) Get the SitDeck build running properly.  3a) finish the CIS 3b) Implement the knowledge graph and integrate."
+}

@@ -365,6 +365,7 @@ A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
 - Read `ACTIVE-CONSIDERATIONS.md` — priority stack and in-flight work.
 - Check for `.handoff.md` at repo root (ONLY on the very first prompt of a fresh chat — never mid-session). If it exists, read it for session-specific continuity from the retiring chat, absorb the context, then move it to `archive/handoffs/handoff-{DATE}.md` (create dir if needed). Never delete handoffs. See `.specs/HANDOFF-PROTOCOL.md`.
 - Read `learnings/core.md` — the curated constitutional learnings. These hard-won failure modes repeat if not internalized at session start. (When core.md is empty, read `.specs/learnings/agent-operations.md` as fallback.)
+- **Stash findings to `/tmp/sdd-scratch.md`** — after reading protocol files, write key findings (active priorities, pending captures, handoff context, core learning titles) to `/tmp/sdd-scratch.md` before any other work. A read without a stash is discarded the moment the next tool call executes. This is not optional. (L-00212)
 - **Flush stale captures**: If `pending_captures` is non-empty, reconcile them into **ACTIVE-CONSIDERATIONS.md** immediately. This is the only write permitted during fresh onboard.
 - Report status. No other file writes, no commits, no edits. First response is read-only.
 
@@ -372,6 +373,7 @@ A JSON state file at `~/auto-sdd/.onboarding-state` tracks update status:
 - Read/write `.onboarding-state` per the per-response protocol. That's it.
 - Do NOT re-read the full ONBOARDING.md. The session already has context.
 - If the interval check fires and `pending_captures` is non-empty, read only **ACTIVE-CONSIDERATIONS.md** to reconcile. Don't read the whole ONBOARDING.md.
+- **Exception — tool access just established**: If this session previously lacked filesystem access (tool-less exchange) and tool access has just become available, treat the transition as equivalent to a fresh onboard: read the key protocol files and stash findings to `/tmp/sdd-scratch.md` before any other work. Context from the tool-less phase is a lossy cache; file state is authoritative. (L-00212)
 
 **Cost profile**: 95% of responses = read/write a 5-line file (negligible). Every ~4th response = one md5 + maybe 15 lines (minimal). New chat after a break = full read (appropriate).
 

@@ -135,3 +135,9 @@ Checkpoint step 4 must actively scan: agent completions (validate/contradict exi
 ## L-00178 — Chat sessions must gate-check elaborate prompt work against problem layer
 **Source:** `process-rules.md`
 **Why core:** Without this, a chat session will help build an elaborate agent prompt without questioning whether prompting is the right solution layer. Observed directly: a prior session built a 377-line prompt with 62 constraint patterns and a detection+injection pipeline to prevent transitive import violations — when the actual root cause was a 10-line detection ordering bug in build_gates.py. **300-line rule**: if any single solution's prompt content would exceed 300 lines, the chat must stop, enumerate at least two non-prompting alternatives (build gate, linter, test, existing tooling), and validate that no mechanical alternative exists before proceeding. The gate-check: "Does a build tool, linter, test, or existing gate already enforce this constraint? If yes, ensure it runs." Mechanical enforcement: `MAX_INJECTED_SECTION_LINES` (150) and `MAX_TOTAL_PROMPT_LINES` (400) in prompt_builder.py, asserted at test time. Never blocking at runtime.
+
+---
+
+## L-00212 — When filesystem access is available, files are authoritative over context; read and stash immediately
+**Source:** `process-rules.md`
+**Why core:** Without this, a session that transitions from tool-less to tool-available will proceed from a lossy context cache — compaction drops state, memories lag behind writes, long sessions drift from file reality — instead of immediately grounding itself in file state. The stash step is what makes the read durable: a file read without a stash is discarded the moment the next tool call executes. Applies on session start, after compaction, after any sequence of prompt-only exchanges, and after any gap where file state may have advanced without context reflecting it. The compaction boundary — not elapsed time — is what invalidates context.

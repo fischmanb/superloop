@@ -857,6 +857,19 @@ Tags: in-context-inference, compaction, .onboarding-state, memory, repo-files, r
 Confidence: high
 Status: active
 Date: 2026-03-08
-Related: L-00210 (related_to)
+Related: L-00210 (related_to), L-00212 (related_to)
 
-Logic in user chats must never be built from in-context inference without consideration for what is in the repo or memory on the subject, as the session could be operating on incomplete knowledge. The fix is always to read first, especially after compactions or repeated prompts. The constituent files are the spec. Also stash files as needed, to preserve calls.
+Logic in user chats must never be built from in-context inference without first reading the relevant files. Context may be incomplete: post-compaction state is lossy, memories lag behind writes, long sessions drift from file reality. The constituent files are the spec. Read them.
+
+---
+
+## L-00212 — When filesystem access is available, files are authoritative over context; read and stash immediately
+ID: L-00212
+Type: process_rule
+Tags: Desktop-Commander, compaction, context-cache, sdd-scratch, file-stash, onboarding-state, tool-access, session-start
+Confidence: high
+Status: active
+Date: 2026-03-08
+Related: L-00211 (related_to), L-00130 (related_to)
+
+When filesystem access is available, files are the authoritative source. In-context knowledge is a lossy cache: compaction drops state, memories lag behind writes, and long sessions drift from file reality. The rule: the moment tool access is established or re-established, read the relevant protocol files and stash key findings to /tmp/sdd-scratch.md before any other work. A read without a stash is discarded the moment the next tool call executes. This applies on session start, after compaction events, after a sequence of prompt-only exchanges, and after any gap where file state may have advanced without context reflecting it. The compaction boundary — not elapsed time — is what invalidates context. When in doubt, read. Stashing is not optional.
