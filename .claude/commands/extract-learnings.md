@@ -6,6 +6,8 @@ description: Scan current session for uncaptured learnings and output in graph s
 
 Scan this session for uncaptured learnings and output them in graph schema format.
 
+**This command applies to ALL session types — build campaigns AND regular chat sessions.** Chat corrections are a primary source of M-entries (methodology signals) and process-rule L-entries. If Brian corrected Claude's behavior, named a wrong pattern, or articulated a principle during the chat, that is a learning and must be captured here. Don't wait for a build campaign to run `!learn`.
+
 ## Process
 
 ### 1. Read current state

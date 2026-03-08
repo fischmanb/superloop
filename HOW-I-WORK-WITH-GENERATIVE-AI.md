@@ -1035,6 +1035,19 @@ Brian thinks beyond the immediate run when evaluating test infrastructure decisi
 
 ---
 
+## M-00091
+
+- **Type:** principle
+- **Tags:** learnings, tags, searchability, abstract-labels, chat-correction, knowledge-capture
+- **Confidence:** high — direct correction in chat; Brian caught it immediately and generalized it
+- **Status:** active
+- **Date:** 2026-03-08
+- **Related:** L-00208 (related_to), L-00209 (related_to)
+
+Learnings tags must be concrete and searchable — the actual flags, filenames, commands, and system components involved — not abstract classifiers describing the type of mistake. Tags like `flag-conflation` and `static-count-in-config` describe the error category; they don't name what broke. A future reader searching for `AUTO_APPROVE`, `project.yaml`, or `max_features` must be able to find the relevant entry. The test: could someone find this learning by searching for the thing that actually broke? If not, the tags are wrong. Brian's correction was immediate and also meta: "they are not semantically relevant to future builds. Should talk about the actual issue in a semantic search friendly way." He then extended it: the fix should propagate to both memory and the code/repo so no future chat has to re-derive it.
+
+---
+
 ## Accumulation (DEPRECATED — see L-00194)
 
 > **Process change (2026-03-04):** New methodology observations go directly into graph-schema M-entries above. This section is a backlog of raw captures that predate the change. Clear by converting to schema entries or discarding. Do NOT add new raw entries here.
