@@ -190,10 +190,12 @@ load_sdd_config() {
         [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
         # Strip inline comments from value
         value="${value%%#*}"
+        # Strip leading/trailing whitespace only (not internal spaces)
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
         # Strip surrounding quotes
         value="${value#\"}" value="${value%\"}"
         value="${value#\'}" value="${value%\'}"
-        value="${value// /}"  # trim whitespace
         case "$key" in
             build_cmd)       [[ -z "${BUILD_CHECK_CMD:-}" ]]   && export BUILD_CHECK_CMD="$value" ;;
             test_cmd)        [[ -z "${TEST_CHECK_CMD:-}" ]]    && export TEST_CHECK_CMD="$value" ;;
