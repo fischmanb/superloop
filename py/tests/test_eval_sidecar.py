@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from auto_sdd.lib.claude_wrapper import CreditExhaustionError
 from auto_sdd.lib.eval_lib import (
     EvalError,
     MechanicalEvalResult,
@@ -18,11 +19,9 @@ from auto_sdd.lib.eval_lib import (
 from auto_sdd.scripts.eval_sidecar import (
     CampaignState,
     EvalSidecarConfig,
-    _build_agent_cmd,
-    _get_commit_message,
+    _build_agent_cmd,    _get_commit_message,
     _get_head,
     _get_new_commits,
-    _is_credit_exhaustion,
     _evaluate_commit,
     generate_campaign_summary,
     run_polling_loop,
@@ -413,21 +412,22 @@ class TestDrainSentinel:
 
 
 class TestCreditExhaustion:
-    """Tests for credit exhaustion detection."""
+    """Tests for credit exhaustion detection — now exception-based via claude_wrapper."""
 
-    def test_credit_keyword_detection(self) -> None:
-        """_is_credit_exhaustion detects credit-related keywords."""
-        assert _is_credit_exhaustion("Error: insufficient_quota reached")
-        assert _is_credit_exhaustion("402 Payment Required")
-        assert _is_credit_exhaustion("429 Too Many requests")
-        assert _is_credit_exhaustion("billing issue detected")
-        assert _is_credit_exhaustion("credit limit exceeded")
+    def test_credit_exhaustion_error_importable(self) -> None:
+        """CreditExhaustionError is raised by claude_wrapper on billing failures."""
+        assert issubclass(CreditExhaustionError, Exception)
 
-    def test_no_credit_keywords(self) -> None:
-        """_is_credit_exhaustion returns False for normal errors."""
-        assert not _is_credit_exhaustion("Connection timeout")
-        assert not _is_credit_exhaustion("Internal server error")
-        assert not _is_credit_exhaustion("")
+    def test_billing_regex_does_not_match_feature_names(self) -> None:
+        from auto_sdd.lib.claude_wrapper import _BILLING_RE
+        assert not _BILLING_RE.search("Tenant Credit Indicators")
+        assert not _BILLING_RE.search("credit score widget")
+
+    def test_billing_regex_matches_api_errors(self) -> None:
+        from auto_sdd.lib.claude_wrapper import _BILLING_RE
+        assert _BILLING_RE.search("credit_balance_too_low")
+        assert _BILLING_RE.search("insufficient_quota")
+        assert _BILLING_RE.search("402 Payment Required")
 
     @patch("auto_sdd.scripts.eval_sidecar.run_agent_with_backoff")
     @patch("auto_sdd.scripts.eval_sidecar.run_mechanical_eval")
@@ -437,7 +437,7 @@ class TestCreditExhaustion:
         mock_backoff: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Agent eval credit failure disables agent evals for remainder."""
+        """CreditExhaustionError from agent disables agent evals for remainder."""
         repo = _create_test_repo(tmp_path)
         eval_dir = tmp_path / "evals"
         eval_dir.mkdir()
@@ -459,12 +459,7 @@ class TestCreditExhaustion:
             passed=True,
         )
 
-        # Agent fails with credit error
-        def backoff_side_effect(output_file: Path, cmd: list[str], **kwargs: Any) -> int:
-            output_file.write_text("Error: 402 Payment Required")
-            return 1
-
-        mock_backoff.side_effect = backoff_side_effect
+        mock_backoff.side_effect = CreditExhaustionError("API credit error")
 
         _evaluate_commit(config, state, commit)
         assert state.agent_evals_disabled is True
@@ -551,13 +546,14 @@ class TestAgentCmd:
     """Tests for _build_agent_cmd."""
 
     def test_default_cmd(self) -> None:
-        """Default agent command has no model flag."""
+        """Default agent command starts with claude executable."""
         cmd = _build_agent_cmd("")
-        assert cmd == ["-p", "--dangerously-skip-permissions"]
+        assert cmd == ["claude", "-p", "--dangerously-skip-permissions"]
 
     def test_cmd_with_model(self) -> None:
         """Agent command includes --model when model is specified."""
         cmd = _build_agent_cmd("claude-sonnet-4-20250514")
+        assert cmd[0] == "claude"
         assert "--model" in cmd
         assert "claude-sonnet-4-20250514" in cmd
 

@@ -181,7 +181,7 @@ def _get_commit_message(project_dir: Path, commit_hash: str) -> str:
 
 def _build_agent_cmd(eval_model: str) -> list[str]:
     """Build the base claude CLI command for agent evals."""
-    cmd = ["-p", "--dangerously-skip-permissions"]
+    cmd = ["claude", "-p", "--dangerously-skip-permissions"]
     if eval_model:
         cmd.extend(["--model", eval_model])
     return cmd
