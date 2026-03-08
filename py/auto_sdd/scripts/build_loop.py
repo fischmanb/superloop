@@ -753,6 +753,22 @@ class BuildLoop:
                 model=model,
                 branch=branch,
             )
+            # Write build failure learning
+            tail = build_output[-2000:] if len(build_output) > 2000 else build_output
+            write_learning(
+                summary=f"Build failure: {feature_name} (status={status}, retries={retry_count})",
+                detail=(
+                    f"Model: {model}  Duration: {_format_duration(duration)}\n"
+                    f"Drift check passed: {drift_check_passed}  "
+                    f"Test check passed: {test_check_passed}\n"
+                    f"Build output tail:\n{tail}"
+                ),
+                category="build-failure",
+                project_name=self.project_dir.name,
+                feature_name=feature_name,
+                project_dir=self.project_dir,
+                repo_dir=Path(__file__).resolve().parents[3],
+            )
 
         # Queue sidecar feedback
         eval_feedback = read_latest_eval_feedback(self.eval_output_dir)
@@ -1422,12 +1438,25 @@ class BuildLoop:
 
         # Gate 5: Code review (optional, non-blocking for gate result)
         if should_run_step("code-review", self.post_build_steps):
-            run_code_review(
+            review_result = run_code_review(
                 gate_dir,
                 model=self.review_model or None,
                 test_cmd=self.test_cmd,
                 cost_log_path=self.cost_log_path,
             )
+            if review_result.summary and review_result.summary not in ("clean", "agent error"):
+                write_learning(
+                    summary=f"Code review finding for {feature_name}: {review_result.summary}",
+                    detail=(
+                        f"Code review {'fixed issues' if review_result.passed else 'found unfixed issues'}.\n"
+                        f"Summary: {review_result.summary}"
+                    ),
+                    category="code-review",
+                    project_name=self.project_dir.name,
+                    feature_name=feature_name,
+                    project_dir=self.project_dir,
+                    repo_dir=Path(__file__).resolve().parents[3],
+                )
             # Re-validate after review
             recheck = check_build(self.build_cmd, gate_dir)
             if not recheck.success:

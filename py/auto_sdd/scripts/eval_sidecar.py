@@ -63,6 +63,7 @@ from auto_sdd.lib.claude_wrapper import (
     run_claude,
 )
 from auto_sdd.lib.convention_checks import run_convention_checks
+from auto_sdd.lib.learnings_writer import write_learning
 from auto_sdd.lib.vector_store import VectorStore
 
 
@@ -570,6 +571,35 @@ def _evaluate_commit(
                 logger.debug(
                     "Convention signals vector store error", exc_info=True
                 )
+
+    # ── Learnings: write notable eval findings ────────────────────────────
+    if agent_output:
+        eval_notes = parse_eval_signal("EVAL_NOTES", agent_output)
+        repeated = parse_eval_signal("EVAL_REPEATED_MISTAKES", agent_output)
+        fw = parse_eval_signal("EVAL_FRAMEWORK_COMPLIANCE", agent_output)
+        iq = parse_eval_signal("EVAL_INTEGRATION_QUALITY", agent_output)
+
+        # Write if there's anything worth capturing
+        notable = repeated not in ("", "none") or fw == "fail" or iq == "major_issues"
+        if notable or eval_notes:
+            parts = []
+            if repeated and repeated != "none":
+                parts.append(f"Repeated mistakes: {repeated}")
+            if fw == "fail":
+                parts.append("Framework compliance: FAIL")
+            if iq == "major_issues":
+                parts.append("Integration quality: major issues")
+            if eval_notes:
+                parts.append(f"Eval notes: {eval_notes}")
+            write_learning(
+                summary=f"Eval findings for {feature_name} ({commit_short})",
+                detail="\n".join(parts),
+                category="eval-finding",
+                project_name=config.project_dir.name,
+                feature_name=feature_name,
+                project_dir=config.project_dir,
+                repo_dir=Path(__file__).resolve().parents[3],
+            )
 
 
 # ── Polling loop ──────────────────────────────────────────────────────────────
