@@ -2571,3 +2571,18 @@ Model: default  Duration: 1s
 Drift check passed: True  Test check passed: True
 Build output tail:
 Error: insufficient_quota
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:27:11Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+Error: insufficient_quota
