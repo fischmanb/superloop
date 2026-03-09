@@ -977,3 +977,29 @@ Date: 2026-03-09
 Related: L-00143 (related_to)
 
 Chat responses default to expansive exploration unless explicitly constrained. When Brian asks to "review build logs and report," that means read the build logs and report — not also explore git history, run the test suite, tally costs, and check project state. Prevention rule: before the first tool call, enumerate exactly what was requested. If the request names specific artifacts (build logs), read those and stop. Do not extrapolate adjacent work items. If confused about scope, ask — don't guess expansively. This complements L-00143 (scope sizing ritual) but applies specifically to the chat interface where the temptation is to "be helpful" by exploring beyond the request boundary.
+
+---
+
+## L-00221 — Merge/push action must never share a response with the approval request
+
+Type: process_rule
+Tags: git-merge, git-push, merge-gate, response-boundary, ONBOARDING.md
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00005 (related_to), L-00219 (related_to)
+
+The ONBOARDING.md merge/push rule creates a forced wait state: the response presenting the merge request must END there. The merge command goes in the NEXT response, only after Brian's explicit approval in the intervening message. Asking "Merge?" and then running the merge in the same response defeats the gate — the question becomes rhetorical theater, and permission is inferred from context rather than granted explicitly. This was observed directly: "Merge?" followed immediately by `git merge` and `git push` in the same response, without waiting. Prevention rule: when a merge or push is appropriate, end the response with the request. Do not include any git merge or git push command in that response. The next response may only proceed after Brian's explicit "yes" or equivalent.
+
+---
+
+## L-00223 — Working tree must be clean before dispatching agent prompts
+
+Type: process_rule
+Tags: git-status, working-tree, agent-dispatch, hard-constraints, clean-state
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00222 (related_to), L-00130 (related_to)
+
+Agents correctly STOP when they encounter pre-existing dirty tracked files outside their allowlist — the hard constraints say "if you encounter ANYTHING unexpected, STOP IMMEDIATELY." This is correct behavior but blocks the implementation. The chat session dispatching the prompt is responsible for ensuring a clean working tree before delivery. Prevention rule: before delivering any agent prompt, run `git status --short` and verify either (a) the working tree is clean, or (b) all dirty files are on the agent's allowlist. If dirty files exist outside the allowlist, commit or stash them first. This is especially important for `general-estimates.jsonl` which is frequently dirty from local token estimates (see L-00222).

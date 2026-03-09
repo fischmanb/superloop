@@ -407,3 +407,16 @@ Date: 2026-03-09
 Related: L-00218 (related_to)
 
 Running `NODE_ENV=production npx next build` in a shell sets NODE_ENV for the duration of that shell session. A subsequent `npx next dev` in the same shell inherits `NODE_ENV=production`, which causes the dev server to return HTTP 500 — the CSS compilation pipeline (Tailwind v4 via @tailwindcss/postcss) fails under production mode in the dev server path. The error (`Module parse failed: Unexpected character '@' at @import "tailwindcss"`) looks like a dependency or config issue but is actually an environment contamination issue. The production build (`next build`) uses webpack which handles the CSS correctly; the dev server uses a different compilation path that fails. Prevention rule: always prefix NODE_ENV inline (`NODE_ENV=production npx next build`) rather than exporting it, and when diagnosing dev server failures, check `echo $NODE_ENV` first.
+
+---
+
+## L-00222 — general-estimates.jsonl stash conflicts are structural, not incidental
+
+Type: failure_pattern
+Tags: general-estimates.jsonl, git-stash, merge-conflict, append-only-JSONL, agent-dispatch
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00223 (related_to)
+
+Both the local chat session and remote Claude Code agents append lines to `general-estimates.jsonl`. When local changes are stashed to merge an agent branch, `git stash pop` always conflicts because both sides appended to the end of the same file. This occurred 3 times in one session. Resolution is always "keep both sides" since both are valid telemetry data. Possible mitigations: (1) commit the file immediately before every agent dispatch so there's nothing to stash, (2) gitignore the file and treat it as local-only, (3) automate the "keep both" resolution. Option 1 is simplest and aligns with L-00223 (clean working tree before dispatch).

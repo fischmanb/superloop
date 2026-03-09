@@ -1088,6 +1088,20 @@ When Brian corrects a specific artifact, he diagnoses the systemic implication, 
 Brian enforces tight scope discipline on chat responses. When asked to do X, he expects exactly X — not X plus adjacent exploration that seems helpful. In one session, a request to "review build logs and report" produced a response that also explored git history, ran the test suite, tallied costs, and assessed project state. Brian corrected this twice in quick succession ("you tried to do way too many things" followed by "JUST REPORT"). The pattern: Brian directs each step explicitly and treats unsolicited expansion as noise, not initiative. A response that does less but matches the request exactly is preferred over one that does more but exceeds it. This is consistent with Brian's general communication style — direct, no excess — applied to the operational boundary between request and response.
 
 
+---
+
+## M-00095
+
+- **Type:** principle
+- **Tags:** agent-dispatch, working-tree, pre-flight, merge-gate, process-discipline
+- **Confidence:** high
+- **Status:** active
+- **Date:** 2026-03-09
+- **Related:** L-00221 (related_to), L-00222 (related_to), L-00223 (related_to), M-00094 (related_to)
+
+Brian treats agent dispatch as a ceremony with pre-conditions, not a casual action. When an agent stopped because of a dirty working tree (pre-existing `learnings/pending.md` outside its allowlist), Brian's response was not to override the constraint but to fix the environment and re-run — validating the agent's STOP as correct behavior. Similarly, when the chat merged without waiting for approval, Brian called it out as a violation even though the merge itself was clean. The pattern: process gates are load-bearing, not decorative. Skipping them because the outcome happens to be safe this time is still a failure, because the gate exists for the cases where the outcome would not be safe. Brian calibrates process discipline by enforcing it on easy cases, not just hard ones.
+
+
 ## Accumulation (DEPRECATED — see L-00194)
 
 > **Process change (2026-03-04):** New methodology observations go directly into graph-schema M-entries above. This section is a backlog of raw captures that predate the change. Clear by converting to schema entries or discarding. Do NOT add new raw entries here.

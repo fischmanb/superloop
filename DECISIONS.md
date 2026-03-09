@@ -570,3 +570,15 @@
 **Decision:** Two surgical fixes to build_loop.py post-agent gate logic.
 **Why:** (1) Pre-agent build cmd detection returns "" for F-0 because next.config.ts doesn't exist yet — agent creates it. Moving detection to post-agent ensures the first feature that introduces the build system is gated correctly. (2) SPEC_FILE signal paths are project-relative; resolving against cwd (py/) always fails, silently skipping all drift checks.
 **Alternatives rejected:** BUILD_CHECK_CMD env override (workaround, not fix). Absolute path requirement in agent prompt (shifts burden to agent, fragile).
+
+## 2026-03-09 — Target projects live outside auto-sdd directory tree
+
+**Decision:** Move all target projects (compstak-sitdeck and future) to separate filesystem locations outside `~/auto-sdd/`. Connection via three explicit pipelines: build (PROJECT_DIR), telemetry (LOGS_DIR), knowledge (learnings writer + CIS vectors). Contract in `WIP/project-isolation-contract.md`.
+**Why:** Two git repos overlapping on one filesystem caused cross-contamination (phantom agent commits into auto-sdd), noisy git status (~130 dirty items), and implicit coupling. Gitignore was a patch over a layout problem.
+**Alternatives rejected:** Gitignore entire project dir (hides the problem, doesn't fix coupling). Gitignore only built output (fragile — every new agent-created directory needs a new entry). Keep everything in one tree (status quo that already failed).
+
+## 2026-03-09 — Contamination enforcement defaults to warn mode
+
+**Decision:** `CONTAMINATION_MODE=warn` as default. Post-agent `_check_repo_contamination()` logs warnings but does not fail features. `CONTAMINATION_MODE=fail` available when ready.
+**Why:** Three enforcement layers deployed in one session (prompt boundary, chmod protection, post-agent audit). Need real-world validation before hard-failing builds on contamination detection. False positives from pre-existing dirty state could block legitimate campaigns.
+**Alternatives rejected:** Hard fail as default (too aggressive before validation). No enforcement (unacceptable given prior contamination history).
