@@ -4,7 +4,7 @@ Spec-driven development with autonomous AI agents. You define features as specs 
 
 The system has been hardened over 35+ rounds of iterative development against documented failure modes — agents fabricating work, ignoring explicit instructions, self-assessing incorrectly, failing silently. Every architectural decision traces back to a specific observed failure.
 
-To date: two full 28-feature campaigns on a React/Next.js codebase with published performance data, a clean 3/3 validation run against a fresh full-stack project (31 minutes, zero failures, compiles and runs), and a documented taxonomy of how AI agents actually fail in production loops.
+To date: a 37+/49-feature CRE analytics build (SitDeck, $201, 599 project tests passing), two full 28-feature campaigns on a React/Next.js codebase with published performance data, a clean 3/3 validation run against a fresh full-stack project (31 minutes, zero failures, compiles and runs), and a documented taxonomy of how AI agents actually fail in production loops.
 
 Forked from [AdrianRogowski/auto-sdd](https://github.com/AdrianRogowski/auto-sdd), which introduced the concept. This fork rebuilt the runtime.
 
@@ -173,9 +173,9 @@ Every Claude session starts blank. auto-sdd treats this as an engineering proble
 
 **Two storage layers, different jobs:**
 
-Claude.ai's memory system provides brief, keyword-level triggers (project name, communication preferences, what's active). The repo provides the detail: 100+ learnings entries in graph schema with typed relationships (SUPERSEDES, DERIVED_FROM, VALIDATED_BY), full architectural context, and the priority stack. Memory sets the tone; the repo provides the knowledge.
+Claude.ai's memory system provides brief, keyword-level triggers (project name, communication preferences, what's active). The repo provides the detail: 226+ learnings entries in graph schema with typed relationships (SUPERSEDES, DERIVED_FROM, VALIDATED_BY), full architectural context, and the priority stack. Memory sets the tone; the repo provides the knowledge.
 
-**The learnings system:** Each entry is self-contained — a fresh Claude instance can read one entry and understand it without context. Entries have a lifecycle: Observation → Demonstrated → Validated → Core (top 13, inlined into CLAUDE.md). At any point, entries can be REFUTED and archived with a reason. Signal scores (1-8+) track confidence based on how many independent sessions confirmed the pattern.
+**The learnings system:** Each entry is self-contained — a fresh Claude instance can read one entry and understand it without context. Entries have a lifecycle: Observation → Demonstrated → Validated → Core (top 17, inlined into CLAUDE.md). At any point, entries can be REFUTED and archived with a reason. Signal scores (1-8+) track confidence based on how many independent sessions confirmed the pattern.
 
 **The checkpoint protocol:** Saying "checkpoint" triggers a deterministic flush: scan for uncaptured learnings, write approved entries to `learnings/`, update `.onboarding-state`, update `ACTIVE-CONSIDERATIONS.md`, commit and push. Everything the session learned is persisted in structured form. The next session boots with that knowledge on first read.
 
@@ -184,6 +184,21 @@ The typical AI workflow is conversational — you teach the AI about your projec
 ---
 
 ## Campaign Results
+
+### SitDeck — CRE Property Analytics (active campaign)
+
+A 49-feature commercial real estate analytics platform built from a single `vision.md` spec. Next.js 15 + DuckDB + Mapbox + Zustand. Three CSV data sources (leases, sales, properties from CompStak). Project isolated at `~/compstak-sitdeck/` with three-layer contamination protection.
+
+| Metric | Result |
+|---|---|
+| Features built | **37+/49** (campaign in progress) |
+| Features failed | **0** |
+| Project tests | **599 passing** (37 vitest files) |
+| Cost | **~$201** |
+| Two-stage retry | Live-validated (Feature #19 succeeded on attempt 2) |
+| Model | Claude Sonnet 4.6 |
+
+This is the first campaign run against the Python build loop with project isolation enforcement (auto-sdd repo files protected from agent writes), two-stage retry (fix-in-place on attempt 1, informed fresh retry on attempt 2+), and codebase summary injection.
 
 ### CRE Lease Comp Tracker (validation run)
 
@@ -241,7 +256,7 @@ The full failure catalog lives in [`learnings/`](learnings/), with highest-signa
 
 ### Python build loop (primary)
 
-The orchestrator is implemented in Python (`py/auto_sdd/`), with 650+ tests covering unit, integration, and dry-run scenarios. The dry-run integration tests exercise real git operations, real file I/O, and real state persistence with only the Claude CLI call mocked.
+The orchestrator is implemented in Python (`py/auto_sdd/`), with 1026 tests covering unit, integration, and dry-run scenarios. The dry-run integration tests exercise real git operations, real file I/O, and real state persistence with only the Claude CLI call mocked.
 
 ### Signal protocol
 
@@ -264,9 +279,26 @@ A separate process polls for new commits during a campaign, runs mechanical eval
 
 Currently the sidecar produces per-feature scores and mistake flags. The planned next layer extracts structured learnings from eval outcomes across features, identifies cross-campaign patterns (which mistake types recur, which prompt adjustments actually reduce failure rates), and feeds those patterns back into both the sidecar's own evaluation criteria and the build loop's prompt construction. The system improves its own quality gates based on what it observes failing.
 
+### Two-stage retry
+
+When a feature fails post-build gates:
+
+- **Attempt 1 (fix-in-place):** Code stays on disk. Agent gets the failure output and a targeted fix prompt. Diagnose and patch — don't rewrite.
+- **Attempt 2+ (informed fresh retry):** `git reset --hard` to branch start. Agent gets a full build prompt plus a summary of all prior failures. Fresh start with knowledge of what went wrong.
+
+This was live-validated on the SitDeck campaign (Feature #19 succeeded on attempt 2 via fix-in-place).
+
 ### Token estimation and calibration
 
 Every agent prompt includes a Token Usage Report that records estimated vs actual token consumption to `general-estimates.jsonl`. A graduated blend (20% per data point, up to 100% at 5+ samples) calibrates future estimates against historical actuals. This feeds scope decisions — when to split prompts, when context budget is tight.
+
+### Project isolation
+
+Target projects live in separate directories (e.g., `~/compstak-sitdeck/`), not inside the auto-sdd repo. Three-layer protection prevents agents from contaminating the orchestrator:
+
+1. **Filesystem boundary in prompts** — agents are told their working directory and forbidden from writing outside it
+2. **Post-build contamination check** — `git diff` against auto-sdd repo root detects any agent writes outside expected patterns
+3. **Protected directories/files** — `py/`, `scripts/`, `lib/`, `tests/`, `*.md`, `.gitignore` etc. trigger gate failure if modified
 
 ### Bash build loop (legacy)
 
@@ -296,7 +328,7 @@ auto-sdd/
 │   │       ├── drift.py               # Drift detection
 │   │       ├── eval_lib.py            # Eval functions
 │   │       └── general_estimates.py   # Token estimation calibration
-│   └── tests/                         # 650+ tests
+│   └── tests/                         # 1026 tests
 │       ├── test_build_loop.py
 │       ├── test_dry_run.py            # Integration tests (real git, mocked agent)
 │       ├── test_reliability.py
@@ -312,7 +344,7 @@ auto-sdd/
 │   └── general-estimates.sh           # Token estimation (bash)
 │
 ├── learnings/                         # Knowledge graph (flat files, graph schema)
-│   ├── core.md                        # 13 highest-signal entries
+│   ├── core.md                        # 17 highest-signal entries
 │   ├── failure-patterns.md
 │   ├── process-rules.md
 │   ├── empirical-findings.md
@@ -421,7 +453,7 @@ LOGS_DIR=~/logs/{project}           # Build summaries and logs
 
 ## Credits
 
-Original concept by [Adrian Rogowski](https://github.com/AdrianRogowski/auto-sdd). This fork rebuilt the runtime over 35+ rounds, adding the reliability layer, test suite (650+), eval system, campaign infrastructure, Python orchestrator, knowledge persistence architecture, and auto-QA pipeline.
+Original concept by [Adrian Rogowski](https://github.com/AdrianRogowski/auto-sdd). This fork rebuilt the runtime over 35+ rounds, adding the reliability layer, test suite (1026), eval system, campaign infrastructure, Python orchestrator, knowledge persistence architecture, two-stage retry (fix-in-place → informed fresh retry), project isolation enforcement, and auto-QA pipeline.
 
 ## License
 
