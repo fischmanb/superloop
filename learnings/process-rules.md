@@ -1003,3 +1003,16 @@ Date: 2026-03-09
 Related: L-00222 (related_to), L-00130 (related_to)
 
 Agents correctly STOP when they encounter pre-existing dirty tracked files outside their allowlist — the hard constraints say "if you encounter ANYTHING unexpected, STOP IMMEDIATELY." This is correct behavior but blocks the implementation. The chat session dispatching the prompt is responsible for ensuring a clean working tree before delivery. Prevention rule: before delivering any agent prompt, run `git status --short` and verify either (a) the working tree is clean, or (b) all dirty files are on the agent's allowlist. If dirty files exist outside the allowlist, commit or stash them first. This is especially important for `general-estimates.jsonl` which is frequently dirty from local token estimates (see L-00222).
+
+---
+
+## L-00226 — Agent prompts must be deliverable as a single copyable block with no internal fenced code blocks
+
+Type: process_rule
+Tags: prompt-engineering, copy-paste, code-block, prompt-delivery, triple-backtick
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00178 (related_to), L-00163 (related_to)
+
+Prompts with internal triple-backtick code blocks (e.g., for Agents.md entry templates, bash snippets, or Python examples) create multiple fenced regions when the prompt itself is delivered inside a fenced block. This breaks single-block copy-paste — the user has to manually reassemble pieces. Observed directly: an Agents.md template block inside the prompt split it into three separate blocks. Prevention rule: never use triple-backtick fencing inside a prompt body. Use indentation (4-space) for code samples, or describe the content textually and let the agent write it based on what it actually did. Additionally, do not pre-write the Agents.md entry — the agent writes its own based on its actual work, which is more accurate than a template written before execution.

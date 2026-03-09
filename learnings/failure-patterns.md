@@ -420,3 +420,29 @@ Date: 2026-03-09
 Related: L-00223 (related_to)
 
 Both the local chat session and remote Claude Code agents append lines to `general-estimates.jsonl`. When local changes are stashed to merge an agent branch, `git stash pop` always conflicts because both sides appended to the end of the same file. This occurred 3 times in one session. Resolution is always "keep both sides" since both are valid telemetry data. Possible mitigations: (1) commit the file immediately before every agent dispatch so there's nothing to stash, (2) gitignore the file and treat it as local-only, (3) automate the "keep both" resolution. Option 1 is simplest and aligns with L-00223 (clean working tree before dispatch).
+
+---
+
+## L-00224 — Agent-executed mv can create unexpected nesting; verify directory structure after move operations
+
+Type: failure_pattern
+Tags: mv, directory-nesting, agent-move, filesystem-structure, compstak-sitdeck
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00225 (related_to)
+
+When an agent ran `mv ~/auto-sdd/compstak-sitdeck ~/compstak-sitdeck`, the target `~/compstak-sitdeck/` already had content (`.specs`, `_shared-csv-data` from a prior copy). The mv placed the project as a subdirectory: `~/compstak-sitdeck/compstak-sitdeck/`. All path references (`PROJECT_DIR`, slash commands, ACTIVE-CONSIDERATIONS) pointed to `~/compstak-sitdeck/` but the actual `.git` and project code were one level deeper. The build loop would have failed silently — `project.yaml` not found, roadmap not found, no features to build. Prevention rule: after any move operation, verify the target directory contains the expected root marker (`.git`, `package.json`, or whatever identifies the project root) directly, not nested. Run `ls <target>/.git` or equivalent immediately after the move.
+
+---
+
+## L-00225 — Config files tracked only in the parent repo are lost when a project is segregated; commit them in the project's own git
+
+Type: failure_pattern
+Tags: project.yaml, .sdd-config, git-tracking, project-segregation, config-loss, git-rm-cached
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00224 (related_to), L-00223 (related_to)
+
+`project.yaml` was tracked in auto-sdd's git under `compstak-sitdeck/.sdd-config/project.yaml`. When compstak-sitdeck was moved out of auto-sdd and `git rm --cached -r compstak-sitdeck/` untracked all its files, `project.yaml` ceased to exist — the project's own git repo never tracked it. The build loop reads `project.yaml` from `<project_dir>/.sdd-config/` at init time; without it, build_cmd and test_cmd fall back to auto-detection or empty strings. Prevention rule: any file the build loop reads from `project_dir` at runtime must be committed in the project's own git repo, not only in the parent orchestrator's repo. This applies to `project.yaml`, `CLAUDE.md`, and any future project-scoped config. When segregating a project, verify all config files exist in the project's own git with `git -C <project_dir> ls-files .sdd-config/`.
