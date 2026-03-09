@@ -40,4 +40,5 @@ tsconfig.tsbuildinfo
 stakd/
 stakd-v2/
 stakd-v3/
+/compstak-sitdeck/
 py/logs/

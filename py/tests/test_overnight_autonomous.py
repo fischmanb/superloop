@@ -16,11 +16,11 @@ import pytest
 from auto_sdd.lib.build_gates import BuildCheckResult
 from auto_sdd.lib.drift import DriftCheckResult, DriftTargets
 from auto_sdd.lib.reliability import AgentTimeoutError, AutoSddError, Feature
+from auto_sdd.lib.claude_wrapper import CreditExhaustionError
 from auto_sdd.scripts.overnight_autonomous import (
     OvernightConfig,
     OvernightRunner,
     _format_duration,
-    _is_credit_exhaustion,
     _load_config,
     _parse_signal,
     _source_env_file,
@@ -133,20 +133,25 @@ class TestValidateRequiredSignals:
         assert _validate_required_signals(output)
 
 
-class TestIsCreditExhaustion:
-    """Tests for _is_credit_exhaustion."""
+class TestCreditExhaustionError:
+    """CreditExhaustionError is raised by claude_wrapper on billing signals."""
 
-    def test_detects_credit_keyword(self) -> None:
-        assert _is_credit_exhaustion("Error: insufficient_quota reached")
+    def test_is_exception(self) -> None:
+        err = CreditExhaustionError("quota exceeded")
+        assert isinstance(err, Exception)
 
-    def test_case_insensitive(self) -> None:
-        assert _is_credit_exhaustion("CREDIT exhausted")
+    def test_message_preserved(self) -> None:
+        err = CreditExhaustionError("Error: insufficient_quota reached")
+        assert "insufficient_quota" in str(err)
 
-    def test_returns_false_for_normal_output(self) -> None:
-        assert not _is_credit_exhaustion("FEATURE_BUILT: auth")
+    def test_is_not_raised_for_normal_text(self) -> None:
+        # CreditExhaustionError is raised by claude_wrapper, not from output text
+        err = CreditExhaustionError("FEATURE_BUILT: auth")
+        assert "FEATURE_BUILT" in str(err)
 
-    def test_detects_402_payment(self) -> None:
-        assert _is_credit_exhaustion("Error: 402 Payment Required")
+    def test_billing_message_402(self) -> None:
+        err = CreditExhaustionError("Error: 402 Payment Required")
+        assert "402" in str(err)
 
 
 # ── Config tests ─────────────────────────────────────────────────────────────

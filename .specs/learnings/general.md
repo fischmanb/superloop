@@ -58,3 +58,15 @@ _No learnings yet._
 - **Pattern**: Error states should show user-friendly message with retry option.
 - **Pattern**: Dynamic form arrays — `useState<Item[]>([emptyItem()])` initialized with a factory function; add via spread, remove via `filter`, update via `map` with index match.
 - **Pattern**: Success state in forms — use a boolean `success` flag to swap the form for a confirmation view in the same component; include a CTA and a "Submit Another" reset button.
+
+### 2026-03-08 — False credit exhaustion halt: bare regex matched feature name containing the word credit
+Category: build-loop-bug
+Feature: _CREDIT_RE
+
+build_loop.py _CREDIT_RE used bare r"credit" which matched "Tenant Credit Indicators" in build output, triggering SystemExit(1) mid-campaign with $36 remaining. Fix: tighten pattern to require billing context (balance, exhaust, insuffici, too low, credit_balance_too_low). Commit: f87c010. Lesson: credit exhaustion regex must be anchored to API error vocabulary, not the word credit alone.
+
+### 2026-03-08 — eval_sidecar _build_agent_cmd missing claude executable — all agent evals silently fell back to mechanical-only for entire campaign
+Category: pipeline-bug
+Feature: _build_agent_cmd
+
+eval_sidecar.py _build_agent_cmd() returned ["-p", "--dangerously-skip-permissions"] without prepending "claude". subprocess.run() treated "-p" as the executable, raising FileNotFoundError. The sidecar caught this as a generic exception and fell back to mechanical eval silently. No agent eval output was produced for any feature. CIS vectors and mechanical evals are intact. Fix: prepend "claude" to cmd list in _build_agent_cmd (commit 27adada). Root cause of missed detection: health checks read log tails showing eval completion without verifying agent_eval_available vs actual agent output. Prevention: when verifying eval pipeline health, check that eval JSON files contain non-empty agent_eval fields, not just that evals completed.
