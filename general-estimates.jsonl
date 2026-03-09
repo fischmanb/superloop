@@ -16,3 +16,4 @@
 {"timestamp":"2026-03-06T15:15:52Z","activity_type":"cis-round-3-convention-checks","estimated_tokens_pre":20000,"active_tokens":7264,"cumulative_tokens":6435042}
 {"timestamp":"2026-03-07T18:55:55Z","activity_type":"sitdeck-roadmap-gen","estimated_tokens_pre":12000,"active_tokens":365,"cumulative_tokens":1227535}
 {"timestamp":"2026-03-09T03:31:38Z","activity_type":"project-isolation-contract","estimated_tokens_pre":60000,"active_tokens":435,"cumulative_tokens":2364961}
+{"timestamp":"2026-03-09T03:58:29Z","activity_type":"fix-contamination-check","estimated_tokens_pre":55000,"active_tokens":2368,"cumulative_tokens":2884422}

@@ -1864,6 +1864,22 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - `grep -n "FILESYSTEM BOUNDARY" py/auto_sdd/lib/prompt_builder.py`: Returns 2 lines
 - `grep -n "_check_contamination" py/auto_sdd/scripts/build_loop.py`: Returns definition + call site
 
+### Round — Fix Contamination Check: Proactive Protection + Always-Run Audit (2026-03-09)
+
+**What was asked**: Fix two problems with the contamination check: (1) it checked the project's git, not auto-sdd's git, so it could never catch the actual threat; (2) it only ran on the FEATURE_BUILT success path. Also add proactive chmod-based write protection.
+
+**What changed**:
+* `py/auto_sdd/scripts/build_loop.py`:
+   * Added `_check_repo_contamination()` — checks auto-sdd's own working tree via `git status --porcelain` against an expected writes allowlist
+   * Added `_protect_repo_tree()` / `_restore_repo_tree()` — chmod auto-sdd source directories read-only before agent execution, restore after
+   * Wired both into `_build_feature()` with try/finally so they run on every agent invocation regardless of outcome
+   * Left existing `_check_contamination()` in `_run_post_build_gates()` — it checks a different concern (project-level path traversal)
+* `py/tests/test_build_loop.py` — 8 new tests covering repo contamination check, write protection, and restore
+
+**What was NOT changed**: No changes to prompt_builder.py, no other modules, no documentation.
+
+**Verification**: All tests pass. git diff --stat shows only allowed files.
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.

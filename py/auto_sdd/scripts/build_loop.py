@@ -245,6 +245,97 @@ def _check_contamination(
     return contaminated
 
 
+# ── Auto-sdd repo contamination helpers ──────────────────────────────────────
+
+_REPO_ROOT: Path = Path(__file__).resolve().parents[3]
+
+_EXPECTED_WRITE_PATTERNS: frozenset[str] = frozenset({
+    "logs/",
+    "learnings/pending.md",
+    "general-estimates.jsonl",
+})
+
+_PROTECT_DIRS: tuple[str, ...] = (
+    "py/", "scripts/", "lib/", "tests/", ".claude/", "learnings/", "WIP/",
+)
+
+
+def _check_repo_contamination(
+    repo_root: Path, allowlist: frozenset[str]
+) -> list[str]:
+    """Check auto-sdd's own working tree for unexpected modifications.
+
+    Runs ``git status --porcelain`` on *repo_root* and returns paths that
+    are modified/added/deleted but do NOT match any prefix in *allowlist*.
+    Untracked files (``??``) are skipped — they may be pre-existing.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            logger.warning(
+                "Repo contamination check: git status failed (rc=%d)",
+                result.returncode,
+            )
+            return []
+    except (subprocess.TimeoutExpired, OSError):
+        logger.warning("Repo contamination check: git status timed out or errored")
+        return []
+
+    contaminated: list[str] = []
+    for line in result.stdout.splitlines():
+        if not line or len(line) < 4:
+            continue
+        status = line[:2].strip()
+        if status == "??":
+            continue
+        path = line[3:]
+        if any(path.startswith(pat) for pat in allowlist):
+            continue
+        contaminated.append(path)
+
+    return contaminated
+
+
+def _protect_repo_tree(repo_root: Path) -> bool:
+    """Make auto-sdd source directories read-only to prevent agent writes.
+
+    Returns True if protection was applied, False on failure.
+    """
+    try:
+        for d in _PROTECT_DIRS:
+            target = repo_root / d
+            if target.is_dir():
+                subprocess.run(
+                    ["chmod", "-R", "a-w", str(target)],
+                    timeout=10,
+                    capture_output=True,
+                )
+        return True
+    except Exception:
+        logger.warning("Failed to apply write protection to repo tree")
+        return False
+
+
+def _restore_repo_tree(repo_root: Path) -> None:
+    """Restore write permissions on auto-sdd source directories."""
+    try:
+        for d in _PROTECT_DIRS:
+            target = repo_root / d
+            if target.is_dir():
+                subprocess.run(
+                    ["chmod", "-R", "u+w", str(target)],
+                    timeout=10,
+                    capture_output=True,
+                )
+    except Exception:
+        logger.warning("Failed to restore write permissions on repo tree")
+
+
 # Dependency directories to auto-detect for git clean exclusions.
 _DEP_DIRS = ("node_modules", "venv", ".venv", "target", "vendor")
 
@@ -1041,6 +1132,7 @@ class BuildLoop:
                     cmd_args.extend(["--model", model])
                 cmd_args.append(prompt)
 
+                protected = _protect_repo_tree(_REPO_ROOT)
                 try:
                     result = run_claude(
                         cmd_args,
@@ -1055,6 +1147,19 @@ class BuildLoop:
                 except Exception:
                     logger.exception("Agent invocation failed")
                     build_result = ""
+                finally:
+                    if protected:
+                        _restore_repo_tree(_REPO_ROOT)
+
+                    # ── Repo contamination audit (runs on ALL outcomes) ──
+                    repo_contaminated = _check_repo_contamination(
+                        _REPO_ROOT, _EXPECTED_WRITE_PATTERNS
+                    )
+                    if repo_contaminated:
+                        for cpath in repo_contaminated:
+                            logger.error(
+                                "REPO_CONTAMINATION: %s", cpath
+                            )
 
                 # Re-detect build/test commands AFTER agent runs — project
                 # structure may have changed (e.g., F-0 creates next.config.ts

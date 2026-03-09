@@ -26,10 +26,16 @@ from auto_sdd.scripts.build_loop import (
     BuildLoop,
     FeatureRecord,
     _check_contamination,
+    _check_repo_contamination,
     _detect_dep_excludes,
+    _EXPECTED_WRITE_PATTERNS,
     _format_duration,
     _parse_signal,
     _parse_token_usage,
+    _PROTECT_DIRS,
+    _protect_repo_tree,
+    _REPO_ROOT,
+    _restore_repo_tree,
     _validate_required_signals,
     derive_component_types,
 )
@@ -1399,3 +1405,107 @@ class TestCheckContamination:
         mock_run.return_value = MagicMock(returncode=0, stdout="")
         result = _check_contamination(tmp_path, "abc123")
         assert result == []
+
+
+# ── _check_repo_contamination tests ──────────────────────────────────────────
+
+
+class TestCheckRepoContamination:
+    """Tests for _check_repo_contamination (auto-sdd working tree audit)."""
+
+    @patch("auto_sdd.scripts.build_loop.subprocess.run")
+    def test_clean_status_returns_empty(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        result = _check_repo_contamination(Path("/fake/repo"), _EXPECTED_WRITE_PATTERNS)
+        assert result == []
+
+    @patch("auto_sdd.scripts.build_loop.subprocess.run")
+    def test_allowlisted_paths_return_empty(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" M logs/foo/bar.json\n M learnings/pending.md\n M general-estimates.jsonl\n",
+        )
+        result = _check_repo_contamination(Path("/fake/repo"), _EXPECTED_WRITE_PATTERNS)
+        assert result == []
+
+    @patch("auto_sdd.scripts.build_loop.subprocess.run")
+    def test_unexpected_path_detected(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" M py/auto_sdd/lib/foo.py\n",
+        )
+        result = _check_repo_contamination(Path("/fake/repo"), _EXPECTED_WRITE_PATTERNS)
+        assert result == ["py/auto_sdd/lib/foo.py"]
+
+    @patch("auto_sdd.scripts.build_loop.subprocess.run")
+    def test_untracked_files_ignored(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="?? some-new-file.txt\n?? another/untracked.py\n",
+        )
+        result = _check_repo_contamination(Path("/fake/repo"), _EXPECTED_WRITE_PATTERNS)
+        assert result == []
+
+    @patch("auto_sdd.scripts.build_loop.subprocess.run")
+    def test_mixed_allowlisted_and_contaminated(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" M logs/build.json\n M py/auto_sdd/scripts/build_loop.py\n M learnings/pending.md\n",
+        )
+        result = _check_repo_contamination(Path("/fake/repo"), _EXPECTED_WRITE_PATTERNS)
+        assert result == ["py/auto_sdd/scripts/build_loop.py"]
+
+
+# ── _protect_repo_tree / _restore_repo_tree tests ────────────────────────────
+
+
+class TestProtectRestoreRepoTree:
+    """Tests for chmod-based write protection functions."""
+
+    @patch("auto_sdd.scripts.build_loop.subprocess.run")
+    def test_protect_calls_chmod_remove_write(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        # Create the directories that _protect_repo_tree checks for
+        for d in _PROTECT_DIRS:
+            (tmp_path / d).mkdir(parents=True, exist_ok=True)
+
+        result = _protect_repo_tree(tmp_path)
+        assert result is True
+
+        # Verify chmod -R a-w was called for each directory
+        calls = mock_run.call_args_list
+        assert len(calls) == len(_PROTECT_DIRS)
+        for call, d in zip(calls, _PROTECT_DIRS):
+            args = call[0][0]
+            assert args[0] == "chmod"
+            assert args[1] == "-R"
+            assert args[2] == "a-w"
+            assert args[3] == str(tmp_path / d)
+
+    @patch("auto_sdd.scripts.build_loop.subprocess.run")
+    def test_restore_calls_chmod_add_write(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        for d in _PROTECT_DIRS:
+            (tmp_path / d).mkdir(parents=True, exist_ok=True)
+
+        _restore_repo_tree(tmp_path)
+
+        calls = mock_run.call_args_list
+        assert len(calls) == len(_PROTECT_DIRS)
+        for call, d in zip(calls, _PROTECT_DIRS):
+            args = call[0][0]
+            assert args[0] == "chmod"
+            assert args[1] == "-R"
+            assert args[2] == "u+w"
+            assert args[3] == str(tmp_path / d)
+
+    @patch("auto_sdd.scripts.build_loop.subprocess.run")
+    def test_protect_returns_false_on_exception(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        (tmp_path / "py").mkdir()
+        mock_run.side_effect = OSError("permission denied")
+        result = _protect_repo_tree(tmp_path)
+        assert result is False
