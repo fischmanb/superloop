@@ -157,3 +157,14 @@ Prefer mechanical validation over agent invocation for structural comparison tas
 - **Related:** L-00012 (root cause of recurrence), L-00175 (related_to)
 
 When a framework-specific build tool is stricter than a generic language tool and the generic matches first, composition failures go undetected. `detect_build_check()` matched `tsconfig.json` before checking for `next.config.*`, returning `tsc --noEmit` for Next.js projects. `tsc` validates types but does not check server/client bundle boundaries — only `next build` does. This caused L-00012 to recur across two full campaigns (stakd-v1 and stakd-v2, 28 features each) despite the pattern being known. The fix: detect Next.js above generic TypeScript. Generalizable: any detection function that selects tools by file presence must order from most-specific framework to most-generic language, because frameworks add constraints their underlying language tooling doesn't enforce.
+
+
+## L-00228 — Always-reset retry discards 90%-correct implementations; fix-in-place before informed fresh retry recovers most failures
+Type: architectural_rationale
+Tags: build_fix_prompt, build_retry_prompt, retry-strategy, _last_gate_name, prior_attempt_summaries, two-stage-retry, build_loop.py
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00001 (related_to), L-00016 (related_to)
+
+The old retry strategy always did `git reset --hard` and rebuilt from scratch with only error hints (last 50 lines build output, 80 lines test output). This wasted working implementations when failures were small (type mismatch, missing import, off-by-one). Two-stage retry: attempt 1 keeps code on disk with `build_fix_prompt` (targeted diagnosis — which gate failed, full failure output, instructions to diagnose and patch, not rewrite), attempt 2+ resets with `build_retry_prompt` enhanced with structured `prior_attempts` context (attempt number, failure mode, summary). First live validation: Feature #19 Rent Potential failed initial build, fix-in-place succeeded — build, 599 tests, and drift check all passed on the fix attempt.

@@ -240,3 +240,14 @@ Status: active
 Date: 2026-03-07T23:00:00-05:00
 
 PptxGenJS via node produces a polished, dark-theme technical deck in a single response when given well-structured session context. A Mag-7-level audience (ML + SW engineers) responds better to: (1) stat callouts over prose, (2) architecture diagrams over bullets, (3) NOW vs PLANNED contrast frames over abstract future state descriptions. Deck took ~6 minutes start to finish including QA iteration.
+
+
+## L-00227 — Codebase summary _EXCLUDED_DIRS must include SDD metadata dirs (.auto-sdd-cache, .specs, .sdd-config, .sdd-state)
+Type: empirical_finding
+Tags: _EXCLUDED_DIRS, codebase_summary.py, .auto-sdd-cache, file-tree, SUMMARY_TIMEOUT, agent-timeout
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00175 (related_to)
+
+The file tree sent to the codebase summary agent included 34 cached summary files and all .specs metadata — noise that inflated the prompt without aiding structural analysis. Combined with a hardcoded 120s timeout insufficient for large projects (cache invalidates every feature build since it's keyed on git tree hash), summary generation timed out on every SitDeck build. Fix: exclude SDD metadata dirs from _EXCLUDED_DIRS in codebase_summary.py, make timeout configurable via SUMMARY_TIMEOUT env var (default 300s). The summary agent only needs application code to produce useful structural context.

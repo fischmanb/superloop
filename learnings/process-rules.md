@@ -1016,3 +1016,14 @@ Date: 2026-03-09
 Related: L-00178 (related_to), L-00163 (related_to)
 
 Prompts with internal triple-backtick code blocks (e.g., for Agents.md entry templates, bash snippets, or Python examples) create multiple fenced regions when the prompt itself is delivered inside a fenced block. This breaks single-block copy-paste — the user has to manually reassemble pieces. Observed directly: an Agents.md template block inside the prompt split it into three separate blocks. Prevention rule: never use triple-backtick fencing inside a prompt body. Use indentation (4-space) for code samples, or describe the content textually and let the agent write it based on what it actually did. Additionally, do not pre-write the Agents.md entry — the agent writes its own based on its actual work, which is more accurate than a template written before execution.
+
+
+## L-00229 — Chat sessions must never launch build_loop; Brian runs all builds in Terminal for operational visibility
+Type: process_rule
+Tags: build_loop, Terminal, chat-session, operational-visibility, start_process, Desktop-Commander
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00020 (related_to)
+
+Brian controls all long-running build processes directly in Terminal. Chat sessions provide run commands, pre-flight context, and analysis — but never execute build_loop themselves. Discovered when chat session launched a build via Desktop Commander start_process and Brian couldn't see progress or interact with it in his Terminal. The control boundary: chat sessions write commands and analyze results, Brian executes.

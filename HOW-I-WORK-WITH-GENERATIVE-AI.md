@@ -1102,6 +1102,17 @@ Brian enforces tight scope discipline on chat responses. When asked to do X, he 
 Brian treats agent dispatch as a ceremony with pre-conditions, not a casual action. When an agent stopped because of a dirty working tree (pre-existing `learnings/pending.md` outside its allowlist), Brian's response was not to override the constraint but to fix the environment and re-run — validating the agent's STOP as correct behavior. Similarly, when the chat merged without waiting for approval, Brian called it out as a violation even though the merge itself was clean. The pattern: process gates are load-bearing, not decorative. Skipping them because the outcome happens to be safe this time is still a failure, because the gate exists for the cases where the outcome would not be safe. Brian calibrates process discipline by enforcing it on easy cases, not just hard ones.
 
 
+## M-00096
+- **Type:** workflow_fact
+- **Tags:** build-loop, Terminal, operational-control, chat-session, execution-boundary
+- **Confidence:** high
+- **Status:** active
+- **Date:** 2026-03-09
+- **Related:** L-00229 (related_to), L-00020 (related_to)
+
+Brian runs all builds in Terminal himself — the pattern extends beyond convenience to operational philosophy. Chat sessions are advisory (commands, analysis, context); execution is Brian's. When a chat session launched a build via Desktop Commander, the immediate correction was "I run all builds in Terminal myself." The control boundary: chat writes, Brian executes. This applies to all long-running processes, not just build_loop.
+
+
 ## Accumulation (DEPRECATED — see L-00194)
 
 > **Process change (2026-03-04):** New methodology observations go directly into graph-schema M-entries above. This section is a backlog of raw captures that predate the change. Clear by converting to schema entries or discarding. Do NOT add new raw entries here.
