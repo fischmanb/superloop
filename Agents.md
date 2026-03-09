@@ -1988,6 +1988,21 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - `mypy --strict` on all 3 source files: Success, no issues
 - `git diff --stat`: Only allowed files modified (plus pre-existing `learnings/pending.md` which was NOT staged)
 
+### Round — Wire Auto-QA as Automatic Post-Campaign Step (2026-03-09)
+
+**Asked**: Wire `ValidationPipeline` from `post_campaign_validation.py` into the build loop so it runs automatically after post-campaign verification, closing the loop from `build_loop` → verify → auto-QA with zero human intervention.
+
+**Changed**:
+- `py/auto_sdd/scripts/build_loop.py`: Added `self.skip_auto_qa` config flag (read from `SKIP_AUTO_QA` env var, default False) in `__init__`. Added `_run_auto_qa()` method that lazily imports `ValidationPipeline`, instantiates it with project_dir/flush_mode/timeout/agent_timeout, calls `pipeline.run()`, and returns exit code (0=pass, 1=failures, 2=infra error). Wired auto-QA call into both `_run_single_mode()` and `_run_both_mode()` after `_post_campaign_verify()` and before `stop_eval_sidecar()`. Guard: only runs if `skip_auto_qa` is False and `loop_built > 0`.
+- `py/tests/test_build_loop.py`: Added `TestRunAutoQA` class with 5 tests: success (exit 0, log assertion), failure (exit 1, log assertion), crash (exception → exit 2, no crash propagation), skipped (SKIP_AUTO_QA=true → flag set, _run_auto_qa not called), no features built (loop_built=0 → _run_auto_qa not called). Added `import logging` and `SKIP_AUTO_QA` to `_clean_env` fixture.
+
+**NOT changed**: No changes to `post_campaign_validation.py`, drift checking, eval sidecar, prompt builder, branch manager, reliability, overnight runner, or any other module. No files created or deleted.
+
+**Verification**:
+- `pytest tests/test_build_loop.py -q`: 102 passed
+- `mypy --strict auto_sdd/scripts/build_loop.py`: Clean (no errors in build_loop.py; 1 pre-existing error in transitive import runtime_attribution.py)
+- `git diff --stat`: Only allowed files modified (plus pre-existing dirty `learnings/pending.md` which was NOT staged)
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.

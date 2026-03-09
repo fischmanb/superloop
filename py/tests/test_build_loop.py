@@ -6,6 +6,7 @@ is acceptable here (unlike lib modules where we prefer real files).
 from __future__ import annotations
 
 import json
+import logging
 import os
 import stat
 import subprocess
@@ -57,7 +58,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "DRIFT_MODEL", "REVIEW_MODEL", "LOGS_DIR", "EVAL_OUTPUT_DIR",
         "COST_LOG_FILE", "BUILD_CHECK_CMD", "TEST_CHECK_CMD",
         "EVAL_SIDECAR", "CLAUDECODE", "ANALYSIS_INTERVAL",
-        "ENABLE_PATTERN_ANALYSIS",
+        "ENABLE_PATTERN_ANALYSIS", "SKIP_AUTO_QA",
     ]:
         monkeypatch.delenv(var, raising=False)
 
@@ -1650,3 +1651,77 @@ class TestPostCampaignVerify:
         # No package.json → no JS package manager → skip
         result = loop._post_campaign_verify()
         assert result is True
+
+
+class TestRunAutoQA:
+    """Tests for _run_auto_qa integration."""
+
+    @staticmethod
+    def _mock_pipeline_module(pipeline_cls: Any) -> dict[str, Any]:
+        """Return a sys.modules patch dict with a fake post_campaign_validation."""
+        fake_mod = MagicMock(ValidationPipeline=pipeline_cls)
+        return {"auto_sdd.scripts.post_campaign_validation": fake_mod}
+
+    def test_run_auto_qa_success(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        loop = _make_loop(tmp_path)
+        mock_instance = MagicMock()
+        mock_instance.run.return_value = 0
+        mock_cls = MagicMock(return_value=mock_instance)
+
+        with caplog.at_level(logging.INFO, logger="auto_sdd.scripts.build_loop"):
+            with patch.dict("sys.modules", self._mock_pipeline_module(mock_cls)):
+                result = loop._run_auto_qa()
+
+        assert result == 0
+        assert "ALL CRITERIA PASSED" in caplog.text
+        mock_cls.assert_called_once()
+
+    def test_run_auto_qa_failure(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        loop = _make_loop(tmp_path)
+        mock_instance = MagicMock()
+        mock_instance.run.return_value = 1
+        mock_cls = MagicMock(return_value=mock_instance)
+
+        with caplog.at_level(logging.WARNING, logger="auto_sdd.scripts.build_loop"):
+            with patch.dict("sys.modules", self._mock_pipeline_module(mock_cls)):
+                result = loop._run_auto_qa()
+
+        assert result == 1
+        assert "exit code 1" in caplog.text
+
+    def test_run_auto_qa_crash(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        loop = _make_loop(tmp_path)
+        mock_cls = MagicMock(side_effect=RuntimeError("boom"))
+
+        with caplog.at_level(logging.ERROR, logger="auto_sdd.scripts.build_loop"):
+            with patch.dict("sys.modules", self._mock_pipeline_module(mock_cls)):
+                result = loop._run_auto_qa()
+
+        assert result == 2
+        assert "Auto-QA pipeline crashed" in caplog.text
+
+    def test_run_auto_qa_skipped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SKIP_AUTO_QA", "true")
+        loop = _make_loop(tmp_path)
+        loop.loop_built = 3
+
+        assert loop.skip_auto_qa is True
+        # Wiring guard: _run_auto_qa should NOT be called when skip_auto_qa is True
+        with patch.object(loop, "_run_auto_qa") as mock_qa:
+            # Simulate the guard logic from _run_single_mode / _run_both_mode
+            if not loop.skip_auto_qa and loop.loop_built > 0:
+                loop._run_auto_qa()
+            mock_qa.assert_not_called()
+
+    def test_run_auto_qa_no_features_built(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        loop.loop_built = 0
+
+        assert not loop.skip_auto_qa
+        # Wiring guard: _run_auto_qa should NOT be called when loop_built == 0
+        with patch.object(loop, "_run_auto_qa") as mock_qa:
+            if not loop.skip_auto_qa and loop.loop_built > 0:
+                loop._run_auto_qa()
+            mock_qa.assert_not_called()

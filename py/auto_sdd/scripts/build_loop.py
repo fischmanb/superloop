@@ -593,6 +593,9 @@ class BuildLoop:
         # Agent timeout (seconds)
         self.agent_timeout = _env_int("AGENT_TIMEOUT", 1800)
 
+        # Auto-QA opt-out
+        self.skip_auto_qa = os.environ.get("SKIP_AUTO_QA", "").lower() in ("1", "true", "yes")
+
         # Gate failure tracking — populated by _run_post_build_gates
         # so the retry loop can pass failure details to fix/retry prompts.
         self._last_gate_name: str = ""
@@ -800,6 +803,17 @@ class BuildLoop:
                 "has dependency or build issues that were not caught per-feature"
             )
 
+        # Auto-QA: full validation pipeline
+        if not self.skip_auto_qa and self.loop_built > 0:
+            qa_exit = self._run_auto_qa()
+            if qa_exit != 0:
+                logger.warning(
+                    "Auto-QA found issues (exit %d) — review validation logs",
+                    qa_exit,
+                )
+        elif self.skip_auto_qa:
+            logger.info("Auto-QA skipped (SKIP_AUTO_QA=true)")
+
         cleanup_merged_branches(self.project_dir, self.main_branch)
 
         if self.enable_resume and self.loop_failed == 0:
@@ -839,6 +853,17 @@ class BuildLoop:
                 "POST-CAMPAIGN VERIFICATION FAILED — the combined project "
                 "has dependency or build issues that were not caught per-feature"
             )
+
+        # Auto-QA: full validation pipeline
+        if not self.skip_auto_qa and self.loop_built > 0:
+            qa_exit = self._run_auto_qa()
+            if qa_exit != 0:
+                logger.warning(
+                    "Auto-QA found issues (exit %d) — review validation logs",
+                    qa_exit,
+                )
+        elif self.skip_auto_qa:
+            logger.info("Auto-QA skipped (SKIP_AUTO_QA=true)")
 
         cleanup_merged_branches(self.project_dir, self.main_branch)
 
@@ -1749,6 +1774,56 @@ class BuildLoop:
             check_lint(gate_dir)
 
         return True
+
+    # ── Post-campaign auto-QA ────────────────────────────────────────────
+
+    def _run_auto_qa(self) -> int:
+        """Run the auto-QA validation pipeline against the built project.
+
+        Invokes the full ValidationPipeline (discovery → acceptance criteria →
+        Playwright validation → failure catalog → RCA → fix agents) automatically
+        after the campaign completes. This closes the loop — no manual step
+        between build completion and quality validation.
+
+        Returns the pipeline exit code (0 = all pass, 1 = some failures, 2 = infra error).
+        """
+        try:
+            from auto_sdd.scripts.post_campaign_validation import (
+                ValidationPipeline,
+            )
+        except ImportError:
+            logger.warning("auto-QA pipeline not available — skipping")
+            return 0
+
+        if not self.project_dir.is_dir():
+            logger.error("Project dir does not exist for auto-QA: %s", self.project_dir)
+            return 2
+
+        logger.info("═══ Post-Campaign Auto-QA ═══")
+        logger.info("Running full validation pipeline against %s", self.project_dir)
+
+        agent_timeout = float(os.environ.get("AGENT_TIMEOUT", str(self.agent_timeout)))
+
+        try:
+            pipeline = ValidationPipeline(
+                project_dir=self.project_dir,
+                flush_mode="auto",
+                validation_timeout=60.0,
+                resume=False,
+                phase=None,
+                agent_timeout=agent_timeout,
+            )
+            exit_code = pipeline.run()
+        except Exception:
+            logger.exception("Auto-QA pipeline crashed")
+            return 2
+
+        if exit_code == 0:
+            logger.info("✓ Auto-QA: ALL CRITERIA PASSED")
+        else:
+            logger.warning("Auto-QA finished with exit code %d — see validation logs", exit_code)
+
+        return exit_code
 
     # ── Post-campaign clean-room verification ────────────────────────────
 
