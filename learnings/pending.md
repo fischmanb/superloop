@@ -2037,3 +2037,537 @@ Drift check passed: True  Test check passed: True
 Build output tail:
 FEATURE_BUILT: auth
 SPEC_FILE: spec.md
+
+---
+
+## [pending] BUILD-FAILURE — test_failure_updates_tracking0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:24:02Z
+Category: build-failure
+Project: test_failure_updates_tracking0
+Feature: auth
+
+**Build failure: auth (status=failed, retries=0)**
+
+Model: opus  Duration: 1m 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+
+---
+
+## [pending] BUILD-FAILURE — test_multiple_builds_accumulat0 / settings — 2026-03-09
+Timestamp: 2026-03-09T04:24:02Z
+Category: build-failure
+Project: test_multiple_builds_accumulat0
+Feature: settings
+
+**Build failure: settings (status=failed, retries=0)**
+
+Model: opus  Duration: 5m 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+
+---
+
+## [pending] BUILD-FAILURE — test_produces_valid_json0 / dashboard — 2026-03-09
+Timestamp: 2026-03-09T04:24:02Z
+Category: build-failure
+Project: test_produces_valid_json0
+Feature: dashboard
+
+**Build failure: dashboard (status=failed, retries=0)**
+
+Model: sonnet  Duration: 1m 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+
+---
+
+## [pending] RETRY — test_retry_succeeds_on_second_0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:24:02Z
+Category: retry
+Project: test_retry_succeeds_on_second_0
+Feature: auth
+
+**auth required 2 attempts before passing gates**
+
+Feature passed on attempt 2. Earlier attempt(s) failed:
+
+---
+
+## [pending] BUILD-FAILURE — test_independent_pass_calls_bu0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:24:03Z
+Category: build-failure
+Project: test_independent_pass_calls_bu0
+Feature: auth
+
+**Build failure: auth (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+BUILD_FAILED: test
+
+---
+
+## [pending] BUILD-FAILURE — test_independent_pass_fails_wh0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:24:03Z
+Category: build-failure
+Project: test_independent_pass_fails_wh0
+Feature: auth
+
+**Build failure: auth (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+FEATURE_BUILT: auth
+SPEC_FILE: spec.md
+
+---
+
+## [pending] DRIFT — test_no_drift_detected0 — 2026-03-09
+Timestamp: 2026-03-09T04:24:03Z
+Category: drift
+Project: test_no_drift_detected0
+Feature: (campaign-wide)
+
+**Drift check: no drift detected for spec.md**
+
+Spec and implementation are aligned.
+Spec: spec.md
+Source files: src.ts
+
+---
+
+## [pending] DRIFT-UNRESOLVABLE — test_unresolvable_drift0 — 2026-03-09
+Timestamp: 2026-03-09T04:24:03Z
+Category: drift-unresolvable
+Project: test_unresolvable_drift0
+Feature: (campaign-wide)
+
+**Drift UNRESOLVABLE for spec.md — needs human review**
+
+Drift agent could not reconcile spec and code.
+Reason: missing schema
+Spec: spec.md
+Source files: src.ts
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:24:06Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 1s
+Drift check passed: True  Test check passed: True
+Build output tail:
+BUILD_FAILED: could not compile
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:24:06Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+Error: insufficient_quota
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:24:09Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 1s
+Drift check passed: True  Test check passed: True
+Build output tail:
+FEATURE_BUILT: Hello World
+SPEC_FILE: .specs/hello-world.md
+SOURCE_FILES: hello-world.ts
+
+---
+
+## [pending] DRIFT — proj — 2026-03-09
+Timestamp: 2026-03-09T04:24:21Z
+Category: drift
+Project: proj
+Feature: (campaign-wide)
+
+**default repo**
+
+detail
+
+---
+
+## [pending] BUILD-FAILURE — test_failure_updates_tracking0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:24:38Z
+Category: build-failure
+Project: test_failure_updates_tracking0
+Feature: auth
+
+**Build failure: auth (status=failed, retries=0)**
+
+Model: opus  Duration: 1m 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+
+---
+
+## [pending] BUILD-FAILURE — test_multiple_builds_accumulat0 / settings — 2026-03-09
+Timestamp: 2026-03-09T04:24:38Z
+Category: build-failure
+Project: test_multiple_builds_accumulat0
+Feature: settings
+
+**Build failure: settings (status=failed, retries=0)**
+
+Model: opus  Duration: 5m 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+
+---
+
+## [pending] BUILD-FAILURE — test_produces_valid_json0 / dashboard — 2026-03-09
+Timestamp: 2026-03-09T04:24:38Z
+Category: build-failure
+Project: test_produces_valid_json0
+Feature: dashboard
+
+**Build failure: dashboard (status=failed, retries=0)**
+
+Model: sonnet  Duration: 1m 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+
+---
+
+## [pending] RETRY — test_retry_succeeds_on_second_0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:24:39Z
+Category: retry
+Project: test_retry_succeeds_on_second_0
+Feature: auth
+
+**auth required 2 attempts before passing gates**
+
+Feature passed on attempt 2. Earlier attempt(s) failed:
+
+---
+
+## [pending] BUILD-FAILURE — test_independent_pass_calls_bu0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:24:39Z
+Category: build-failure
+Project: test_independent_pass_calls_bu0
+Feature: auth
+
+**Build failure: auth (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+BUILD_FAILED: test
+
+---
+
+## [pending] BUILD-FAILURE — test_independent_pass_fails_wh0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:24:39Z
+Category: build-failure
+Project: test_independent_pass_fails_wh0
+Feature: auth
+
+**Build failure: auth (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+FEATURE_BUILT: auth
+SPEC_FILE: spec.md
+
+---
+
+## [pending] DRIFT — test_no_drift_detected0 — 2026-03-09
+Timestamp: 2026-03-09T04:24:40Z
+Category: drift
+Project: test_no_drift_detected0
+Feature: (campaign-wide)
+
+**Drift check: no drift detected for spec.md**
+
+Spec and implementation are aligned.
+Spec: spec.md
+Source files: src.ts
+
+---
+
+## [pending] DRIFT-UNRESOLVABLE — test_unresolvable_drift0 — 2026-03-09
+Timestamp: 2026-03-09T04:24:40Z
+Category: drift-unresolvable
+Project: test_unresolvable_drift0
+Feature: (campaign-wide)
+
+**Drift UNRESOLVABLE for spec.md — needs human review**
+
+Drift agent could not reconcile spec and code.
+Reason: missing schema
+Spec: spec.md
+Source files: src.ts
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:24:42Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+BUILD_FAILED: could not compile
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:24:43Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+Error: insufficient_quota
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:24:45Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+FEATURE_BUILT: Hello World
+SPEC_FILE: .specs/hello-world.md
+SOURCE_FILES: hello-world.ts
+
+---
+
+## [pending] DRIFT — proj — 2026-03-09
+Timestamp: 2026-03-09T04:24:58Z
+Category: drift
+Project: proj
+Feature: (campaign-wide)
+
+**default repo**
+
+detail
+
+---
+
+## [pending] BUILD-FAILURE — test_failure_updates_tracking0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:25:05Z
+Category: build-failure
+Project: test_failure_updates_tracking0
+Feature: auth
+
+**Build failure: auth (status=failed, retries=0)**
+
+Model: opus  Duration: 1m 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+
+---
+
+## [pending] BUILD-FAILURE — test_multiple_builds_accumulat0 / settings — 2026-03-09
+Timestamp: 2026-03-09T04:25:05Z
+Category: build-failure
+Project: test_multiple_builds_accumulat0
+Feature: settings
+
+**Build failure: settings (status=failed, retries=0)**
+
+Model: opus  Duration: 5m 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+
+---
+
+## [pending] BUILD-FAILURE — test_produces_valid_json0 / dashboard — 2026-03-09
+Timestamp: 2026-03-09T04:25:05Z
+Category: build-failure
+Project: test_produces_valid_json0
+Feature: dashboard
+
+**Build failure: dashboard (status=failed, retries=0)**
+
+Model: sonnet  Duration: 1m 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+
+---
+
+## [pending] RETRY — test_retry_succeeds_on_second_0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:25:06Z
+Category: retry
+Project: test_retry_succeeds_on_second_0
+Feature: auth
+
+**auth required 2 attempts before passing gates**
+
+Feature passed on attempt 2. Earlier attempt(s) failed:
+
+---
+
+## [pending] BUILD-FAILURE — test_independent_pass_calls_bu0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:25:06Z
+Category: build-failure
+Project: test_independent_pass_calls_bu0
+Feature: auth
+
+**Build failure: auth (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+BUILD_FAILED: test
+
+---
+
+## [pending] BUILD-FAILURE — test_independent_pass_fails_wh0 / auth — 2026-03-09
+Timestamp: 2026-03-09T04:25:06Z
+Category: build-failure
+Project: test_independent_pass_fails_wh0
+Feature: auth
+
+**Build failure: auth (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+FEATURE_BUILT: auth
+SPEC_FILE: spec.md
+
+---
+
+## [pending] DRIFT — test_no_drift_detected0 — 2026-03-09
+Timestamp: 2026-03-09T04:25:06Z
+Category: drift
+Project: test_no_drift_detected0
+Feature: (campaign-wide)
+
+**Drift check: no drift detected for spec.md**
+
+Spec and implementation are aligned.
+Spec: spec.md
+Source files: src.ts
+
+---
+
+## [pending] DRIFT-UNRESOLVABLE — test_unresolvable_drift0 — 2026-03-09
+Timestamp: 2026-03-09T04:25:06Z
+Category: drift-unresolvable
+Project: test_unresolvable_drift0
+Feature: (campaign-wide)
+
+**Drift UNRESOLVABLE for spec.md — needs human review**
+
+Drift agent could not reconcile spec and code.
+Reason: missing schema
+Spec: spec.md
+Source files: src.ts
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:25:09Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 0s
+Drift check passed: True  Test check passed: True
+Build output tail:
+BUILD_FAILED: could not compile
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:25:10Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 1s
+Drift check passed: True  Test check passed: True
+Build output tail:
+Error: insufficient_quota
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:25:13Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 1s
+Drift check passed: True  Test check passed: True
+Build output tail:
+FEATURE_BUILT: Hello World
+SPEC_FILE: .specs/hello-world.md
+SOURCE_FILES: hello-world.ts
+
+---
+
+## [pending] DRIFT — proj — 2026-03-09
+Timestamp: 2026-03-09T04:25:25Z
+Category: drift
+Project: proj
+Feature: (campaign-wide)
+
+**default repo**
+
+detail
+
+---
+
+## [pending] BUILD-FAILURE — test-project / Hello World — 2026-03-09
+Timestamp: 2026-03-09T04:25:49Z
+Category: build-failure
+Project: test-project
+Feature: Hello World
+
+**Build failure: Hello World (status=failed, retries=0)**
+
+Model: default  Duration: 1s
+Drift check passed: True  Test check passed: True
+Build output tail:
+Error: insufficient_quota
