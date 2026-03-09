@@ -237,6 +237,10 @@ def run_claude(
     # Strip CLAUDECODE from the child environment to prevent nested-session
     # detection — mirrors ``unset CLAUDECODE`` in the bash wrapper.
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    # Force development mode so package managers install devDependencies.
+    # Without this, a parent shell with NODE_ENV=production silently
+    # breaks builds by skipping devDeps (tailwind, vitest, etc.).
+    env["NODE_ENV"] = "development"
 
     logger.info("Running: %s (timeout=%ds)", " ".join(cmd), timeout)
 

@@ -23,6 +23,7 @@ project types, and functions to execute those checks with typed results.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -297,6 +298,7 @@ def run_cmd_safe(
     project_dir: Path,
     *,
     timeout: int = 600,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a shell command safely with timeout.
 
@@ -304,16 +306,21 @@ def run_cmd_safe(
         cmd: Shell command string.
         project_dir: Working directory.
         timeout: Seconds before kill.
+        env: Environment variables for the subprocess.  Defaults to the
+            current environment with ``NODE_ENV`` forced to ``development``
+            so package managers always install devDependencies.
 
     Returns:
         CompletedProcess with stdout/stderr captured.
     """
+    run_env = env if env is not None else {**os.environ, "NODE_ENV": "development"}
     return subprocess.run(
         ["sh", "-c", cmd],
         capture_output=True,
         text=True,
         cwd=str(project_dir),
         timeout=timeout,
+        env=run_env,
     )
 
 
@@ -354,6 +361,65 @@ def check_build(
         tail = "\n".join(lines[-50:]) if len(lines) > 50 else combined
         logger.error("Build check failed")
         return BuildCheckResult(success=False, output=tail)
+
+
+def check_deps(
+    project_dir: Path,
+    *,
+    timeout: int = 120,
+) -> BuildCheckResult:
+    """Verify all declared dependencies are actually installed.
+
+    Detects the package manager (npm/yarn/pnpm) and runs its
+    verification command. Catches the case where NODE_ENV or stale
+    lockfiles caused devDependencies to be silently skipped.
+
+    Returns:
+        BuildCheckResult with success flag and output.
+    """
+    pm = _detect_package_manager(project_dir)
+    if pm is None:
+        logger.info("No JS package manager detected — skipping dep check")
+        return BuildCheckResult(success=True, output="")
+
+    # Package manager verification commands:
+    # npm ls --all exits non-zero if any declared dep is missing
+    # yarn check --verify-tree does the same
+    # pnpm ls exits non-zero on missing deps
+    verify_cmds = {
+        "npm": "npm ls --all 2>&1 | tail -5",
+        "yarn": "yarn check --verify-tree 2>&1 | tail -5",
+        "pnpm": "pnpm ls 2>&1 | tail -5",
+    }
+    cmd = verify_cmds.get(pm, "")
+    if not cmd:
+        return BuildCheckResult(success=True, output="")
+
+    logger.info("Checking dependency health: %s", cmd)
+    try:
+        proc = run_cmd_safe(cmd, project_dir, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return BuildCheckResult(
+            success=False, output="Dependency check timed out"
+        )
+
+    if proc.returncode != 0:
+        tail = (proc.stdout or "") + (proc.stderr or "")
+        logger.warning("Dependency check failed:\n%s", tail[-2000:])
+        return BuildCheckResult(success=False, output=tail[-2000:])
+
+    return BuildCheckResult(success=True, output="")
+
+
+def _detect_package_manager(project_dir: Path) -> str | None:
+    """Detect which JS package manager the project uses."""
+    if (project_dir / "pnpm-lock.yaml").exists():
+        return "pnpm"
+    if (project_dir / "yarn.lock").exists():
+        return "yarn"
+    if (project_dir / "package-lock.json").exists() or (project_dir / "package.json").exists():
+        return "npm"
+    return None
 
 
 def check_tests(

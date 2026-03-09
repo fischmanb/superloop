@@ -10,9 +10,11 @@ import pytest
 from auto_sdd.lib.build_gates import (
     BuildCheckResult,
     DeadExportResult,
+    _detect_package_manager,
     agent_cmd,
     check_build,
     check_dead_exports,
+    check_deps,
     check_lint,
     check_tests,
     check_working_tree_clean,
@@ -447,3 +449,106 @@ class TestRunCmdSafe:
         call_args = mock_run.call_args[0][0]
         assert call_args[0] == "sh", f"Expected 'sh' but got '{call_args[0]}'"
         assert call_args[1] == "-c"
+
+    @patch("auto_sdd.lib.build_gates.subprocess.run")
+    def test_passes_node_env_development(self, mock_run: object, tmp_path: Path) -> None:
+        """run_cmd_safe must default to NODE_ENV=development in env."""
+        from unittest.mock import MagicMock
+        assert isinstance(mock_run, MagicMock)
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        run_cmd_safe("echo test", tmp_path)
+        call_kwargs = mock_run.call_args[1]
+        env = call_kwargs.get("env", {})
+        assert env.get("NODE_ENV") == "development"
+
+    @patch("auto_sdd.lib.build_gates.subprocess.run")
+    def test_custom_env_passed_through(self, mock_run: object, tmp_path: Path) -> None:
+        """When caller provides explicit env, it should be used as-is."""
+        from unittest.mock import MagicMock
+        assert isinstance(mock_run, MagicMock)
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        custom_env = {"PATH": "/usr/bin", "NODE_ENV": "test"}
+        run_cmd_safe("echo test", tmp_path, env=custom_env)
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["env"] == custom_env
+
+
+# ── _detect_package_manager ──────────────────────────────────────────────────
+
+
+class TestDetectPackageManager:
+    def test_pnpm(self, tmp_path: Path) -> None:
+        (tmp_path / "pnpm-lock.yaml").touch()
+        assert _detect_package_manager(tmp_path) == "pnpm"
+
+    def test_yarn(self, tmp_path: Path) -> None:
+        (tmp_path / "yarn.lock").touch()
+        assert _detect_package_manager(tmp_path) == "yarn"
+
+    def test_npm_lock(self, tmp_path: Path) -> None:
+        (tmp_path / "package-lock.json").touch()
+        assert _detect_package_manager(tmp_path) == "npm"
+
+    def test_npm_package_json(self, tmp_path: Path) -> None:
+        (tmp_path / "package.json").touch()
+        assert _detect_package_manager(tmp_path) == "npm"
+
+    def test_no_pm(self, tmp_path: Path) -> None:
+        assert _detect_package_manager(tmp_path) is None
+
+    def test_pnpm_takes_precedence(self, tmp_path: Path) -> None:
+        """pnpm-lock.yaml wins over yarn.lock and package-lock.json."""
+        (tmp_path / "pnpm-lock.yaml").touch()
+        (tmp_path / "yarn.lock").touch()
+        (tmp_path / "package-lock.json").touch()
+        assert _detect_package_manager(tmp_path) == "pnpm"
+
+
+# ── check_deps ───────────────────────────────────────────────────────────────
+
+
+class TestCheckDeps:
+    @patch("auto_sdd.lib.build_gates.run_cmd_safe")
+    def test_success(self, mock_run: object, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+        assert isinstance(mock_run, MagicMock)
+        (tmp_path / "package.json").write_text("{}")
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = "ok"
+        mock_proc.stderr = ""
+        mock_run.return_value = mock_proc
+
+        result = check_deps(tmp_path)
+        assert result.success is True
+
+    @patch("auto_sdd.lib.build_gates.run_cmd_safe")
+    def test_failure(self, mock_run: object, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+        assert isinstance(mock_run, MagicMock)
+        (tmp_path / "package.json").write_text("{}")
+        mock_proc = MagicMock()
+        mock_proc.returncode = 1
+        mock_proc.stdout = "missing: @tailwindcss/postcss"
+        mock_proc.stderr = ""
+        mock_run.return_value = mock_proc
+
+        result = check_deps(tmp_path)
+        assert result.success is False
+        assert "tailwindcss" in result.output
+
+    def test_no_package_json_skips(self, tmp_path: Path) -> None:
+        result = check_deps(tmp_path)
+        assert result.success is True
+        assert result.output == ""
+
+    @patch("auto_sdd.lib.build_gates.run_cmd_safe")
+    def test_timeout(self, mock_run: object, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+        assert isinstance(mock_run, MagicMock)
+        (tmp_path / "package.json").write_text("{}")
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="npm ls", timeout=120)
+
+        result = check_deps(tmp_path)
+        assert result.success is False
+        assert "timed out" in result.output

@@ -62,14 +62,17 @@ from auto_sdd.lib.branch_manager import (
 from auto_sdd.lib.build_gates import (
     BuildCheckResult,
     DeadExportResult,
+    _detect_package_manager,
     check_build,
     check_dead_exports,
+    check_deps,
     check_lint,
     check_tests,
     check_working_tree_clean,
     clean_working_tree,
     detect_build_check,
     detect_test_check,
+    run_cmd_safe,
     should_run_step,
 )
 from auto_sdd.lib.claude_wrapper import ClaudeResult, CreditExhaustionError, run_claude
@@ -788,6 +791,13 @@ class BuildLoop:
         summary_path = self.write_build_summary(total_elapsed)
         logger.info("Summary written to: %s", summary_path)
 
+        # Post-campaign clean-room verification
+        if not self._post_campaign_verify():
+            logger.error(
+                "POST-CAMPAIGN VERIFICATION FAILED — the combined project "
+                "has dependency or build issues that were not caught per-feature"
+            )
+
         cleanup_merged_branches(self.project_dir, self.main_branch)
 
         if self.enable_resume and self.loop_failed == 0:
@@ -820,6 +830,13 @@ class BuildLoop:
         total_elapsed = int(time.time()) - self.script_start
         summary_path = self.write_build_summary(total_elapsed)
         logger.info("Summary written to: %s", summary_path)
+
+        # Post-campaign clean-room verification
+        if not self._post_campaign_verify():
+            logger.error(
+                "POST-CAMPAIGN VERIFICATION FAILED — the combined project "
+                "has dependency or build issues that were not caught per-feature"
+            )
 
         cleanup_merged_branches(self.project_dir, self.main_branch)
 
@@ -1612,6 +1629,16 @@ class BuildLoop:
             )
             return False
 
+        # Gate 1.75: Dependency health — all declared packages resolved
+        dep_result = check_deps(gate_dir)
+        if not dep_result.success:
+            logger.warning(
+                "Agent said FEATURE_BUILT but dependency check failed"
+            )
+            self._last_gate_name = "deps"
+            self._last_gate_build_output = dep_result.output[-3000:]
+            return False
+
         # Gate 2: Build check
         build_ok = check_build(self.build_cmd, gate_dir)
         if not build_ok.success:
@@ -1719,6 +1746,64 @@ class BuildLoop:
         if should_run_step("lint", self.post_build_steps):
             check_lint(gate_dir)
 
+        return True
+
+    # ── Post-campaign clean-room verification ────────────────────────────
+
+    def _post_campaign_verify(self) -> bool:
+        """Clean-room verification after all features are built.
+
+        Removes node_modules, reinstalls dependencies from scratch
+        with NODE_ENV=development forced, then runs build and test
+        commands. Catches cases where individual features pass gates
+        but the combined project has stale or broken dependencies.
+
+        Returns True if verification passes.
+        """
+        logger.info("═══ Post-campaign clean-room verification ═══")
+
+        pm = _detect_package_manager(self.project_dir)
+        if pm is None:
+            logger.info("No JS package manager — skipping clean-room verify")
+            return True
+
+        # Step 1: Remove node_modules
+        nm_dir = self.project_dir / "node_modules"
+        if nm_dir.exists():
+            logger.info("Removing node_modules for clean reinstall...")
+            import shutil
+            shutil.rmtree(nm_dir, ignore_errors=True)
+
+        # Step 2: Reinstall dependencies
+        install_cmds = {"npm": "npm install", "yarn": "yarn install", "pnpm": "pnpm install"}
+        install_cmd = install_cmds.get(pm, "npm install")
+        logger.info("Reinstalling: %s", install_cmd)
+        install_result = run_cmd_safe(install_cmd, self.project_dir, timeout=300)
+        if install_result.returncode != 0:
+            logger.error("Clean-room install failed:\n%s", (install_result.stdout or "")[-2000:])
+            return False
+
+        # Step 3: Verify deps
+        dep_check = check_deps(self.project_dir)
+        if not dep_check.success:
+            logger.error("Clean-room dependency check failed:\n%s", dep_check.output[-2000:])
+            return False
+
+        # Step 4: Build check
+        if self.build_cmd:
+            build_check = check_build(self.build_cmd, self.project_dir)
+            if not build_check.success:
+                logger.error("Clean-room build failed:\n%s", build_check.output[-2000:])
+                return False
+
+        # Step 5: Test check
+        if self.test_cmd:
+            test_check = check_tests(self.test_cmd, self.project_dir)
+            if not test_check.success:
+                logger.error("Clean-room tests failed:\n%s", test_check.output[-2000:])
+                return False
+
+        logger.info("✓ Clean-room verification passed")
         return True
 
     # ── Independent pass (both mode) ─────────────────────────────────────

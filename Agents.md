@@ -1968,6 +1968,26 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - Attempted live single-feature build from chat session — learned Brian runs all builds in Terminal himself. Process rule captured.
 - Flushed pending captures to ACTIVE-CONSIDERATIONS.md
 
+### Round — Environment Isolation + Dependency Health Gate + Post-Campaign Verification (2026-03-09)
+
+**Asked**: Fix three classes of environment leakage that silently break builds: (1) parent shell NODE_ENV=production causing npm to skip devDependencies, (2) no gate to verify dependencies actually resolved, (3) no clean-room verification after all features are built.
+
+**Changed**:
+- `py/auto_sdd/lib/claude_wrapper.py`: Force `NODE_ENV=development` in agent subprocess env (line 242). Parent shell with NODE_ENV=production was silently skipping devDependencies (tailwind, vitest, etc.).
+- `py/auto_sdd/lib/build_gates.py`: `run_cmd_safe()` now accepts `env` kwarg, defaults to `NODE_ENV=development` for all gate commands. Added `import os` at module level. New `check_deps()` function verifies declared packages resolved (auto-detects npm/yarn/pnpm). New `_detect_package_manager()` helper.
+- `py/auto_sdd/scripts/build_loop.py`: Imported `check_deps`, `_detect_package_manager`, `run_cmd_safe` from build_gates. `check_deps` wired as Gate 1.75 in `_run_post_build_gates()` (between contamination check and build check). New `_post_campaign_verify()` method does clean-room reinstall + dep check + build + test after all features. Called in both `run()` and `_run_both_mode()` after summary is written, before `stop_eval_sidecar()`.
+- `py/tests/test_claude_wrapper.py`: 2 tests for NODE_ENV=development in agent env.
+- `py/tests/test_build_gates.py`: Tests for `_detect_package_manager` (6 tests), `check_deps` (4 tests), `run_cmd_safe` NODE_ENV default (2 tests).
+- `py/tests/test_build_loop.py`: Tests for check_deps gate blocking (2 tests), `_post_campaign_verify` (3 tests).
+
+**NOT changed**: No changes to drift checking, eval sidecar, prompt builder, branch manager, reliability, overnight runner, or any other module. No files created or deleted.
+
+**Verification**:
+- `pytest tests/test_claude_wrapper.py tests/test_build_gates.py tests/test_build_loop.py -q`: 207 passed
+- `pytest tests/ -q`: 1043 passed, 2 failed (both pre-existing: `test_merge_commit_skipped`, `test_contamination_check_clean_repo`)
+- `mypy --strict` on all 3 source files: Success, no issues
+- `git diff --stat`: Only allowed files modified (plus pre-existing `learnings/pending.md` which was NOT staged)
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.

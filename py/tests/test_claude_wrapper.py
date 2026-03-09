@@ -763,3 +763,47 @@ class TestRunClaudeTokenLogging:
         result = run_claude(["-p", "test"])
         assert result.output == "Hello world"
         assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# run_claude — NODE_ENV isolation
+# ---------------------------------------------------------------------------
+
+
+class TestRunClaudeEnvIsolation:
+    """Tests for NODE_ENV=development in agent subprocess env."""
+
+    @patch("auto_sdd.lib.claude_wrapper.subprocess.run")
+    def test_run_claude_sets_node_env_development(
+        self, mock_run: Any
+    ) -> None:
+        """NODE_ENV must be set to 'development' in the env passed to subprocess."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=["claude"],
+            returncode=0,
+            stdout=_make_claude_json(),
+            stderr="",
+        )
+        run_claude(["-p", "test"])
+
+        call_kwargs = mock_run.call_args[1]
+        env = call_kwargs.get("env", {})
+        assert env.get("NODE_ENV") == "development"
+
+    @patch("auto_sdd.lib.claude_wrapper.subprocess.run")
+    def test_run_claude_overrides_production_node_env(
+        self, mock_run: Any
+    ) -> None:
+        """Even if parent shell has NODE_ENV=production, agent gets development."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=["claude"],
+            returncode=0,
+            stdout=_make_claude_json(),
+            stderr="",
+        )
+        with patch.dict("os.environ", {"NODE_ENV": "production"}):
+            run_claude(["-p", "test"])
+
+        call_kwargs = mock_run.call_args[1]
+        env = call_kwargs.get("env", {})
+        assert env.get("NODE_ENV") == "development"

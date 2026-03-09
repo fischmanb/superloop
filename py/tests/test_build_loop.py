@@ -1547,3 +1547,106 @@ class TestProtectRestoreRepoTree:
 
         assert not (gitignore.stat().st_mode & stat.S_IWUSR)
         assert not (version.stat().st_mode & stat.S_IWUSR)
+
+
+# ── check_deps gate in _run_post_build_gates ─────────────────────────────────
+
+
+class TestCheckDepsGate:
+    """Tests for check_deps wired as Gate 1.75 in _run_post_build_gates."""
+
+    def test_dep_failure_blocks_gate(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+
+        with patch(
+            "auto_sdd.scripts.build_loop.check_working_tree_clean",
+            return_value=True,
+        ):
+            with patch(
+                "auto_sdd.scripts.build_loop.check_deps",
+                return_value=BuildCheckResult(
+                    success=False, output="missing: @tailwindcss/postcss"
+                ),
+            ):
+                result = loop._run_post_build_gates(
+                    "FEATURE_BUILT: auth\n", "auth"
+                )
+
+        assert result is False
+        assert loop._last_gate_name == "deps"
+
+    def test_dep_success_continues_to_build(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+
+        with patch(
+            "auto_sdd.scripts.build_loop.check_working_tree_clean",
+            return_value=True,
+        ):
+            with patch(
+                "auto_sdd.scripts.build_loop.check_deps",
+                return_value=BuildCheckResult(success=True, output=""),
+            ):
+                with patch(
+                    "auto_sdd.scripts.build_loop.check_build",
+                    return_value=BuildCheckResult(success=True, output=""),
+                ):
+                    result = loop._run_post_build_gates(
+                        "FEATURE_BUILT: auth\n", "auth"
+                    )
+
+        assert result is True
+
+
+# ── _post_campaign_verify ────────────────────────────────────────────────────
+
+
+class TestPostCampaignVerify:
+    """Tests for _post_campaign_verify clean-room verification."""
+
+    def test_happy_path(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        loop.build_cmd = "npm run build"
+        loop.test_cmd = "npm test"
+        (tmp_path / "package.json").write_text("{}")
+
+        with patch(
+            "auto_sdd.scripts.build_loop.run_cmd_safe",
+        ) as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
+            with patch(
+                "auto_sdd.scripts.build_loop.check_deps",
+                return_value=BuildCheckResult(success=True, output=""),
+            ):
+                with patch(
+                    "auto_sdd.scripts.build_loop.check_build",
+                    return_value=BuildCheckResult(success=True, output=""),
+                ):
+                    with patch(
+                        "auto_sdd.scripts.build_loop.check_tests",
+                        return_value=BuildCheckResult(
+                            success=True, output="", test_count=5
+                        ),
+                    ):
+                        result = loop._post_campaign_verify()
+
+        assert result is True
+
+    def test_install_failure_returns_false(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        (tmp_path / "package.json").write_text("{}")
+
+        with patch(
+            "auto_sdd.scripts.build_loop.run_cmd_safe",
+        ) as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="npm ERR!", stderr=""
+            )
+            result = loop._post_campaign_verify()
+
+        assert result is False
+
+    def test_no_package_manager_returns_true(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        # No package.json → no JS package manager → skip
+        result = loop._post_campaign_verify()
+        assert result is True
