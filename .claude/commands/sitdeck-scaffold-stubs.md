@@ -1,5 +1,5 @@
 ---
-description: Generate all 44 SitDeck feature stub files from the populated roadmap (compstak-sitdeck/.specs/features/)
+description: Generate all 44 SitDeck feature stub files from the populated roadmap (~/compstak-sitdeck/.specs/features/)
 ---
 
 Generate SitDeck feature stubs: $ARGUMENTS
@@ -9,9 +9,9 @@ Generate SitDeck feature stubs: $ARGUMENTS
 Run these checks first. If any fail, stop and report — do not proceed:
 
 ```bash
-ls /Users/brianfischman/auto-sdd/compstak-sitdeck/.specs/roadmap.md
-wc -l /Users/brianfischman/auto-sdd/compstak-sitdeck/.specs/roadmap.md
-mkdir -p /Users/brianfischman/auto-sdd/compstak-sitdeck/.specs/features/
+ls /Users/brianfischman/compstak-sitdeck/.specs/roadmap.md
+wc -l /Users/brianfischman/compstak-sitdeck/.specs/roadmap.md
+mkdir -p /Users/brianfischman/compstak-sitdeck/.specs/features/
 ```
 
 `roadmap.md` must exist and have content. If it's blank or missing, run `/sitdeck-roadmap create` first.
@@ -20,7 +20,7 @@ mkdir -p /Users/brianfischman/auto-sdd/compstak-sitdeck/.specs/features/
 
 ## What This Command Does
 
-Reads the populated `compstak-sitdeck/.specs/roadmap.md` and writes one `.md` stub file per widget into `compstak-sitdeck/.specs/features/`.
+Reads the populated `~/compstak-sitdeck/.specs/roadmap.md` and writes one `.md` stub file per widget into `~/compstak-sitdeck/.specs/features/`.
 
 **Do NOT write a script to generate these files. Write each file directly.**
 
@@ -28,9 +28,9 @@ Reads the populated `compstak-sitdeck/.specs/roadmap.md` and writes one `.md` st
 
 ## Context
 
-**Repo**: compstak-sitdeck/ (inside auto-sdd monorepo — agent is already at repo root)
-**Specs dir**: compstak-sitdeck/.specs/
-**Features dir**: compstak-sitdeck/.specs/features/
+**Repo**: ~/compstak-sitdeck/ (independent project directory)
+**Specs dir**: ~/compstak-sitdeck/.specs/
+**Features dir**: ~/compstak-sitdeck/.specs/features/
 **Tech stack**: Next.js 15, DuckDB, SQLite, Mapbox, NextAuth, Zustand, react-grid-layout
 
 ### Data Sources
@@ -102,7 +102,7 @@ Restaurant/Bar, Self-Storage, Shallow Bay, Warehouse/Distribution
 
 ## Stub File Structure
 
-Write each file at: `compstak-sitdeck/.specs/features/F-{NNN}-{kebab-widget-name}.md`
+Write each file at: `~/compstak-sitdeck/.specs/features/F-{NNN}-{kebab-widget-name}.md`
 
 ```markdown
 # F-{NNN}: {Widget Name}
@@ -207,15 +207,15 @@ Run after all 44 files are written:
 
 ```bash
 echo "=== Stub files created ==="
-ls /Users/brianfischman/auto-sdd/compstak-sitdeck/.specs/features/ | wc -l
+ls /Users/brianfischman/compstak-sitdeck/.specs/features/ | wc -l
 
 echo "=== Named widget spot check ==="
 grep -rl "CRE Property Map\|Recent Transactions\|Market Overview\|League Tables\|Rent Optimizer\|AI Agent" \
-  /Users/brianfischman/auto-sdd/compstak-sitdeck/.specs/features/ | wc -l
+  /Users/brianfischman/compstak-sitdeck/.specs/features/ | wc -l
 
 echo "=== Enum check ==="
 grep -rl "MOCK_MARKETS\|MOCK_BUILDING_CLASSES" \
-  /Users/brianfischman/auto-sdd/compstak-sitdeck/.specs/features/ | wc -l
+  /Users/brianfischman/compstak-sitdeck/.specs/features/ | wc -l
 ```
 
 Expected: 44, 6, 44. Fix any mismatch before reporting done.
@@ -225,7 +225,7 @@ Expected: 44, 6, 44. Fix any mismatch before reporting done.
 ## After Completing
 
 ```
-✅ SitDeck feature stubs written: 44 files in compstak-sitdeck/.specs/features/
+✅ SitDeck feature stubs written: 44 files in ~/compstak-sitdeck/.specs/features/
 
 Phase breakdown:
 - Phase 1: F-001 – F-026 (26 core data widgets)

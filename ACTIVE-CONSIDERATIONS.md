@@ -13,13 +13,13 @@ Ordered by efficiency gain per complexity added:
 1. **SitDeck build campaign — 36/49 features built, assessment in progress.**
    - Campaign ran Mar 7-8. 9 failed build attempts on Mar 7 (PATH issue, config parser bugs, signal parsing), followed by successful overnight run.
    - App compiles (`next build` clean) and boots (`next dev` returns 200).
-   - Currently on branch `auto/chained-20260308-193835` in compstak-sitdeck, 60 commits ahead of main.
+   - Currently on branch `auto/chained-20260308-193835` in ~/compstak-sitdeck, 60 commits ahead of main.
    - 13 features remain pending. $201 API cost across 239 agent invocations.
    - **Not yet done**: merge campaign branch to main, browser-level widget verification, auto-sdd repo state cleanup (many uncommitted files), learnings capture for campaign failure patterns.
    - Full assessment in Agents.md ("SitDeck Build Campaign Assessment" round, 2026-03-08).
-   - **Run command**: `caffeinate -diw $$ & cd ~/auto-sdd/py && AUTO_APPROVE=true PROJECT_DIR=~/auto-sdd/compstak-sitdeck .venv/bin/python -m auto_sdd.scripts.build_loop`
+   - **Run command**: `caffeinate -diw $$ & cd ~/auto-sdd/py && AUTO_APPROVE=true PROJECT_DIR=~/compstak-sitdeck LOGS_DIR=~/auto-sdd/logs/compstak-sitdeck .venv/bin/python -m auto_sdd.scripts.build_loop`
 2. **CIS Rounds 1-4 COMPLETE. Rounds 5-6 need campaign data from #1.**
-   - Campaign data from SitDeck now exists (feature-vectors.jsonl in compstak-sitdeck/.sdd-state/). Rounds 5-6 may be unblocked pending assessment of data quality.
+   - Campaign data from SitDeck now exists (feature-vectors.jsonl in ~/compstak-sitdeck/.sdd-state/). Rounds 5-6 may be unblocked pending assessment of data quality.
    - Full plan: `WIP/campaign-intelligence-system.md`
 3. **Auto-QA validation — PROVEN. Second run 3/3 fixes succeeded.**
    - Run 2 (val-20260306-004027): 36 min, $6.95. 29/32 pass, 3 fail, 0 blocked. 3/3 fix agents succeeded.

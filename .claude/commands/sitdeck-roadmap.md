@@ -1,14 +1,14 @@
 ---
-description: Create or update the SitDeck product roadmap (compstak-sitdeck/.specs/roadmap.md)
+description: Create or update the SitDeck product roadmap (~/compstak-sitdeck/.specs/roadmap.md)
 ---
 
 Manage the SitDeck roadmap: $ARGUMENTS
 
 ## Paths
 
-- Specs: compstak-sitdeck/.specs/
-- Vision: compstak-sitdeck/.specs/vision.md
-- Roadmap: compstak-sitdeck/.specs/roadmap.md
+- Specs: ~/compstak-sitdeck/.specs/
+- Vision: ~/compstak-sitdeck/.specs/vision.md
+- Roadmap: ~/compstak-sitdeck/.specs/roadmap.md
 
 ## Mode Detection
 
@@ -25,10 +25,10 @@ Manage the SitDeck roadmap: $ARGUMENTS
 
 ### Create Mode
 
-1. Read `compstak-sitdeck/.specs/vision.md` — app overview, widget catalog, tech stack, design principles
+1. Read `~/compstak-sitdeck/.specs/vision.md` — app overview, widget catalog, tech stack, design principles
 2. Verify the widget catalog section exists (Widget Catalog, 50+ Planned) — all 44 named widgets must appear
 3. Do NOT decompose or invent features. The widget list is the canonical feature set. Transcribe it exactly.
-4. Write `compstak-sitdeck/.specs/roadmap.md` using the format below
+4. Write `~/compstak-sitdeck/.specs/roadmap.md` using the format below
 5. Show draft, wait for approval before saving
 
 ### Add Mode
@@ -165,7 +165,7 @@ Show progress table by phase, overall %, next feature, blocked items. No file ch
 
 Report:
 ```
-✅ SitDeck roadmap saved to compstak-sitdeck/.specs/roadmap.md
+✅ SitDeck roadmap saved to ~/compstak-sitdeck/.specs/roadmap.md
 
 44 widgets across 3 phases:
 - Phase 1: 26 core data widgets

@@ -1819,6 +1819,23 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - ACTIVE-CONSIDERATIONS.md in auto-sdd was not updated by the previous session to reflect any of the campaign activity.
 
 
+### Round — Project Directory Segregation (2026-03-09)
+
+**What was asked**: Move compstak-sitdeck out of the auto-sdd directory tree to eliminate implicit coupling between the build system and its target projects. Target projects connect to auto-sdd only through three explicit pipelines: build (PROJECT_DIR), telemetry (LOGS_DIR), and knowledge (learnings writer + CIS vectors).
+
+**What changed**:
+- `compstak-sitdeck/` physically moved from `~/auto-sdd/compstak-sitdeck/` to `~/compstak-sitdeck/` (done by Brian before this agent ran)
+- `.gitignore` — removed `/compstak-sitdeck/` entry (no longer needed)
+- `.claude/commands/sitdeck-roadmap.md` — all paths updated to `~/compstak-sitdeck/`
+- `.claude/commands/sitdeck-scaffold-stubs.md` — all paths updated, "inside monorepo" note corrected
+- `ACTIVE-CONSIDERATIONS.md` — run command updated with new PROJECT_DIR and explicit LOGS_DIR
+- `ONBOARDING.md` — run command updated to match
+- Committed staged `git rm --cached` untracking of compstak-sitdeck specs from auto-sdd index
+
+**What was NOT changed**: No Python source code, no scripts, no tests, no build loop logic. LOGS_DIR is an env var override — the derivation logic in build_loop.py is unchanged.
+
+**Verification**: git diff --stat shows only allowed files.
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
