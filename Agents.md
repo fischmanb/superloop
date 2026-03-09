@@ -1836,6 +1836,16 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 
 **Verification**: git diff --stat shows only allowed files.
 
+### Round — Project Isolation Contract (2026-03-09)
+
+**What was asked**: Write a design document specifying the exact set of permitted cross-boundary data flows between auto-sdd and target projects, in both directions, with enforcement design for a follow-up implementation round.
+
+**What changed**: Created `WIP/project-isolation-contract.md` — pipeline inventory (all cross-boundary write paths enumerated with source component and direction), proactive enforcement design (prompt-level boundary + post-agent contamination audit), expected writes allowlist, and implementation plan.
+
+**What was NOT changed**: No Python source, no scripts, no tests, no build loop logic. Design doc only.
+
+**Verification**: git diff --stat shows only WIP/project-isolation-contract.md and Agents.md.
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
