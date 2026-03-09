@@ -541,9 +541,7 @@ class TestBuildSingleFeature:
         def agent_side_effect(
             output_file: Path, cmd: list[str], **kw: Any
         ) -> int:
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            output_file.write_text("Error: insufficient_quota reached\n")
-            return 1
+            raise CreditExhaustionError("insufficient_quota")
 
         mock_agent.side_effect = agent_side_effect
         mock_git.return_value = MagicMock(returncode=0, stdout="abc123\n")

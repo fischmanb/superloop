@@ -25,7 +25,7 @@ from unittest.mock import patch
 
 import pytest
 
-from auto_sdd.lib.claude_wrapper import ClaudeResult
+from auto_sdd.lib.claude_wrapper import ClaudeResult, CreditExhaustionError
 from auto_sdd.lib.reliability import Feature, emit_topo_order
 from auto_sdd.scripts.build_loop import BuildLoop
 
@@ -408,10 +408,7 @@ class TestFullDryRun:
         def mock_run_claude(
             args: list[str], **kwargs: object
         ) -> ClaudeResult:
-            return ClaudeResult(
-                output="Error: insufficient_quota\n",
-                exit_code=1,
-            )
+            raise CreditExhaustionError("insufficient_quota")
 
         with pytest.raises(SystemExit):
             with _mock_agent_env(mock_run_claude):
