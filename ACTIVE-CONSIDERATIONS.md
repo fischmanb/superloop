@@ -6,17 +6,15 @@
 
 ---
 
-### Priority stack (updated 2026-03-09 — post isolation enforcement session)
+### Priority stack (updated 2026-03-09 — post !wrap)
 
 Ordered by efficiency gain per complexity added:
 
-1. **SitDeck build campaign — 36/49 features built, merged to main.**
+1. **SitDeck build campaign — 36/49 features built, system verified, ready to resume.**
    - Campaign ran Mar 7-8. App compiles and boots. 13 features remain pending.
-   - Campaign branch merged to main in compstak-sitdeck, orphan branches deleted.
-   - Project moved to `~/compstak-sitdeck/` (separate from auto-sdd).
-   - $201 API cost across 239 agent invocations.
-   - **Not yet done**: browser-level widget verification, resume build for remaining 13 features, ~90 untracked log/eval files in auto-sdd need gitignore decisions.
-   - Full assessment in Agents.md ("SitDeck Build Campaign Assessment" round).
+   - Project at `~/compstak-sitdeck/` with `project.yaml` committed (npx fix applied).
+   - Integration test suite (8 tests) verifies full pipeline with isolation layers.
+   - **Not yet proven**: one real feature build with all isolation layers active. Unit/integration tests pass but run_claude is mocked. A single-feature live build is the final validation.
    - **Run command**: `caffeinate -diw $$ & cd ~/auto-sdd/py && AUTO_APPROVE=true PROJECT_DIR=~/compstak-sitdeck LOGS_DIR=~/auto-sdd/logs/compstak-sitdeck .venv/bin/python -m auto_sdd.scripts.build_loop`
 2. **CIS Rounds 5-6 — need campaign data from #1.**
    - Campaign data exists (feature-vectors.jsonl in ~/compstak-sitdeck/.sdd-state/). May be unblocked.
@@ -28,33 +26,23 @@ Ordered by efficiency gain per complexity added:
 6. **Local model integration** — Not started.
 7. **Adaptive routing** — Deprioritized.
 
-### Repo hygiene — partially done
-
-- ~90 untracked files in auto-sdd (`logs/compstak-sitdeck/evals/`, `logs/compstak-sitdeck/build-*.log`, `logs/validation/val-*`). Need gitignore decisions (step 4 of triage plan `WIP/plans/3_8_2026.md`).
-- Dozens of orphan branches in auto-sdd (`auto/chained-*`, `claude/*`) — step 6.
-- Test suite not yet run post-campaign — step 7.
-
 ### Knowledge graph build intelligence — DESIGNED, NOT STARTED
 
 - **WIP:** `WIP/knowledge-graph-build-intelligence.md` (207 lines)
 
 ### Other active items
 
-- **auto-sdd vs superloop naming asymmetry**: Local dir is `~/auto-sdd`, GitHub repo is `fischmanb/superloop`. No functional impact, doc-layer confusion only. Deferred to later session.
+- **auto-sdd vs superloop naming asymmetry**: Local dir is `~/auto-sdd`, GitHub repo is `fischmanb/superloop`. No functional impact, doc-layer confusion only. Deferred.
+- **ONBOARDING.md reconciliation needed**: File is stale — describes pre-campaign, pre-isolation state. Needs full refresh to match current reality (project segregated, isolation enforcement, 1026 tests, L-00226/M-00095).
 - **HOW-I-WORK corpus curation**: 84+ entries. 4+ clusters ready for formalization.
-- **Learnings graph-schema conversion**: Some old-format entries may remain in `.specs/learnings/`.
 - **Memory slot optimization**: 15/30 slots. Not urgent. (L-00095)
 
 ### Completed (archive — remove when no longer useful for context)
 
-- **Project isolation enforcement (2026-03-09)**: Three-layer protection: prompt FILESYSTEM BOUNDARY directive, chmod write-protection of auto-sdd source/docs during agent execution (dirs + root files), post-agent `_check_repo_contamination()` audit on every `run_claude()` return. Contract: `WIP/project-isolation-contract.md`. 92 tests.
-- **Project directory segregation (2026-03-09)**: compstak-sitdeck moved from `~/auto-sdd/compstak-sitdeck/` to `~/compstak-sitdeck/`. All path references updated. Explicit `LOGS_DIR` preserves telemetry pipeline.
-- **SitDeck campaign branch merged + cleanup (2026-03-09)**: 60 commits fast-forwarded to main. 46 orphan branches deleted.
-- **Campaign artifacts committed (2026-03-09)**: Stashed campaign data (cost log, eval sidecar, learnings, estimates, test file) committed to clean working tree.
-- **SitDeck roadmap + feature stubs (2026-03-07)**: 44 widgets across 3 phases.
-- **L-00012 demoted from core (2026-03-08)**: Core count back to 17.
-- **Repo rename + unfork (2026-03-06)**: Renamed to `superloop` on GitHub.
-- **Bash→Python conversion**: ALL PHASES COMPLETE. 970+ tests.
-- **auto-QA pipeline**: ALL PHASES COMPLETE. Run 2: 29/32 pass, 3/3 fixes.
-- **Learnings system**: L-00001–L-00220+, M-00001–M-00094+, 17 curated in core.md.
-- **Campaign intelligence system design**: `WIP/campaign-intelligence-system.md`.
+- **Integration pipeline test (2026-03-09)**: 8 tests covering full build loop with isolation layers — single-feature build, prompt boundary, chmod protection/restore, root file protection, contamination check clean/dirty, config loading, log derivation. 1026 total tests.
+- **Credit exhaustion test fix (2026-03-09)**: Two tests broken by prior refactor (31ef249) — mocks returned output text instead of raising CreditExhaustionError. Fixed.
+- **Repo triage complete (2026-03-09)**: logs/ gitignored (23 tracked files untracked), 45 orphan branches deleted in auto-sdd, working tree clean.
+- **Project isolation enforcement (2026-03-09)**: Three-layer protection. Contract: `WIP/project-isolation-contract.md`. 92 build_loop tests.
+- **Project directory segregation (2026-03-09)**: compstak-sitdeck at `~/compstak-sitdeck/`. Nested dir issue found and flattened. project.yaml recovered and committed to project git.
+- **SitDeck campaign (2026-03-08)**: 36/49 features built, merged to main, orphan branches deleted. $201 cost.
+- **Learnings system**: L-00001–L-00226, M-00001–M-00095, 17 curated in core.md.
