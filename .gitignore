@@ -17,7 +17,7 @@
 .env.local
 
 # Logs
-logs/*.log
+logs/
 tests/dry-run-verbose.log
 
 # OS files
