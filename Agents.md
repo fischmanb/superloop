@@ -1768,6 +1768,57 @@ grep -c "source.*validation.sh" scripts/*.sh  # Should be 1 (generate-mapping.sh
 - git diff --stat: only compstak-sitdeck/.specs/roadmap.md and Agents.md modified
 
 ---
+
+### Round — SitDeck Build Campaign Assessment (2026-03-08)
+
+**What was asked**: Assess the state of the SitDeck build campaign after two days of troubleshooting and restarts. The previous chat session did not document reliably. Review build logs and terminal outputs, report findings.
+
+**Timeline**: 9 build log files spanning Mar 7 ~3:52pm through ~11:30pm, followed by a successful overnight run (no log file captured) from ~12:06am Mar 8 through ~8:02pm Mar 8.
+
+**What happened — the failures (Mar 7)**:
+
+- **Run 1** (build-155224): Built F-0 (Project Setup) in ~20min. `FEATURE_BUILT` signal not parsed by the loop — drift check skipped. Killed after 1 feature.
+- **Run 2** (build-165923): Built F-1 (CRE Property Map) in ~12min. Same signal parsing failure. Killed after 1 feature.
+- **Run 3** (build-205002): Dead on arrival — bash script invoked, not Python entry point. `/dev/tty: Device not configured`.
+- **Run 4** (build-210059): First multi-feature success. Market Map (11m), Portfolio Map (12m), Rent Optimizer (10m), Rent Trends started. Signals parsed correctly, drift checks ran. Log cuts off mid-build.
+- **Run 5** (build-214458): project.yaml bash config parser bug — IFS split on colon+space separately, producing `NODE_ENV=productionnextbuild` and `npxvitestrun--passWithNoTests` (no spaces). Build check passed by accident, test command failed.
+- **Run 6** (build-215633): Different config (MAX_FEATURES=25, tsc for build check). Log cuts off after starting F-1.
+- **Run 7** (build-220018, 488 lines): The catastrophic run. `NODE_ENV=production next build` as build check — `bash: line 1: next: command not found`. Bare `next` not on PATH, needed `npx next build`. Every feature failed identically, 3 attempts each. F-1, F-4, F-8, F-9, F-11 all failed — agents built features successfully each time but the build gate rejected them. **0/5 features passed, 15 wasted agent invocations, ~1.5 hours burned on a PATH resolution issue.** Each failure also reset to `main`, discarding agent work.
+
+**What happened — the success (overnight Mar 7-8)**:
+
+- Successful run built 36 features from ~12:06am through ~8:02pm Mar 8.
+- No build log file was captured in `logs/compstak-sitdeck/` for this run.
+- Currently on branch `auto/chained-20260308-193835`, 60 commits ahead of main.
+- 13 features remain pending. Roadmap shows 36/49 complete.
+
+**Build assessment**:
+- `NODE_ENV=production npx next build` — compiles clean (649ms, no errors).
+- `next dev` — boots and returns HTTP 200 (initial 500 was due to stale `NODE_ENV=production` in shell from prior build test, not a code bug).
+
+**Fixes committed to auto-sdd during campaign** (by Brian + previous chat):
+- `f191716`: Split AUTO_APPROVE / SKIP_PREFLIGHT flag conflation (L-00208/209)
+- `fc62ccd`: Bash config parser IFS bug — splits on colon+space separately, drops value
+- `b7ce248`: Bash config parser strips internal spaces
+- `2bbd96c`: MAX_FEATURES defaults to None (build all) instead of 25
+- `ada6609`: Correct SitDeck run command to Python entry point (L-00214)
+- `e454962`: Reset compstak-sitdeck to fresh — wipe built code, reset roadmap
+- `2635ad0`: Re-detect build cmd after agent, not before; resolve SPEC_FILE against project_dir (L-00216/217)
+- `f87c010`: Tighten credit exhaustion regex to avoid false positive on feature names containing "credit"
+- `31ef249`: Raise CreditExhaustionError from claude_wrapper; remove output-text scanning
+- `27adada`: Prepend 'claude' executable to eval sidecar agent cmd
+
+**Campaign cost**: $201.08 across 239 agent invocations.
+
+**What was NOT changed**: No changes to auto-sdd source code in this assessment session. No changes to compstak-sitdeck. The `package.json` was temporarily modified to test a Turbopack hypothesis (reverted in same session).
+
+**Key learnings (not yet captured as L-entries)**:
+- The dominant failure mode — bare `next` vs `npx next` PATH issue — may not have an L-entry despite being the single most expensive failure of the campaign.
+- No build log was captured for the successful overnight run — the logging mechanism failed silently or the run was started differently.
+- Agents.md in the project (compstak-sitdeck/Agents.md) only has 3 entries despite 36 features built — agent-side documentation was not maintained.
+- ACTIVE-CONSIDERATIONS.md in auto-sdd was not updated by the previous session to reflect any of the campaign activity.
+
+
 ## Questions?
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper design rationale.
