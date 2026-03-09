@@ -1,6 +1,6 @@
 {
-  "last_check_ts": "2026-03-09T05:30:00.000000Z",
+  "last_check_ts": "2026-03-09T15:45:00.000000Z",
   "last_check_hash": "f6e9314b3530349082197ff3b09bb5c6",
-  "prompt_count": 0,
-  "pending_captures": []
+  "prompt_count": 3,
+  "pending_captures": ["docs/ directory restructure committed (de0d5d7) — single organized entry point at docs/README.md"]
 }

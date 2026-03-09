@@ -6,15 +6,15 @@
 
 ---
 
-### Priority stack (updated 2026-03-09 — post !wrap)
+### Priority stack (updated 2026-03-09 — post session 2)
 
 Ordered by efficiency gain per complexity added:
 
-1. **SitDeck build campaign — 36/49 features built, system verified, ready to resume.**
-   - Campaign ran Mar 7-8. App compiles and boots. 13 features remain pending.
+1. **SitDeck build campaign — 37+/49 features built, pipeline validated, resume for remaining features.**
+   - Feature #19 (Rent Potential) built successfully 2026-03-09 with two-stage retry (fix-in-place on attempt 2). 599 tests passing. Drift auto-fixed.
+   - Build still running — additional features may have completed.
    - Project at `~/compstak-sitdeck/` with `project.yaml` committed (npx fix applied).
-   - Integration test suite (8 tests) verifies full pipeline with isolation layers.
-   - **Not yet proven**: one real feature build with all isolation layers active. Unit/integration tests pass but run_claude is mocked. A single-feature live build is the final validation.
+   - Two-stage retry system live-validated (8533639). Codebase summary timeout fixed (63edac4).
    - **Run command**: `caffeinate -diw $$ & cd ~/auto-sdd/py && AUTO_APPROVE=true PROJECT_DIR=~/compstak-sitdeck LOGS_DIR=~/auto-sdd/logs/compstak-sitdeck .venv/bin/python -m auto_sdd.scripts.build_loop`
 2. **CIS Rounds 5-6 — need campaign data from #1.**
    - Campaign data exists (feature-vectors.jsonl in ~/compstak-sitdeck/.sdd-state/). May be unblocked.
@@ -32,12 +32,20 @@ Ordered by efficiency gain per complexity added:
 
 ### Other active items
 
+- **Build launches are Brian-only**: Brian runs all builds in Terminal himself. Chat sessions provide run commands and pre-flight context but never launch build_loop.
+
 - **auto-sdd vs superloop naming asymmetry**: Local dir is `~/auto-sdd`, GitHub repo is `fischmanb/superloop`. No functional impact, doc-layer confusion only. Deferred.
 - **ONBOARDING.md reconciliation needed**: File is stale — describes pre-campaign, pre-isolation state. Needs full refresh to match current reality (project segregated, isolation enforcement, 1026 tests, L-00226/M-00095).
 - **HOW-I-WORK corpus curation**: 84+ entries. 4+ clusters ready for formalization.
 - **Memory slot optimization**: 15/30 slots. Not urgent. (L-00095)
 
+
+- **docs/ directory restructure (2026-03-09)**: Single organized entry point at docs/README.md — system/, operations/, guides/, knowledge/, plans/, history/. 5 new files, 29 total. de0d5d7.
+
 ### Completed (archive — remove when no longer useful for context)
+
+- **Two-stage retry system (2026-03-09)**: Fix-in-place (attempt 1) before informed fresh retry (attempt 2+). Live-validated on Feature #19. 8533639.
+- **Codebase summary timeout fix (2026-03-09)**: Excluded SDD metadata from file tree, timeout bumped to 300s (SUMMARY_TIMEOUT env var). 63edac4.
 
 - **Integration pipeline test (2026-03-09)**: 8 tests covering full build loop with isolation layers — single-feature build, prompt boundary, chmod protection/restore, root file protection, contamination check clean/dirty, config loading, log derivation. 1026 total tests.
 - **Credit exhaustion test fix (2026-03-09)**: Two tests broken by prior refactor (31ef249) — mocks returned output text instead of raising CreditExhaustionError. Fixed.
