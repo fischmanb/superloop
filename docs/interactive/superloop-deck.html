@@ -107,7 +107,7 @@ function buildSlides() {
         </div>
         <div class="stats" style="margin-top:48px;">
           <div class="stat"><div class="stat-num accent">1,026</div><div class="stat-label">passing tests</div></div>
-          <div class="stat"><div class="stat-num green">226+</div><div class="stat-label">graph-schema learnings</div></div>
+          <div class="stat"><div class="stat-num green">300+</div><div class="stat-label">graph-schema learnings</div></div>
           <div class="stat"><div class="stat-num amber">37+</div><div class="stat-label">features built (active campaign)</div></div>
           <div class="stat"><div class="stat-num accent">4</div><div class="stat-label">campaigns completed</div></div>
         </div>
@@ -136,7 +136,7 @@ function buildSlides() {
       ${makeCard('Spec-driven','Roadmap → feature specs → agent prompt. Every build is fully defined before the agent runs. No improvisation.',C.accent)}
       ${makeCard('Closed loop','Build check → test gate → drift check → eval sidecar → learnings. Each layer catches what the prior one missed.',C.green)}
       ${makeCard('Hardened','Two-stage retry, crash recovery, project isolation (3-layer), signal protocol, file locking. 1,026 tests.',C.amber)}
-      ${makeCard('Self-improving','226+ graph-schema learnings compound across campaigns. Eval findings feed subsequent build prompts automatically.',C.accent)}
+      ${makeCard('Self-improving','300+ graph-schema learnings compound across campaigns. Eval findings feed subsequent build prompts automatically.',C.accent)}
     </div>
   `);
 
@@ -177,15 +177,18 @@ function buildSlides() {
   // ── SLIDE 6: KNOWLEDGE PROBLEM ──
   addSlide(deck, `
     <h2>The knowledge compounding problem</h2>
-    <div style="display:flex;gap:24px;margin-top:20px;">
-      <div class="card" style="flex:1;padding:28px;">
-        <h3 style="color:#EF4444;text-align:center;font-size:20px;margin-bottom:20px;">NOW (reactive)</h3>
-        ${['Each build agent starts with zero project memory','Mistakes repeat across campaigns (DuckDB init, signal format, import boundaries)','Eval sidecar catches errors AFTER they happen','Learnings corpus is passive — fed into prompts but not queried','Knowledge in flat markdown, not queryable graph structure'].map(t=>`<p style="color:#94A3B8;font-size:14px;margin-bottom:14px;">✗ &nbsp;${t}</p>`).join('')}
+    <p class="muted" style="font-size:14px;margin-bottom:24px;">Every agent starts blank. The question is how fast the system learns.</p>
+    <div style="display:flex;gap:20px;">
+      <div style="flex:1;background:linear-gradient(135deg,#1a0a0a 0%,#1E293B 100%);border-radius:12px;padding:28px;border:1px solid #7f1d1d55;">
+        <h3 style="color:#EF4444;font-size:22px;margin-bottom:20px;">🔴 &nbsp;Now — reactive</h3>
+        ${['Each build agent starts with <b style="color:#EF4444;">zero project memory</b>','Mistakes repeat across campaigns — DuckDB init, signal format, import boundaries','Eval sidecar catches errors <b style="color:#EF4444;">after</b> they happen','Learnings corpus is passive — injected but not queried','Knowledge in flat markdown — not a queryable structure'].map(t=>`<div style="display:flex;gap:10px;margin-bottom:14px;align-items:flex-start;"><span style="color:#EF4444;font-size:16px;flex-shrink:0;">✗</span><span style="color:#CBD5E1;font-size:14px;line-height:1.5;">${t}</span></div>`).join('')}
       </div>
-      <div style="display:flex;align-items:center;font-size:32px;color:#06B6D4;">→</div>
-      <div class="card" style="flex:1;padding:28px;">
-        <h3 style="color:#10B981;text-align:center;font-size:20px;margin-bottom:20px;">PLANNED (prescriptive)</h3>
-        ${['Knowledge graph queried BEFORE each feature build','Synthesis call: given prior outcomes, here\'s the best approach','BFS on dependency chain + semantic + BM25 retrieval','Write path is async — zero critical path impact','Compounds: campaigns → technology patterns → principles'].map(t=>`<p style="color:#94A3B8;font-size:14px;margin-bottom:14px;">✓ &nbsp;${t}</p>`).join('')}
+      <div style="display:flex;align-items:center;flex-shrink:0;">
+        <div style="background:#06B6D4;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:bold;color:#020617;">→</div>
+      </div>
+      <div style="flex:1;background:linear-gradient(135deg,#042f2e 0%,#1E293B 100%);border-radius:12px;padding:28px;border:1px solid #10B98133;">
+        <h3 style="color:#10B981;font-size:22px;margin-bottom:20px;">🟢 &nbsp;Planned — prescriptive</h3>
+        ${['Knowledge graph queried <b style="color:#10B981;">before</b> each feature build','Synthesis call: <i>given prior outcomes, here\'s the best approach</i>','BFS on dependency chain + semantic + BM25 retrieval','Write path is async — <b style="color:#10B981;">zero critical path impact</b>','Compounds: campaigns → technology patterns → principles'].map(t=>`<div style="display:flex;gap:10px;margin-bottom:14px;align-items:flex-start;"><span style="color:#10B981;font-size:16px;flex-shrink:0;">✓</span><span style="color:#CBD5E1;font-size:14px;line-height:1.5;">${t}</span></div>`).join('')}
       </div>
     </div>
   `);
@@ -214,7 +217,7 @@ function buildSlides() {
       </div>
     </div>
     <div class="card" style="margin-top:20px;padding:16px 24px;">
-      <p style="font-size:13px;"><b>Current state:</b> <span class="muted">226+ L-series learnings + 95+ M-series methodology entries in flat markdown. Graph schema enforced (IDs, typed edges, confidence, status). Migration to SQLite graph is format conversion, not knowledge extraction.</span></p>
+      <p style="font-size:13px;"><b>Current state:</b> <span class="muted">300+ learnings entries (L-series + M-series) in flat markdown. Graph schema enforced (IDs, typed edges, confidence, status). Migration to SQLite graph is format conversion, not knowledge extraction.</span></p>
     </div>
   `);
 
@@ -223,8 +226,8 @@ function buildSlides() {
     <h2>Where it's going</h2>
     <div style="margin-top:24px;">
       ${[
+        {p:'Now',t:'Local execution on GPT-OSS',d:'Moving build loop to local hardware. GPT-OSS delivers the best coding performance per GB of active RAM — eliminates API dependency and rate limits entirely.',c:C.green},
         {p:'Next',t:'Knowledge graph write path',d:'knowledge_store.py + extended eval sidecar. Accumulate structured data before building the read path.',c:C.accent},
-        {p:'Next',t:'Local execution on GPT-OSS',d:'Move build loop to local hardware. GPT-OSS delivers the best coding performance per GB of active RAM — eliminates API dependency and rate limits entirely.',c:C.accent},
         {p:'Next',t:'spec_preprocessor.py',d:'Pre-build hook: BFS + semantic + BM25 + synthesis. Inject prescriptive intelligence into specs before the agent sees them.',c:C.accent},
         {p:'Future',t:'Multi-agent parallelism',d:'Independent features run concurrently. Infrastructure tasks (npm install, tsc) dominate wall time — this is the unlock.',c:C.amber},
         {p:'Long-term',t:'SFT / fine-tuning',d:'feature_outcomes + graph nodes already in training format. Deferred until 100+ campaign corpus. Graph IS the training data.',c:C.muted},
@@ -264,19 +267,19 @@ function makeCard(title, body, accentColor) {
 const PHASES = [
   {title:"1. Spec → Prompt Builder",desc:"The build loop reads roadmap.md, topo-sorts features by dependency, and picks the next pending one. It constructs a prompt from the feature spec. After the first feature is built, a codebase summary and learnings from prior builds are also injected.",boxes:["prompt"],arrows:[]},
   {title:"2. Build Agent implements the feature",desc:"A fresh agent session receives the prompt in an isolated context window. It reads the codebase, writes code, runs commands, and commits. Zero memory of prior features — only what the prompt injected. Currently Claude Code; moving to local GPT-OSS.",boxes:["prompt","agent"],arrows:["prompt-agent"]},
-  {title:"3. Build Gates verify mechanically",desc:"The orchestrator validates the agent's output with machine checks only — agent self-assessment is discarded. Seven gates: HEAD advanced, tree clean, contamination check, tsc/build, tests (599 passing), dead exports, lint.",boxes:["agent","gates"],arrows:["agent-gates"]},
+  {title:"3. Build Gates verify mechanically",desc:"The orchestrator validates the agent's output with machine checks only — agent self-assessment is discarded. Seven gates: HEAD advanced, tree clean, contamination check, tsc/build, full mechanical test suite, dead exports, lint.",boxes:["agent","gates"],arrows:["agent-gates"]},
   {title:"3R. On failure → two-stage retry",desc:"If any gate fails: Attempt 1 keeps code on disk, injects the exact failure stderr. Attempt 2+ does git reset --hard and rebuilds from scratch with all prior failure context.",boxes:["agent","gates"],arrows:["agent-gates","retry"]},
   {title:"4. Drift Check",desc:"A separate fresh agent compares the feature spec against the actual committed code. Did the builder implement what was specified? Catches scope drift, missing requirements, hallucinated features.",boxes:["gates","drift"],arrows:["gates-drift"]},
-  {title:"5. Auto-QA validates at runtime",desc:"The app is booted, browsed via Playwright, tested against acceptance criteria generated from specs. Failures are cataloged, root-caused, and fix agents are dispatched.",boxes:["drift","qa"],arrows:["drift-qa"]},
+  {title:"5. Auto-QA validates at runtime",desc:"After the full campaign completes, the built app is booted, browsed via Playwright, and tested against acceptance criteria generated from specs. Failures are cataloged, root-caused, and fix agents are dispatched. Runs post-campaign, not per-feature.",boxes:["drift","qa"],arrows:["drift-qa"]},
   {title:"6. Git Commit → advance to next feature",desc:"Feature is committed. Resume state is written. The loop advances to the next feature in the topo-sorted queue. This repeats for every feature.",boxes:["qa","commit","prompt"],arrows:["qa-commit","next-feature"]},
   {title:"7. Eval Sidecar (async, per commit)",desc:"After each commit, the eval sidecar wakes up asynchronously — never blocks the build. It classifies the feature: framework compliance, scope assessment, integration quality.",boxes:["commit","eval"],arrows:["commit-eval"]},
-  {title:"8. Findings → Learnings Corpus",desc:"Eval findings are written to the learnings corpus — 226+ graph-schema entries with typed edges, IDs, confidence scores.",boxes:["eval","learnings"],arrows:["commit-eval","eval-learnings"]},
+  {title:"8. Findings → Learnings Corpus",desc:"Eval findings are written to the learnings corpus — 300+ graph-schema entries with typed edges, IDs, confidence scores.",boxes:["commit","eval","learnings"],arrows:["commit-eval","eval-learnings"]},
   {title:"9. Feedback loop → next build",desc:"On the NEXT feature build, the learnings corpus and codebase summary are injected back into the prompt. Past mistakes prevent future repetition. This is the first feedback loop.",boxes:["learnings","codebase","prompt"],arrows:["learnings-prompt","codebase-prompt"]},
-  {title:"10. Knowledge Graph",desc:"Structured learnings flow into a SQLite knowledge graph with FTS5 and embeddings. Makes the corpus queryable.",boxes:["learnings","kg","promo"],arrows:["learnings-kg"],inDev:true},
+  {title:"10. Knowledge Graph",desc:"Structured learnings flow into a SQLite knowledge graph with FTS5 and embeddings. Makes the corpus queryable.",boxes:["learnings","kg"],arrows:["learnings-kg"],inDev:true},
   {title:"11. The full loop closes",desc:"spec_preprocessor.py queries the knowledge graph BEFORE each build: BFS + semantic + BM25 + synthesis. The output is injected into the feature spec before the agent sees it. The system teaches itself.",boxes:["kg","preproc","promo","prompt","learnings"],arrows:["learnings-kg","kg-preproc","preproc-promo","return-path"],inDev:true},
 ];
 
-const B={prompt:{x:60,y:55,w:130,h:50,l:"Prompt\nBuilder",c:C.accentDk},agent:{x:222,y:55,w:130,h:50,l:"Build\nAgent",c:C.green},gates:{x:384,y:55,w:130,h:50,l:"Build\nGates",c:C.amber},drift:{x:546,y:55,w:130,h:50,l:"Drift\nCheck",c:C.accent},qa:{x:708,y:55,w:130,h:50,l:"Auto-QA",c:C.green},commit:{x:870,y:55,w:130,h:50,l:"Git\nCommit",c:C.green},eval:{x:60,y:210,w:250,h:50,l:"Eval Sidecar",c:C.amber},learnings:{x:350,y:210,w:200,h:50,l:"Learnings\n(226+)",c:C.accent},codebase:{x:590,y:210,w:220,h:50,l:"Codebase\nSummary",c:C.accentDk},kg:{x:100,y:340,w:230,h:50,l:"Knowledge\nGraph",c:C.accent},preproc:{x:380,y:340,w:260,h:50,l:"spec_\npreprocessor",c:C.accent},promo:{x:690,y:340,w:170,h:50,l:"Promotion\nJob",c:C.muted}};
+const B={prompt:{x:60,y:55,w:130,h:50,l:"Prompt\nBuilder",c:C.accentDk},agent:{x:222,y:55,w:130,h:50,l:"Build\nAgent",c:C.green},gates:{x:384,y:55,w:130,h:50,l:"Build\nGates",c:C.amber},drift:{x:546,y:55,w:130,h:50,l:"Drift\nCheck",c:C.accent},qa:{x:708,y:55,w:130,h:50,l:"Auto-QA",c:C.green},commit:{x:870,y:55,w:130,h:50,l:"Git\nCommit",c:C.green},eval:{x:60,y:210,w:250,h:50,l:"Eval Sidecar",c:C.amber},learnings:{x:350,y:210,w:200,h:50,l:"Learnings\n(300+)",c:C.accent},codebase:{x:590,y:210,w:220,h:50,l:"Codebase\nSummary",c:C.accentDk},kg:{x:100,y:340,w:230,h:50,l:"Knowledge\nGraph",c:C.accent},preproc:{x:380,y:340,w:260,h:50,l:"spec_\npreprocessor",c:C.accent},promo:{x:690,y:340,w:170,h:50,l:"Promotion\nJob",c:C.muted}};
 
 const A={"prompt-agent":{d:"M190,80 L222,80",c:C.accentDk},"agent-gates":{d:"M352,80 L384,80",c:C.green},"gates-drift":{d:"M514,80 L546,80",c:C.amber},"drift-qa":{d:"M676,80 L708,80",c:C.accent},"qa-commit":{d:"M838,80 L870,80",c:C.green},"retry":{d:"M449,105 L449,130 L287,130 L287,105",c:C.amber},"commit-eval":{d:"M935,105 L935,175 L310,175 L310,210",c:C.muted},"eval-learnings":{d:"M310,235 L350,235",c:C.amber},"learnings-prompt":{d:"M450,210 L450,165 L125,165 L125,105",c:C.accent,da:true},"codebase-prompt":{d:"M700,210 L700,155 L155,155 L155,105",c:C.accentDk,da:true},"learnings-kg":{d:"M450,260 L450,290 L215,290 L215,340",c:C.accent},"kg-preproc":{d:"M330,365 L380,365",c:C.accent},"preproc-promo":{d:"M640,365 L690,365",c:C.muted},"return-path":{d:"M380,365 L30,365 L30,80 L60,80",c:C.accent,w:4},"next-feature":{d:"M1000,80 L1020,80 L1020,38 L125,38 L125,55",c:C.green,da:true}};
 
@@ -297,9 +300,9 @@ function renderLoop() {
   svg += '<defs>' + colors.map(c=>`<marker id="ah${c.replace('#','')}" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0,0 8,3 0,6" fill="${c}"/></marker>`).join('') + '</defs>';
 
   // Section labels
-  svg += `<text x="60" y="47" fill="${C.subtle}" font-size="9" font-style="italic" font-family="Calibri,sans-serif">per feature (topo-sorted)</text>`;
-  svg += `<text x="60" y="200" fill="${C.subtle}" font-size="9" font-style="italic">async intelligence — per commit, never blocks</text>`;
-  svg += `<text x="100" y="332" fill="${C.subtle}" font-size="9" font-style="italic">knowledge compounding — closes the loop</text>`;
+  svg += `<text x="60" y="47" fill="#64748B" font-size="10" font-style="italic" font-family="Calibri,sans-serif">per feature (topo-sorted)</text>`;
+  svg += `<text x="60" y="200" fill="#64748B" font-size="10" font-style="italic">async intelligence — per commit, never blocks</text>`;
+  svg += `<text x="100" y="332" fill="#64748B" font-size="10" font-style="italic">knowledge compounding — closes the loop</text>`;
 
   // Arrows
   for (const [id,a] of Object.entries(A)) {
@@ -359,8 +362,8 @@ function renderLoop() {
   ct.innerHTML = html;
 }
 
-function loopNav(dir) { loopStep = Math.max(0, Math.min(PHASES.length-1, loopStep+dir)); renderLoop(); }
-function loopGo(i) { loopStep = i; renderLoop(); }
+function loopNav(dir) { loopStep = Math.max(0, Math.min(PHASES.length-1, loopStep+dir)); renderLoop(); goSlide(2); }
+function loopGo(i) { loopStep = i; renderLoop(); goSlide(2); }
 
 // ═══════════════════════════════════════════════════════
 // NAVIGATION
@@ -382,7 +385,13 @@ function goSlide(n) {
     d.onclick = () => goSlide(i);
     dots.appendChild(d);
   }
-  document.getElementById('page-num').textContent = (currentSlide+1) + ' / ' + totalSlides;
+  // Page number: account for loop sub-steps
+  const totalPages = totalSlides - 1 + PHASES.length; // 8 slides but slide 3 = 12 steps
+  let currentPage;
+  if (currentSlide < 2) currentPage = currentSlide + 1;
+  else if (currentSlide === 2) currentPage = 3 + loopStep;
+  else currentPage = 2 + PHASES.length + (currentSlide - 2);
+  document.getElementById('page-num').textContent = currentPage + ' / ' + totalPages;
 }
 
 document.addEventListener('keydown', (e) => {
