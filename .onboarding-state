@@ -1,6 +1,6 @@
 {
-  "last_check_ts": "2026-03-09T05:00:00.000000Z",
+  "last_check_ts": "2026-03-09T05:30:00.000000Z",
   "last_check_hash": "f6e9314b3530349082197ff3b09bb5c6",
   "prompt_count": 0,
-  "pending_captures": ["compstak-sitdeck nested directory issue found and fixed during system verification — mv created ~/compstak-sitdeck/compstak-sitdeck/ nesting, flattened with rsync", "project.yaml was lost during project segregation — only tracked in auto-sdd git, not compstak-sitdeck git. Restored with npx fix and committed to project repo.", "Integration pipeline test prompt ready — 8 tests covering full build loop with all isolation layers. Not yet run."]
+  "pending_captures": []
 }
