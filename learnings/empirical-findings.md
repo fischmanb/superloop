@@ -251,3 +251,14 @@ Date: 2026-03-09
 Related: L-00175 (related_to)
 
 The file tree sent to the codebase summary agent included 34 cached summary files and all .specs metadata — noise that inflated the prompt without aiding structural analysis. Combined with a hardcoded 120s timeout insufficient for large projects (cache invalidates every feature build since it's keyed on git tree hash), summary generation timed out on every SitDeck build. Fix: exclude SDD metadata dirs from _EXCLUDED_DIRS in codebase_summary.py, make timeout configurable via SUMMARY_TIMEOUT env var (default 300s). The summary agent only needs application code to produce useful structural context.
+
+
+## L-00237 — PptxGenJS cannot render real connectors or arrows; use SVG or HTML for technical diagrams
+Type: empirical_finding
+Tags: PptxGenJS, pptx, SVG, arrows, connectors, diagrams, presentation, GitHub-Pages
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00236 (related_to)
+
+Six iterations of a closed-loop architecture diagram in PptxGenJS all failed — the library has no arrow markers, no bezier paths, no elbow connectors. Faking them with tiny rectangles and ovals always looks amateur. SVG rendered via sharp had text layout issues. Final solution: self-contained HTML with inline React/SVG, hosted on GitHub Pages. Interactive stepper (12 phases, arrow-key navigation) communicates the system better than any static diagram could. For technical presentations with complex diagrams, skip PowerPoint entirely — HTML gives full CSS/SVG control and can be shared as a URL.

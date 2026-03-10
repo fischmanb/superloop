@@ -1045,3 +1045,64 @@ Examples from a single session (2026-03-09):
 - --resume losing progress → didn't say "restart from scratch"; fixed the code to reuse existing run_id so completed phases are preserved
 
 The test: after your fix, can a different user on a different machine hit the same class of problem? If yes, the fix is incomplete.
+
+
+## L-00231 — Never claim a pipeline is connected without mechanically verifying reads exist for every write
+Type: process_rule
+Tags: knowledge-pipeline, data-flow, verification, eval-sidecar, learnings, write_learning, read_latest_eval_feedback, prompt_builder
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00230 (instance_of), L-00175 (related_to)
+
+Told Brian the system was "self-improving" and "compounding knowledge" when the pipeline was broken at 5 junctions: pending.md write-only (128 entries dead), repo learnings never injected (230+ L-series invisible to agents), eval history reader only read latest 1 of 113 JSONs, MistakeTracker volatile (resets every campaign), auto-QA findings trapped in logs. The write side worked. The read side was broken or capped to uselessness. Verification rule: after any claim that data flows from A to B, grep for the actual read call. If no function reads the file that another function writes, the pipe is broken regardless of what the architecture diagram says.
+
+## L-00232 — --resume must preserve run identity; generating a new ID defeats state lookup
+Type: failure_pattern
+Tags: --resume, run_id, ValidationPipeline, validation-state.json, post_campaign_validation.py, state-persistence
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00230 (instance_of)
+
+ValidationPipeline.__init__() always generated a fresh run_id (`val-{timestamp}`), even with --resume. ValidationState only loads completed_phases when `existing.get("run_id") == self.run_id`, which never matched the old run. Result: --resume silently re-ran all phases from scratch, wasting the ~$7 and ~60 min from the prior partial run. Fix: when resume=True, read the existing state file and reuse its run_id. The identity of a resumable operation must be stable across invocations — any system that generates a new identity on resume has a broken resume.
+
+## L-00233 — Phase 0 must kill lingering dev server processes before binding ports
+Type: failure_pattern
+Tags: Phase-0, port-3000, lsof, dev-server, health-check, post_campaign_validation.py, RUNTIME_READY
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00230 (instance_of)
+
+Phase 0 starts a dev server then health-checks it. If a previous run's dev server is still on port 3000 (from a crash, Ctrl-C, or prior smoke test), Phase 0 times out on health check — it starts a NEW server that binds a different port, then checks 3000 where the stale server doesn't respond correctly. Fix: scan ports 3000, 3001, 5173, 8080 and kill any listeners before starting. Generalizes to any pipeline step that binds a network port.
+
+## L-00234 — Bash-to-Python migration must grep for every env var guard in the original; dropped guards are silent regressions
+Type: failure_pattern
+Tags: NODE_ENV, bash-to-python, migration, claude_wrapper.py, run_cmd_safe, devDependencies, npm-install
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00230 (instance_of)
+
+The bash build loop had `NODE_ENV=development` guards around agent and gate subprocess calls (Round 23). The Python rewrite dropped them — `claude_wrapper.py` and `run_cmd_safe()` inherited the parent shell's env verbatim. When the user's shell had `NODE_ENV=production`, npm silently skipped devDependencies (@tailwindcss/postcss, vitest, etc.), producing a project that looked installed but couldn't build. Fix: force `NODE_ENV=development` in every subprocess env. Prevention: during any bash-to-Python migration, grep the original bash for every `export`, `env`, and variable assignment, and verify each has a Python equivalent.
+
+## L-00235 — nohup + tee in zsh causes process suspension; use stdin redirect + disown for background pipelines
+Type: failure_pattern
+Tags: nohup, tee, zsh, suspended, tty-output, disown, background-process, auto-qa
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00229 (related_to)
+
+Running `nohup command 2>&1 | tee logfile &` in zsh causes `suspended (tty output)` because tee writes to the terminal, which zsh blocks for backgrounded processes. Even `bg %1` re-suspends immediately. The process is alive but permanently frozen. Fix: redirect stdin from /dev/null and disown: `command > logfile 2>&1 < /dev/null & disown`. This fully detaches from the tty. Never use tee for background pipeline logging — write directly to a file and tail -f separately.
+
+## L-00236 — Hardcoded agent timeouts fail at scale; timeouts must be adaptive based on project complexity
+Type: empirical_finding
+Tags: AGENT_TIMEOUT, timeout, Phase-3, Playwright, auto-qa, token-estimator, general-estimates.jsonl
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00175 (related_to)
+
+900s timeout killed a Phase 3 Playwright agent that was legitimately crawling a 37-feature app (19 of 20 screenshots taken). 3-feature CRE project completed in ~5 min; sitdeck needed 15+ min per complex widget feature. Hardcoded timeouts waste time on small projects and kill legitimate work on large ones. The estimator already logs actual tokens and duration per agent call in general-estimates.jsonl (181 calls, median 382s, P90 521s). Timeout should be f(estimated_tokens, historical_tokens_per_second, buffer_multiplier) with floor 120s and cap 3600s.
