@@ -1106,3 +1106,14 @@ Date: 2026-03-09
 Related: L-00175 (related_to)
 
 900s timeout killed a Phase 3 Playwright agent that was legitimately crawling a 37-feature app (19 of 20 screenshots taken). 3-feature CRE project completed in ~5 min; sitdeck needed 15+ min per complex widget feature. Hardcoded timeouts waste time on small projects and kill legitimate work on large ones. The estimator already logs actual tokens and duration per agent call in general-estimates.jsonl (181 calls, median 382s, P90 521s). Timeout should be f(estimated_tokens, historical_tokens_per_second, buffer_multiplier) with floor 120s and cap 3600s.
+
+
+## L-00242 — The system cannot audit, diagnose, or capture learnings about itself; a human is the actual closed loop
+Type: process_rule
+Tags: self-audit, self-diagnosis, closed-loop, knowledge-pipeline, checkpoint, learnings-scan, meta-cognition
+Confidence: high
+Status: active
+Date: 2026-03-10
+Related: L-00231 (instance_of), L-00230 (instance_of)
+
+In session 3, three outputs produced all the value: a pipeline audit (5 broken data flows), 5 agent prompts to fix them, and 11 learnings entries. All three were explicitly requested by Brian — none were produced by the system itself. The build loop didn't flag its own broken knowledge pipes. The eval sidecar didn't report that 112 of 113 findings were going nowhere. The checkpoint protocol's learnings scan was skipped repeatedly (counter reset to 0 without running). Brian had to request the audit, request the prompts, request the learnings scan, then request the scan again when it was skipped during checkpoint. The system claims to be a "self-improving closed loop" but the human is the actual loop closure. Until the system can mechanically verify its own data flow connectivity (Prompt 5's retrieval optimization loop is a start), self-improvement is a manual process that depends on the operator noticing what's broken.
