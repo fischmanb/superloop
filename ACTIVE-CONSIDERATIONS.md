@@ -42,6 +42,10 @@ Ordered by efficiency gain per complexity added:
 
 - **docs/ directory restructure (2026-03-09)**: Single organized entry point at docs/README.md — system/, operations/, guides/, knowledge/, plans/, history/. 5 new files, 29 total. de0d5d7.
 - **Superloop HTML deck on GitHub Pages**: Self-contained presentation at https://fischmanb.github.io/superloop/interactive/superloop-deck.html. Slide 3 is interactive 12-step closed loop stepper. Replaces PPTX. Source at docs/interactive/superloop-deck.html.
+- **Test count trend gate (future)**: `--passWithNoTests` in vitest is correct for early features, but a gate that tracks test count trends and flags features that add code with zero corresponding tests would be a stronger signal than binary pass/fail. Low priority.
+- **Round 38 merged (26a7b2f)**: Environment isolation (NODE_ENV=development forced in agent + gate subprocesses), dependency health gate (check_deps, Gate 1.75), post-campaign clean-room verification. 1045 tests all passing.
+- **Auto-QA scale test running**: First run against compstak-sitdeck (37+ features). CRE lease tracker (3 features) validated the pipeline; this is the real scale proof. Run ID in logs/auto-qa-sitdeck-*.log.
+- **Adaptive timeouts from token estimator (design)**: Hardcoded timeouts (600s build, 900s auto-QA) cause premature kills on large projects and waste time on small ones. The estimator already has agent token data in general-estimates.jsonl. Timeout should be `f(estimated_tokens, historical_tokens_per_second, buffer_multiplier)` — not arbitrary. Applies to build loop agents AND auto-QA agents. Phase 3 Playwright agents are especially variable (5 min for simple features, 15+ min for complex multi-widget features). The token estimation calibration system (estimated vs actual JSONL) provides the training data. Implementation: compute rolling median tokens/sec from last N runs, multiply by estimated tokens for the task, add 2x safety buffer, floor at 120s, cap at 3600s.
 
 ### Completed (archive — remove when no longer useful for context)
 

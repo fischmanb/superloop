@@ -2212,6 +2212,21 @@ class ValidationPipeline:
 
         self.run_id = f"val-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
+        # When resuming, reuse the existing run_id so ValidationState
+        # can find its completed_phases. Without this, --resume always
+        # generates a new run_id that never matches the saved state.
+        if self.resume:
+            state_file = (self.project_dir / ".sdd-state" / "validation-state.json")
+            if state_file.exists():
+                try:
+                    existing = json.loads(state_file.read_text())
+                    old_id = existing.get("run_id", "")
+                    if old_id:
+                        logger.info("Resuming run: %s", old_id)
+                        self.run_id = old_id
+                except (json.JSONDecodeError, OSError):
+                    pass
+
         # State dir
         self.state_dir = self.project_dir / ".sdd-state"
         self.state_dir.mkdir(parents=True, exist_ok=True)
