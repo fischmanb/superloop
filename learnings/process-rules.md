@@ -1027,3 +1027,21 @@ Date: 2026-03-09
 Related: L-00020 (related_to)
 
 Brian controls all long-running build processes directly in Terminal. Chat sessions provide run commands, pre-flight context, and analysis — but never execute build_loop themselves. Discovered when chat session launched a build via Desktop Commander start_process and Brian couldn't see progress or interact with it in his Terminal. The control boundary: chat sessions write commands and analyze results, Brian executes.
+
+## L-00230 — Every bug fix must prevent the class of bug, not just the instance
+Type: process_rule
+Tags: bug-fix, prevention, generalization, closed-loop, system-design, NODE_ENV, check_deps, port-cleanup, --resume
+Confidence: high
+Status: active
+Date: 2026-03-09
+Related: L-00175 (generalizes_to), L-00020 (related_to)
+
+Fixing a bug means eliminating the category of failure, not patching the symptom. Every fix must be implemented such that the underlying bug is prevented from happening again — and to every extent possible, in any part of the system. A fix that requires a human to "run X in the shell" or "remember to set Y" is not a fix. The system must be self-healing.
+
+Examples from a single session (2026-03-09):
+- NODE_ENV=production in user's shell → didn't tell user to unset it; forced NODE_ENV=development in every subprocess the system controls (claude_wrapper.py + run_cmd_safe)
+- Missing devDependencies → didn't say "run npm install"; added check_deps() gate that catches any unresolved package regardless of cause
+- Stale dev server blocking port → didn't say "kill it manually"; auto-kill lingering processes on common dev ports before Phase 0
+- --resume losing progress → didn't say "restart from scratch"; fixed the code to reuse existing run_id so completed phases are preserved
+
+The test: after your fix, can a different user on a different machine hit the same class of problem? If yes, the fix is incomplete.

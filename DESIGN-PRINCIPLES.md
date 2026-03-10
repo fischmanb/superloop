@@ -151,3 +151,7 @@ This file is a constitution, not a changelog. It should be short, stable, and au
 ## 5. Command design rule
 
 Before designing any `.claude/commands/` file that wraps, replaces, or incorporates existing commands or protocols, read every file it subsumes. Designing from in-context inference about what a protocol contains produces incomplete designs that require correction. This applies to `!wrap`, `!checkpoint`, `!learn`, and any future compound commands.
+
+## 6. Prevention over patching
+
+Every bug fix must prevent the class of bug, not just the instance. A fix that requires a human to "run X in the shell" or "remember to set Y" is not a fix — it's a workaround that will break for the next user. The system must be self-healing. After any fix, apply the test: can a different user on a different machine hit the same class of problem? If yes, the fix is incomplete. Generalize across the system — if a subprocess needs a clean environment, every subprocess gets a clean environment, not just the one that broke. (L-00230)
