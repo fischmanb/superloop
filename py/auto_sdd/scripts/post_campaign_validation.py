@@ -2057,6 +2057,24 @@ def run_phase_0(
         result.dev_command = dev_cmd_name
         logger.info("Starting dev server: %s run %s", pm, dev_cmd_name)
 
+        # Kill any existing process on common dev ports to prevent conflicts.
+        # Without this, a lingering dev server from a prior run blocks Phase 0.
+        for port in (3000, 3001, 5173, 8080):
+            try:
+                pids = subprocess.run(
+                    ["lsof", "-t", f"-i:{port}"],
+                    capture_output=True, text=True, timeout=5,
+                ).stdout.strip()
+                if pids:
+                    for pid_str in pids.split("\n"):
+                        try:
+                            os.kill(int(pid_str), 9)
+                            logger.info("Killed existing process on port %d (PID %s)", port, pid_str)
+                        except (OSError, ValueError):
+                            pass
+            except (subprocess.TimeoutExpired, OSError):
+                pass
+
         try:
             server_proc = subprocess.Popen(
                 [pm, "run", dev_cmd_name],
